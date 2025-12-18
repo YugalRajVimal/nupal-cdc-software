@@ -91,6 +91,8 @@ export default function TherapistRegistration() {
   return (
     <div className=" bg-slate-50 flex items-center justify-center p-6">
       <div className="w-full max-w-4xl bg-white rounded-2xl shadow-lg p-8">
+        {/* Heading */}
+        <h1 className="text-3xl font-bold text-center mb-8 text-gray-800">Therapist Registration</h1>
         {/* Step Indicator */}
         <div className="flex items-center justify-between mb-8">
           {steps.map((label, i) => (

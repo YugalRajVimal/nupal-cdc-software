@@ -41,7 +41,7 @@ import PrivacyPolicy from "./pages/PrivacyPolicy";
 import ParentAppLayout from "./layout/Parent/AppLayout";
 import ParentDashboard from "./pages/ParentPages/Dashboard/Home";
 import TherapistRegistration from "./pages/AdminPages/AddTherapist/TherapistRegistration";
-import PatientRegistration from "./pages/AdminPages/Patient/RegisterPatient";
+import PatientRegistration from "./pages/AdminPages/AddPatient/RegisterPatient";
 import SubAdminHome from "./pages/AdminPages/Dashboard/Home";
 import ReceptionDesk from "./pages/AdminPages/ReceptionDesk/ReceptionDesk";
 import ConsultationsLeads from "./pages/AdminPages/ConsultationsLeads/ConsultationsLeads";
