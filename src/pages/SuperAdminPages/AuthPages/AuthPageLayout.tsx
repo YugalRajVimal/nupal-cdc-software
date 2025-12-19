@@ -16,7 +16,7 @@ export default function AuthLayout({
             {/* <!-- ===== Common Grid Shape Start ===== --> */}
             <GridShape />
             <div className="flex flex-col items-center max-w-xs">
-              <p className="block mb-4 text-white text-4xl">Dairy Management</p>
+              <p className="block mb-4 text-white text-4xl">Nupal CDC</p>
               <p className="text-center text-gray-400 dark:text-white/60">
                 Admin Dashboard
               </p>

@@ -7,8 +7,8 @@ export default function BasicTables() {
   return (
     <>
       <PageMeta
-        title="Dairy Management"
-        description="Admin and Sub-Admin Panel for Dairy Management"
+        title="Nupal CDC"
+        description="Admin and Sub-Admin Panel for Nupal CDC"
       />
       <PageBreadcrumb pageTitle="Basic Tables" />
       <div className="space-y-6">

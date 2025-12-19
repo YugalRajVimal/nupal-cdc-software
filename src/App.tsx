@@ -51,6 +51,7 @@ import TherapistsPage from "./pages/AdminPages/TherapistsPage/TherapistsPage";
 import PatientsPage from "./pages/AdminPages/PatientsPage/PatientsPage";
 import FinancesPage from "./pages/AdminPages/FinancesPage/FinancesPage";
 import TherapyTypesPage from "./pages/AdminPages/TherapyTypesPage/TherapyTypesPage";
+import AuthPage from "./pages/AuthPages/SIgnInPage";
 
 export default function App() {
   return (
@@ -163,12 +164,9 @@ export default function App() {
             <Route path="/parent/profile" element={<div>My Profile Page</div>} />
           </Route>
 
-          {/* Auth Layout */}
-          <Route path="/admin/signin" element={<SignIn />} />
-          {/* <Route path="/signup" element={<SignUp />} /> */}
-          <Route path="/sub-admin/signin" element={<SubAdminSignIn />} />
-          <Route path="/therapist/signin" element={<SupervisorSignIn />} />
-          <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+          <Route path="/signin" element={<AuthPage />} />
+        
+          {/* <Route path="/privacy-policy" element={<PrivacyPolicy />} /> */}
 
           {/* <Route path="/sub-admin/signup" element={<SubAdminSignUpForm />} /> */}
 

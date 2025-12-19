@@ -8,8 +8,8 @@ export default function Badges() {
   return (
     <div>
      <PageMeta
-        title="Dairy Management"
-        description="Admin and Sub-Admin Panel for Dairy Management"
+        title="Nupal CDC"
+        description="Admin and Sub-Admin Panel for Nupal CDC"
       />
       <PageBreadcrumb pageTitle="Badges" />
       <div className="space-y-5 sm:space-y-6">

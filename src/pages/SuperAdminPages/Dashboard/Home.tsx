@@ -51,8 +51,8 @@ export default function Home() {
   return (
     <>
       <PageMeta
-        title="Dairy Management"
-        description="Admin and Sub-Admin Panel for Dairy Management"
+        title="Nupal CDC"
+        description="Admin and Sub-Admin Panel for Nupal CDC"
       />
       <div className="max-w-6xl mx-auto mt-8">
         <h1 className="text-2xl font-bold mb-6 text-gray-800">

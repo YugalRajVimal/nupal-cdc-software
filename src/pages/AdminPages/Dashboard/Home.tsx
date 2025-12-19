@@ -16,8 +16,8 @@ export default function SubAdminHome() {
   return (
     <>
       <PageMeta
-        title="Dairy Management"
-        description="Admin and Sub-Admin Panel for Dairy Management"
+        title="Nupal CDC"
+        description="Admin and Sub-Admin Panel for Nupal CDC"
       />
       <div className="max-w-6xl mx-auto mt-8">
         {loading ? (

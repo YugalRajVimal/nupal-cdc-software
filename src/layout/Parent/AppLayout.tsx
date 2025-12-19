@@ -45,7 +45,7 @@ const ParentAppLayout: React.FC = () => {
   //       if (!token) {
   //         setIsSubAdminAuthenticated(false);
   //         if (window.location.pathname.startsWith("/sub-admin")) {
-  //           window.location.href = "/sub-admin/signin";
+  //           window.location.href = "/signin";
   //         }
   //         return;
   //       }
@@ -61,17 +61,17 @@ const ParentAppLayout: React.FC = () => {
   //       if (res.status === 200) {
   //         setIsSubAdminAuthenticated(true);
   //         // redirect only if logged in but not already on an admin page
-  //         if (window.location.pathname === "/sub-admin/signin") {
+  //         if (window.location.pathname === "/signin") {
   //           window.location.href = "/sub-admin";
   //         }
   //       } else {
   //         setIsSubAdminAuthenticated(false);
-  //         window.location.href = "/sub-admin/signin";
+  //         window.location.href = "/signin";
   //       }
   //     } catch (err) {
   //       console.error("Auth check failed:", err);
   //       setIsSubAdminAuthenticated(false);
-  //       window.location.href = "/sub-admin/signin";
+  //       window.location.href = "/signin";
   //     }
   //   };
 

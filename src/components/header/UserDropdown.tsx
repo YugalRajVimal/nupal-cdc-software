@@ -24,7 +24,7 @@ export default function UserDropdown() {
 
   const handleLogout = () => {
     localStorage.removeItem("admin-token");
-    window.location.href = "/admin/signin";
+    window.location.href = "/signin";
   };
 
   useEffect(() => {

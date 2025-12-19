@@ -24,7 +24,7 @@ export default function SupervisorUserDropdown() {
 
   const handleLogout = () => {
     localStorage.removeItem("therapist-token");
-    window.location.href = "/therapist/signin"; // Redirect to sign-in page
+    window.location.href = "/signin"; // Redirect to sign-in page
   };
 
   useEffect(() => {

@@ -39,8 +39,8 @@
 //       try {
 //         const token = localStorage.getItem("admin-token");
 
-//         if (!token && window.location.pathname !== "/admin/signin") {
-//           window.location.href = "/admin/signin";
+//         if (!token && window.location.pathname !== "/signin") {
+//           window.location.href = "/signin";
 //         }
 
 //         // if (window.location.pathname !== "/admin" && isAdminAuthenticated) {
@@ -146,7 +146,7 @@ const AppLayout: React.FC = () => {
   //       if (!token) {
   //         setIsAdminAuthenticated(false);
   //         if (window.location.pathname.startsWith("/admin")) {
-  //           window.location.href = "/admin/signin";
+  //           window.location.href = "/signin";
   //         }
   //         return;
   //       }
@@ -162,17 +162,17 @@ const AppLayout: React.FC = () => {
   //       if (res.status === 200) {
   //         setIsAdminAuthenticated(true);
   //         // redirect only if logged in but not already on an admin page
-  //         if (window.location.pathname === "/admin/signin") {
+  //         if (window.location.pathname === "/signin") {
   //           window.location.href = "/admin";
   //         }
   //       } else {
   //         setIsAdminAuthenticated(false);
-  //         window.location.href = "/admin/signin";
+  //         window.location.href = "/signin";
   //       }
   //     } catch (err) {
   //       console.error("Auth check failed:", err);
   //       setIsAdminAuthenticated(false);
-  //       window.location.href = "/admin/signin";
+  //       window.location.href = "/signin";
   //     }
   //   };
 

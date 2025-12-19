@@ -63,8 +63,8 @@ export default function SubAdminUserProfiles() {
   return (
     <>
       <PageMeta
-        title="Dairy Management"
-        description="Admin and Sub-Admin Panel for Dairy Management"
+        title="Nupal CDC"
+        description="Admin and Sub-Admin Panel for Nupal CDC"
       />
       <PageBreadcrumb pageTitle="Profile" />
 
