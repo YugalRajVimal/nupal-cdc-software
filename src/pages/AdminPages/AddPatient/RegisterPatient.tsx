@@ -1,6 +1,8 @@
 import { useState, ChangeEvent, ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || "";
+
 const steps = ["Personal", "Extra Details", "Review"];
 
 interface FormDataState {
@@ -68,24 +70,49 @@ export default function PatientRegistration() {
     otherDocument: undefined,
   });
 
+  const [submitting, setSubmitting] = useState(false);
+
   const update = (key: keyof FormDataState, value: any) =>
     setFormData((prev) => ({ ...prev, [key]: value }));
 
-  // const submit = async () => {
-  //   const payload = new FormData();
-  //   Object.entries(formData).forEach(([k, v]) => {
-  //     if (v !== undefined && v !== null) {
-  //       if (k === "otherDocument" && v instanceof File) {
-  //         payload.append(k, v);
-  //       } else if (k !== "otherDocument") {
-  //         payload.append(k, v as string);
-  //       }
-  //     }
-  //   });
-    
-  //   await fetch("/api/therapist/register", { method: "POST", body: payload });
-  //   alert("Registration submitted");
-  // };
+  // New: Submit to /api/admin/patients/register
+  const submit = async () => {
+    setSubmitting(true);
+    try {
+      const payload = new FormData();
+      Object.entries(formData).forEach(([k, v]) => {
+        if (v !== undefined && v !== null && v !== "") {
+          if (k === "otherDocument" && v instanceof File) {
+            payload.append(k, v);
+          } else if (k !== "otherDocument") {
+            payload.append(k, v as string);
+          }
+        }
+      });
+
+      const res = await fetch(`${API_BASE_URL}/api/admin/patients`, {
+        method: "POST",
+        body: payload,
+      });
+
+      // To view payload content:
+      for (let pair of payload.entries()) {
+        console.log(pair[0]+ ': ' + pair[1]);
+      }
+
+      if (!res.ok) {
+        const msg = await res.text();
+        alert("Failed to register patient: " + msg);
+        setSubmitting(false);
+        return;
+      }
+      alert("Patient registered successfully");
+      // Optionally: Reset form or navigate
+    } catch (error: any) {
+      alert("Registration failed: " + (error?.message || error));
+    }
+    setSubmitting(false);
+  };
 
   return (
     <div className=" bg-slate-50 flex items-center justify-center p-6">
@@ -296,20 +323,22 @@ export default function PatientRegistration() {
 
         <div className="flex justify-between mt-8">
           <button
-            disabled={step === 1}
+            disabled={step === 1 || submitting}
             onClick={() => setStep((prev) => prev - 1)}
             className="px-4 py-2 rounded-lg border disabled:opacity-40"
           >Previous</button>
           {step < 3 ? (
             <button
+              disabled={submitting}
               onClick={() => setStep((prev) => prev + 1)}
               className="px-6 py-2 bg-blue-600 text-white rounded-lg shadow"
             >Next</button>
           ) : (
             <button
-
+              disabled={submitting}
+              onClick={submit}
               className="px-6 py-2 bg-green-600 text-white rounded-lg shadow"
-            >Submit Registration</button>
+            >{submitting ? "Submitting..." : "Submit Registration"}</button>
           )}
         </div>
       </div>

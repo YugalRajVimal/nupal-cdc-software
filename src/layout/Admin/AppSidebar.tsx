@@ -54,7 +54,7 @@ const navItems: NavItem[] = [
   },
   {
     icon: <UserIcon />,
-    name: "Children",
+    name: "Patient",
     path: "/admin/children",
   },
   {
@@ -66,6 +66,11 @@ const navItems: NavItem[] = [
     icon: <ChevronDownIcon />,
     name: "Therapy Types",
     path: "/admin/therapy-types",
+  },
+  {
+    icon: <FileIcon />,
+    name: "Packages",
+    path: "/admin/packages",
   },
 ];
 

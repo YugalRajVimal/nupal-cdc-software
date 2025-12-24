@@ -1,4 +1,6 @@
 import { BrowserRouter as Router, Routes, Route } from "react-router";
+import { ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 import SignIn from "./pages/SuperAdminPages/AuthPages/SignIn";
 
@@ -52,10 +54,23 @@ import PatientsPage from "./pages/AdminPages/PatientsPage/PatientsPage";
 import FinancesPage from "./pages/AdminPages/FinancesPage/FinancesPage";
 import TherapyTypesPage from "./pages/AdminPages/TherapyTypesPage/TherapyTypesPage";
 import AuthPage from "./pages/AuthPages/SIgnInPage";
+import PackagesPage from "./pages/AdminPages/PackagesPage/PackagesPage";
 
 export default function App() {
   return (
     <>
+      <ToastContainer 
+        position="top-right"
+        autoClose={3000}
+        hideProgressBar={false}
+        newestOnTop={false}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme="light"
+      />
       <Router>
         <ScrollToTop />
         <Routes>
@@ -103,9 +118,6 @@ export default function App() {
               path="/super-admin/audit-logs"
               element={<h1>Audit Logs</h1>}
             />
-
-           
-
             {/* Others Page */}
             <Route path="/super-admin/profile" element={<UserProfiles />} />
             <Route path="/calendar" element={<Calendar />} />
@@ -143,6 +155,7 @@ export default function App() {
             <Route path="/admin/children" element={<PatientsPage/>} />
             <Route path="/admin/finances" element={<FinancesPage/>} />
             <Route path="/admin/therapy-types" element={<TherapyTypesPage />} />
+            <Route path="/admin/packages" element={<PackagesPage />} />
 
             {/* Others Page */}
             <Route path="/admin/profile" element={<SubAdminProfiles />} />
