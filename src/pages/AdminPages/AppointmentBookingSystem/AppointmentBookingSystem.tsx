@@ -67,11 +67,7 @@ type Booking = {
   couponValidityDays?: number;
 };
 
-type Coupon = {
-  code: string;
-  discount: number;
-  validityDays: number;
-};
+
 
 function generateCouponCode() {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";

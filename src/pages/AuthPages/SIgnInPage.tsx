@@ -19,26 +19,7 @@ const roles = [
 
 type Role = typeof roles[number]["key"];
 
-// Animation configs for smoother transitions
-const containerVariant = {
-  hidden: { opacity: 0, y: 50 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: { type: "spring", stiffness: 60, damping: 15, duration: 0.7 }
-  },
-  exit: { opacity: 0, y: -30, transition: { duration: 0.3 } }
-};
 
-const tabVariant = {
-  initial: { scale: 1, boxShadow: "0 0 #0000" },
-  selected: {
-    scale: 1.08,
-    boxShadow: "0 8px 32px 0 rgba(34,41,47,0.10)",
-    transition: { type: "spring", stiffness: 320, damping: 20 }
-  },
-  notSelected: { scale: 1, boxShadow: "0 0 #0000" }
-};
 
 export default function AuthPage() {
   const [role, setRole] = useState<Role>("admin");

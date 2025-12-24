@@ -109,10 +109,7 @@ export default function TherapistRegistration() {
     });
 
     if (res.status === 201) {
-      let data: any = {};
-      try {
-        data = await res.json();
-      } catch {}
+   
 
       setSuccessMessage(`Registration submitted successfully!`);
       toast.success("Therapist registered successfully!", {

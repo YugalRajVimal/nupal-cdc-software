@@ -83,7 +83,7 @@ export default function PatientRegistration() {
       Object.entries(formData).forEach(([k, v]) => {
         if (v !== undefined && v !== null && v !== "") {
           if (k === "otherDocument" && v instanceof File) {
-            payload.append(k, v);
+            payload.append(k, v as string);
           } else if (k !== "otherDocument") {
             payload.append(k, v as string);
           }

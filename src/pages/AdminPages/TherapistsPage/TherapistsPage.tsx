@@ -1,12 +1,11 @@
 import { useEffect, useState } from "react";
 import {
   FiUser,
-  FiPhone,
-  FiMail,
+
   FiEdit2,
   FiTrash2,
   FiEye,
-  FiCalendar,
+
 } from "react-icons/fi";
 import { motion } from "framer-motion";
 import axios from "axios";
@@ -71,7 +70,6 @@ const FIELD_LIST: {
   // Show name, email, and role correctly, prioritizing userId property if present, then fallback to root.
   { key: "name", label: "Name", render: (_, row) => row?.userId?.name || row?.name || "-" },
   { key: "email", label: "Email", type: "email", render: (_, row) => row?.userId?.email || row?.email || "-" },
-  // HIDE ROLE IN EDIT MODAL (see renderEditModal below)
   { key: "role", label: "Role", render: (_, row) => row?.userId?.role || row?.role || "-" },
   { key: "fathersName", label: "Father's Name" },
   { key: "mobile1", label: "Mobile 1" },
@@ -107,7 +105,7 @@ export default function TherapistsPage() {
   const [selected, setSelected] = useState<TherapistProfile | null>(null);
   const [editTherapist, setEditTherapist] = useState<TherapistProfile | null>(null);
   const [editField, setEditField] = useState<{ [k: string]: any }>({});
-  const [deleteId, setDeleteId] = useState<string | null>(null);
+
   const [error, setError] = useState<string | null>(null);
 
   async function fetchTherapists() {
@@ -190,24 +188,6 @@ export default function TherapistsPage() {
         }
       }
 
-      // override email/name with editField values, ensuring proper placement
-      if (
-        editTherapist.userId &&
-        (editField.name !== undefined || editField.email !== undefined)
-      ) {
-        // If those fields are changed, also update the nested userId property
-        if (editField.name !== undefined)
-          payload.name = undefined; // ensure not set on root
-        if (editField.email !== undefined)
-          payload.email = undefined;
-
-        payload.userId = {
-          ...editTherapist.userId,
-          ...(editField.name !== undefined ? { name: editField.name } : {}),
-          ...(editField.email !== undefined ? { email: editField.email } : {}),
-        };
-      }
-
       await axios.put(
         `${API_BASE_URL.replace(/\/$/, "")}/api/admin/therapist/${editTherapist._id}`,
         payload,
@@ -239,7 +219,6 @@ export default function TherapistsPage() {
         `${API_BASE_URL.replace(/\/$/, "")}/api/admin/therapist/${id}`
       );
       await fetchTherapists();
-      setDeleteId(null);
     } catch (err: any) {
       let msg = "Error removing therapist.";
       if (err?.response?.data?.message) {
@@ -292,8 +271,8 @@ export default function TherapistsPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
               {FIELD_LIST.map(f => {
                 const value = f.render
-                  ? f.render(selected[f.key], selected)
-                  : selected[f.key];
+                  ? f.render(selected[f.key as keyof typeof selected], selected)
+                  : selected[f.key as keyof typeof selected];
                 return (
                   <div key={f.key} className="flex flex-col">
                     <span className="text-xs text-slate-500">{f.label}</span>
@@ -344,32 +323,6 @@ export default function TherapistsPage() {
 
   function renderEditModal() {
     if (!editTherapist) return null;
-
-    // Prepare for name and email field values and update logic
-    // Find out true "name", "email" from the correct source for value
-    const getEditValue = (f: { key: string; type?: string }) => {
-      // For "name" and "email", prefer editField > userId > root
-      if (f.key === "name") {
-        if (editField.name !== undefined) return editField.name;
-        if (editTherapist.userId && editTherapist.userId.name !== undefined)
-          return editTherapist.userId.name;
-        return editTherapist.name ?? "";
-      }
-      if (f.key === "email") {
-        if (editField.email !== undefined) return editField.email;
-        if (editTherapist.userId && editTherapist.userId.email !== undefined)
-          return editTherapist.userId.email;
-        return editTherapist.email ?? "";
-      }
-      // all others as before
-      return editField[f.key] !== undefined
-        ? editField[f.key]
-        : editTherapist[f.key as keyof typeof editTherapist] ?? "";
-    };
-
-    // Only show fields except "role" in the edit modal
-    const editFields = FIELD_LIST.filter(f => f.key !== "role");
-
     return (
       <div className="fixed inset-0 z-40 bg-white/70 flex items-center justify-center">
         <div className="relative w-full max-w-2xl mx-auto h-full flex items-center justify-center">
@@ -388,7 +341,7 @@ export default function TherapistsPage() {
               }}
               className="grid grid-cols-1 md:grid-cols-2 gap-4"
             >
-              {editFields.map(f => (
+              {FIELD_LIST.map(f => (
                 <div key={f.key}>
                   <label className="block text-sm mb-1">{f.label}</label>
                   {f.type === "file" ? (
@@ -410,16 +363,20 @@ export default function TherapistsPage() {
                     <input
                       className="w-full border px-2 py-1 rounded"
                       type={f.type || "text"}
-                      value={getEditValue(f)}
-                      onChange={e => {
+                      value={
+                        editField[f.key] !== undefined
+                          ? editField[f.key]
+                          : editTherapist[f.key as keyof typeof editTherapist] ?? ""
+                      }
+                      onChange={e =>
                         setEditField(prev => ({
                           ...prev,
                           [f.key]:
                             f.type === "number"
                               ? e.target.value.replace(/[^0-9]/g, "")
                               : e.target.value,
-                        }));
-                      }}
+                        }))
+                      }
                     />
                   )}
                 </div>
@@ -502,7 +459,11 @@ export default function TherapistsPage() {
                   <td className="px-4 py-3 whitespace-nowrap">{(t?.userId?.email || t.email) || "-"}</td>
                   <td className="px-4 py-3 whitespace-nowrap">{t.mobile1 || "-"}</td>
                   <td className="px-4 py-3 whitespace-nowrap">{t.specializations?.trim() ? t.specializations : "-"}</td>
-                  <td className="px-4 py-3 whitespace-nowrap">{t.experienceYears !== undefined && t.experienceYears !== null && t.experienceYears !== "" ? `${t.experienceYears} yrs` : "-"}</td>
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    {typeof t.experienceYears === "number" && !isNaN(t.experienceYears)
+                      ? `${t.experienceYears} yrs`
+                      : "-"}
+                  </td>
                   <td className="px-4 py-3 whitespace-nowrap">
                     <div className="flex items-center gap-3">
                       <button

@@ -2,7 +2,7 @@ import { BrowserRouter as Router, Routes, Route } from "react-router";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
-import SignIn from "./pages/SuperAdminPages/AuthPages/SignIn";
+// import SignIn from "./pages/SuperAdminPages/AuthPages/SignIn";
 
 import NotFound from "./pages/SuperAdminPages/OtherPage/NotFound";
 import UserProfiles from "./pages/SuperAdminPages/UserProfiles";
@@ -21,7 +21,7 @@ import Blank from "./pages/SuperAdminPages/Blank";
 import AppLayout from "./layout/AppLayout";
 import { ScrollToTop } from "./components/common/ScrollToTop";
 import Home from "./pages/SuperAdminPages/Dashboard/Home";
-import SubAdminSignIn from "./pages/SuperAdminPages/AuthPages/SubAdmin/SignIn";
+// import SubAdminSignIn from "./pages/SuperAdminPages/AuthPages/SubAdmin/SignIn";
 
 import SubAdminAppLayout from "./layout/Admin/AppLayout";
 import SubAdminProfiles from "./pages/AdminPages/UserProfiles";
@@ -33,11 +33,11 @@ import HomePage from "./pages/HomePage";
 
 import SupervisorAppLayout from "./layout/Therapist/AppLayout";
 import SupervisorHome from "./pages/TherapistPages/Dashboard/Home";
-import SupervisorSignIn from "./pages/SuperAdminPages/AuthPages/Supervisor/SignIn";
+// import SupervisorSignIn from "./pages/SuperAdminPages/AuthPages/Supervisor/SignIn";
 
 import SupervisorProfiles from "./pages/TherapistPages/UserProfiles";
 
-import PrivacyPolicy from "./pages/PrivacyPolicy";
+// import PrivacyPolicy from "./pages/PrivacyPolicy";
 
 
 import ParentAppLayout from "./layout/Parent/AppLayout";
