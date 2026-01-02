@@ -72,6 +72,12 @@ const navItems: NavItem[] = [
     name: "Packages",
     path: "/admin/packages",
   },
+
+  {
+    icon: <FileIcon />,
+    name: "Manage Therapist Availability",
+    path: "/admin/manage-availability",
+  },
 ];
 
 
@@ -311,6 +317,9 @@ const SubAdminAppSidebar: React.FC = () => {
         lg:translate-x-0`}
       onMouseEnter={() => !isExpanded && setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
+      // style={{
+      //   background: "linear-gradient(180deg, #fdf4cc 0%, #ffe3ef 45%, #ced3f3 100%)",
+      // }}
     >
       <div
         className={`py-8 px-6 flex ${

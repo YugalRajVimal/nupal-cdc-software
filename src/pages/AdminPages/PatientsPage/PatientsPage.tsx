@@ -6,6 +6,7 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || "";
 
 type Patient = {
   _id: string;
+  patientId?: string;
   childFullName: string;
   gender?: string;
   childDOB?: string;
@@ -58,6 +59,7 @@ export default function PatientsPage() {
       address: patient.address || "",
       diagnosisInfo: patient.diagnosisInfo || "",
       remarks: patient.remarks || "",
+      // Do NOT include patientId since it is non-editable
     });
   };
 
@@ -112,7 +114,7 @@ export default function PatientsPage() {
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="min-h-screen bg-slate-50 p-8"
+      className="min-h-screen p-8"
     >
       <h1 className="text-2xl font-bold text-slate-800 mb-6">Patients</h1>
 
@@ -123,6 +125,7 @@ export default function PatientsPage() {
           <table className="w-full text-sm">
             <thead className="bg-slate-100 text-slate-600">
               <tr>
+                <th className="px-4 py-3 text-left">PatientID</th>
                 <th className="px-4 py-3 text-left">Patient</th>
                 <th className="px-4 py-3 text-left">Diagnosis/Concern</th>
                 <th className="px-4 py-3 text-left">Contact</th>
@@ -132,6 +135,10 @@ export default function PatientsPage() {
             <tbody>
               {patients.map((p) => (
                 <tr key={p._id} className="border-t">
+                  {/* Patient ID column, non-editable */}
+                  <td className="px-4 py-4 font-semibold text-slate-700">
+                    {p.patientId || <span className="italic text-slate-400">N/A</span>}
+                  </td>
                   <td className="px-4 py-4">
                     <div className="flex items-center gap-3">
                       <div className="w-9 h-9 rounded-full bg-green-100 flex items-center justify-center">
@@ -182,7 +189,7 @@ export default function PatientsPage() {
               ))}
               {patients.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="text-center p-6 text-slate-400">
+                  <td colSpan={5} className="text-center p-6 text-slate-400">
                     No patients found.
                   </td>
                 </tr>
@@ -210,6 +217,19 @@ export default function PatientsPage() {
               }}
               className="space-y-4"
             >
+              {/* Show Patient ID - not editable */}
+              <div>
+                <label className="block mb-1 text-sm font-medium">Patient ID</label>
+                <input
+                  type="text"
+                  className="w-full border rounded px-3 py-2 bg-gray-100 text-gray-600 cursor-not-allowed"
+                  value={editPatient.patientId || ""}
+                  readOnly
+                  disabled
+                  tabIndex={-1}
+                  style={{ opacity: 1 }}
+                />
+              </div>
               <div>
                 <label className="block mb-1 text-sm font-medium">Name</label>
                 <input

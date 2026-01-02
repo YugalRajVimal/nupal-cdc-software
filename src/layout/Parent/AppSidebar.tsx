@@ -296,7 +296,7 @@ const ParentAppSidebar: React.FC = () => {
         <Link to="/">
           {isExpanded || isHovered || isMobileOpen ? (
             <>
-              <span className="text-3xl font-bold">ADMIN</span>
+              <span className="text-3xl font-bold">Parent Dashboard</span>
             </>
           ) : (
             // <img
@@ -305,7 +305,7 @@ const ParentAppSidebar: React.FC = () => {
             //   width={32}
             //   height={32}
             // />
-            <span className="text-xl font-bold">ADMIN</span>
+            <span className="text-xl font-bold">Parent Dashboard</span>
           )}
         </Link>
       </div>

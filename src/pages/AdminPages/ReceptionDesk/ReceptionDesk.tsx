@@ -83,7 +83,7 @@ export default function ReceptionDesk() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+      <div className="min-h-screen flex items-center justify-center ">
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -100,7 +100,7 @@ export default function ReceptionDesk() {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.6, ease: "easeOut" }}
-      className="min-h-screen bg-slate-50 p-8"
+      className="min-h-screen  p-8"
     >
       {/* Header */}
       <div className="flex items-center justify-between mb-6">

@@ -14,11 +14,32 @@ import {
   FiPackage,
   FiEdit2,
   FiX,
+  FiHash,
+  FiCheckCircle,
 } from "react-icons/fi";
 import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
+import axios from "axios";
 
 const DAYS = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
+
+const SESSION_TIME_OPTIONS = [
+  { id: '0830-0915', label: '08:30 to 09:15', limited: true },
+  { id: '0915-1000', label: '09:15 to 10:00', limited: true },
+  { id: '1000-1045', label: '10:00 to 10:45', limited: false },
+  { id: '1045-1130', label: '10:45 to 11:30', limited: false },
+  { id: '1130-1215', label: '11:30 to 12:15', limited: false },
+  { id: '1215-1300', label: '12:15 to 13:00', limited: false },
+  { id: '1300-1345', label: '13:00 to 13:45', limited: false },
+  { id: '1415-1500', label: '14:15 to 15:00', limited: false },
+  { id: '1500-1545', label: '15:00 to 15:45', limited: false },
+  { id: '1545-1630', label: '15:45 to 16:30', limited: false },
+  { id: '1630-1715', label: '16:30 to 17:15', limited: false },
+  { id: '1715-1800', label: '17:15 to 18:00', limited: false },
+  { id: '1800-1845', label: '18:00 to 18:45', limited: true },
+  { id: '1845-1930', label: '18:45 to 19:30', limited: true },
+  { id: '1930-2015', label: '19:30 to 20:15', limited: true }
+];
 
 type Patient = {
   id: string;
@@ -46,7 +67,7 @@ type Package = {
   sessionCount?: number;
 };
 
-type BookingSession = { date: string; time: string; _id?: string };
+type BookingSession = { date: string; slotId: string; _id?: string };
 
 type DiscountInfo = {
   discountEnabled?: boolean;
@@ -57,6 +78,7 @@ type DiscountInfo = {
 
 type Booking = {
   _id: string;
+  appointmentId?: string;
   patient: Patient;
   therapy: Therapy;
   package: Package | null;
@@ -67,7 +89,24 @@ type Booking = {
   couponValidityDays?: number;
 };
 
+// --- AVAILABILITY types adapted for new format ---
+// For a day, slotId => { total: number, booked: number }
+export type SlotAvailability = {
+  [slotId: string]: {
+    total: number;
+    booked: number;
+  };
+};
+export type CalendarDayAvailability = {
+  [date: string]: SlotAvailability;
+};
 
+function pad2(n: number) {
+  return n < 10 ? `0${n}` : `${n}`;
+}
+function getDateKey(year: number, month: number, day: number): string {
+  return `${year}-${pad2(month)}-${pad2(day)}`;
+}
 
 function generateCouponCode() {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
@@ -98,7 +137,7 @@ export default function AppointmentBookingSystem() {
   const [patientId, setPatientId] = useState<string>("");
   const [therapyId, setTherapyId] = useState<string>("");
   const [packageId, setPackageId] = useState<string>("");
-  const [sessions, setSessions] = useState<{ date: string; time: string }[]>([]);
+  const [sessions, setSessions] = useState<{ date: string; slotId: string }[]>([]);
 
   const [discountEnabled, setDiscountEnabled] = useState<boolean>(false);
   const [discount, setDiscount] = useState<number>(0);
@@ -114,16 +153,78 @@ export default function AppointmentBookingSystem() {
   const [bookingError, setBookingError] = useState<string | null>(null);
   const [bookingSuccess, setBookingSuccess] = useState<string | null>(null);
 
+  // Calendar availability per @ManageAvailabilityPage
+  const [dayAvailability, setDayAvailability] = useState<CalendarDayAvailability>({});
+  const [availabilityLoading, setAvailabilityLoading] = useState<boolean>(false);
+  const [availabilityError, setAvailabilityError] = useState<string | null>(null);
+
   // EDIT STATE
-  // If editBookingId !== null, act in edit mode. State mirrors booking fields.
   const [editBookingId, setEditBookingId] = useState<string | null>(null);
 
-  // days/month for calendar
+  // Calendar
   const daysInMonth = getDaysInMonth(year, month);
   const startDay = getStartDay(year, month);
 
-  // --- BEGIN: Booking Fetch Logic ---
+  // --- FETCH & NORMALIZE NEW AVAILABILITY STRUCTURE ---
+  /**  NEW FORMAT:
+   * { success: true, data: Array<{date: string, sessions: Array<{id, label, limited, count, booked, ...}>}> }
+   * Convert to { [dateStr]: { [slotId]: { total: number, booked: number } } }
+   */
+  const fetchMonthAvailability = useCallback(async (year: number, month: number) => {
+    setAvailabilityLoading(true);
+    setAvailabilityError(null);
 
+    try {
+      const start = getDateKey(year, month + 1, 1);
+      const end = getDateKey(year, month + 1, getDaysInMonth(year, month));
+      const res = await axios.get(`${API_BASE_URL}/api/admin/availability-slots/range/${start}/${end}`);
+      const api = res.data;
+
+      // Accept both: { success, data } and old object
+      if (
+        api &&
+        typeof api === "object" &&
+        api.success === true &&
+        Array.isArray(api.data)
+      ) {
+        // New format!
+        const cal: CalendarDayAvailability = {};
+        for (const day of api.data) {
+          if (typeof day.date === "string" && Array.isArray(day.sessions)) {
+            const slotMap: SlotAvailability = {};
+            for (const slot of day.sessions) {
+              // count is total slots for the slotId, booked is count of booked
+              slotMap[slot.id] = {
+                total: typeof slot.count === "number" ? slot.count : 0,
+                booked: typeof slot.booked === "number" ? slot.booked : 0,
+              };
+            }
+            cal[day.date] = slotMap;
+          }
+        }
+        setDayAvailability(cal);
+      }
+      // Fallback for old shape (legacy)
+      else if (api && typeof api === 'object' && !Array.isArray(api)) {
+        setDayAvailability(api as any);
+      } else {
+        setDayAvailability({});
+        setAvailabilityError("Unexpected result from server when fetching calendar availability.");
+      }
+    } catch (e: any) {
+      setDayAvailability({});
+      setAvailabilityError("Failed to fetch slot availability for calendar.");
+    }
+    setAvailabilityLoading(false);
+  }, []);
+
+  useEffect(() => {
+    fetchMonthAvailability(year, month);
+    // eslint-disable-next-line
+  }, [year, month, API_BASE_URL]);
+  // --
+
+  // --- Booking Fetch Logic ---
   useEffect(() => {
     async function fetchMasterData() {
       setDataLoading(true);
@@ -182,7 +283,6 @@ export default function AppointmentBookingSystem() {
       setDataLoading(false);
     }
     fetchMasterData();
-    // ToastContainer: see App root for real rendering
   }, []);
 
   function normalizeBookings(bookings: any[]): Booking[] {
@@ -213,17 +313,27 @@ export default function AppointmentBookingSystem() {
           }
         };
       }
+      // Patch sessions: normalize any 'time' field to 'slotId' for display
+      let normalizedSessions = Array.isArray(b.sessions)
+        ? b.sessions.map((s: any) => ({
+            ...s,
+            slotId: s.slotId ?? s.time ?? "",
+          }))
+        : [];
+
       if (b.discountInfo && typeof b.discountInfo === "object") {
         return {
           ...b,
           patient,
+          sessions: normalizedSessions,
           discount: b.discountInfo.discount ?? b.discount,
           couponCode: b.discountInfo.couponCode ?? b.couponCode,
           couponValidityDays: b.discountInfo.validityDays ?? b.couponValidityDays,
           discountEnabled: b.discountInfo.discountEnabled,
+          appointmentId: b.appointmentId,
         };
       }
-      return { ...b, patient };
+      return { ...b, patient, sessions: normalizedSessions, appointmentId: b.appointmentId };
     });
   }
 
@@ -246,14 +356,11 @@ export default function AppointmentBookingSystem() {
     }
   }, [dataLoading, loading, fetchBookings]);
 
-  // --- END: Booking Fetch Logic
-
   useEffect(() => {
     const t = setTimeout(() => setLoading(false), 700);
     return () => clearTimeout(t);
   }, []);
 
-  // Editing logic. When in edit mode (editBookingId !== null), fields are set to the booking's values.
   const selectedPackage = packages.find((p) => p._id === packageId) || null;
   const getTotalSessionsForPackage = (pkg: Package | null) => {
     if (!pkg) return undefined;
@@ -268,16 +375,13 @@ export default function AppointmentBookingSystem() {
   };
   const maxSelectableDates = getTotalSessionsForPackage(selectedPackage);
 
-  // If editing, keep selection <= maxSelectableDates
   useEffect(() => {
     if (maxSelectableDates === undefined) return;
     if (sessions.length > maxSelectableDates) {
       setSessions((prev) => prev.slice(0, maxSelectableDates));
-      // toast.info(`Sessions reduced to maximum allowed for this package (${maxSelectableDates}).`);
     }
   }, [packageId, maxSelectableDates]);
 
-  // When entering edit mode, fill fields from booking
   useEffect(() => {
     if (editBookingId) {
       const booking = bookings.find((b) => b._id === editBookingId);
@@ -291,12 +395,11 @@ export default function AppointmentBookingSystem() {
           Array.isArray(booking.sessions)
             ? booking.sessions.map((s) => ({
                 date: s.date,
-                time: s.time,
+                slotId: s.slotId ?? "",
               }))
             : []
         );
 
-        // unified discount fields
         let di = booking.discountInfo || {};
         setDiscountEnabled(!!di.discountEnabled);
         setDiscount(
@@ -310,13 +413,10 @@ export default function AppointmentBookingSystem() {
             ? di.validityDays
             : booking.couponValidityDays || 1
         );
-        // toast.info("Now editing booking. Make changes and click Update.");
       }
     }
-    // Only update when entering edit mode or bookings change
   }, [editBookingId, bookings]);
 
-  // When leaving edit mode, clear state
   function resetForm() {
     setPatientId("");
     setTherapyId("");
@@ -360,35 +460,31 @@ export default function AppointmentBookingSystem() {
   };
 
   const toggleDate = (day: number) => {
-    const dateKey = `${year}-${month + 1}-${day}`;
+    const dateKey = getDateKey(year, month + 1, day);
     const exists = sessions.find((s) => s.date === dateKey);
     if (exists) {
       setSessions((prev) => prev.filter((s) => s.date !== dateKey));
-      // toast.info(`Date ${dateKey} removed from session selection.`);
       return;
     }
     if (
       typeof maxSelectableDates === "number" &&
       sessions.length >= maxSelectableDates
     ) {
-      // toast.warn(`You can select up to ${maxSelectableDates} date${maxSelectableDates > 1 ? "s" : ""}.`);
       return;
     }
-    setSessions((prev) => [...prev, { date: dateKey, time: "" }]);
-    // toast.success(`Date ${dateKey} added. Please set time.`);
+    setSessions((prev) => [...prev, { date: dateKey, slotId: "" }]);
   };
 
-  const updateTime = (date: string, time: string) => {
+  const updateSlotId = (date: string, slotId: string) => {
     setSessions((prev) =>
-      prev.map((s) => (s.date === date ? { ...s, time } : s))
+      prev.map((s) => (s.date === date ? { ...s, slotId } : s))
     );
-    // toast.info(`Time for ${date} updated.`);
   };
 
   const selectedPatient = patients.find((p) => p.id === patientId) || null;
   const selectedTherapy = therapies.find((t) => t._id === therapyId) || null;
 
-  function getFirstSessionEarliest(sessions: { date: string; time: string }[]) {
+  function getFirstSessionEarliest(sessions: { date: string; slotId: string }[]) {
     if (!sessions || sessions.length === 0) return null;
     const sorted = [...sessions].sort((a, b) => a.date.localeCompare(b.date));
     return sorted[0];
@@ -401,7 +497,7 @@ export default function AppointmentBookingSystem() {
     !!selectedTherapy &&
     !!selectedPackage &&
     sessions.length > 0 &&
-    !!(earliestSession && earliestSession.time);
+    !!(earliestSession && earliestSession.slotId);
 
   function getPatientDisplayName(patient: Patient | undefined | null) {
     if (!patient) return "";
@@ -439,24 +535,17 @@ export default function AppointmentBookingSystem() {
 
   const handleRegenerateCouponCode = () => {
     setCouponCode(generateCouponCode());
-    // toast.info("Coupon code regenerated.");
   };
 
-  //---------------------------------------------
-  // API CALLS (booking create, update, delete, coupon)
-  //---------------------------------------------
-
-  // CREATE/EDIT BUTTON
   const handleBookOrUpdate = async (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
     setBookingSuccess(null);
     setBookingError(null);
 
     if (!canBook) {
-      setBookingError(
-        "Please fill all required fields and select session date/time."
-      );
-      toast.error("Please fill all required fields and select a session date and time.");
+      const message = "Please fill all required fields and select a session date and time.";
+      setBookingError(message);
+      toast.error(message);
       return;
     }
 
@@ -466,9 +555,12 @@ export default function AppointmentBookingSystem() {
       patient: patientId,
       therapy: therapyId,
       package: packageId,
-      sessions: sessions.slice().sort((a, b) => a.date.localeCompare(b.date)),
+      sessions: sessions
+        .slice()
+        .sort((a, b) => a.date.localeCompare(b.date))
+        .map(({ date, slotId }) => ({ date, slotId })),
+      discountEnabled,
     };
-    payload.discountEnabled = discountEnabled;
     if (discountEnabled) {
       payload.discount = discount;
       payload.couponCode = couponCode;
@@ -478,61 +570,87 @@ export default function AppointmentBookingSystem() {
     try {
       let res, result;
       if (!editBookingId) {
-        // NEW BOOKING (POST)
         res = await fetch(`${API_BASE_URL}/api/admin/bookings`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
       } else {
-        // EDIT (PUT)
         res = await fetch(`${API_BASE_URL}/api/admin/bookings/${editBookingId}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
       }
-      result = await res.json();
-      if (!res.ok || result.error) {
-        setBookingError(result.message || result.error || "Booking failed.");
-        toast.error(result.message || result.error || "Booking failed.");
+
+      let rawText = await res.text();
+      try {
+        result = JSON.parse(rawText);
+      } catch {
+        result = null;
+      }
+
+      if (!res.ok) {
+        let message = "Booking failed.";
+        if (result && (result.message || result.error)) {
+          message = result.message || result.error;
+        } else if (typeof rawText === "string" && rawText.trim() && !rawText.startsWith("<")) {
+          message = rawText;
+        }
+        setBookingError(message);
+        toast.error(message);
         setBookingLoading(false);
         return;
       }
-      setBookingSuccess(
-        !editBookingId
-          ? "Booking successfully created."
-          : "Booking successfully updated."
-      );
-      toast.success(
-        !editBookingId
-          ? "Booking successfully created."
-          : "Booking successfully updated."
-      );
+
+      if (result && result.success === false) {
+        const message = result.message || result.error || "Booking failed.";
+        setBookingError(message);
+        toast.error(message);
+        setBookingLoading(false);
+        return;
+      }
+
+      if (result && !result.booking) {
+        const message = result.message || "No booking returned from server.";
+        setBookingError(message);
+        toast.error(message);
+        setBookingLoading(false);
+        return;
+      }
+
+      const successMsg = !editBookingId
+        ? "Booking successfully created."
+        : "Booking successfully updated.";
+      setBookingSuccess(successMsg);
+      toast.success(successMsg);
+
       await fetchBookings();
       resetForm();
+      fetchMonthAvailability(year, month); // refresh slot display too
     } catch (e: any) {
-      setBookingError(editBookingId ? "Failed to update." : "Booking failed.");
-      toast.error(editBookingId ? "Failed to update." : "Booking failed.");
+      const msg =
+        (typeof e === "object" && e !== null && ("message" in e) && e.message)
+          ? e.message
+          : editBookingId
+            ? "Failed to update."
+            : "Booking failed.";
+      setBookingError(msg);
+      toast.error(msg);
     }
     setBookingLoading(false);
   };
 
-  // Enter edit mode
   function handleEditBooking(bookingId: string) {
     setEditBookingId(bookingId);
     setBookingError(null);
     setBookingSuccess(null);
-    // toast.info("Edit mode activated for selected booking.");
   }
 
-  // Cancel edit mode (and clear state)
   function handleCancelEdit() {
     resetForm();
-    // toast.info("Edit cancelled. Form cleared.");
   }
 
-  // Delete
   async function handleDeleteBooking(id: string) {
     if (!window.confirm("Delete this booking?")) return;
     try {
@@ -544,24 +662,74 @@ export default function AppointmentBookingSystem() {
         toast.error(result?.message || "Booking could not be deleted.");
       }
       await fetchBookings();
+      fetchMonthAvailability(year, month);
     } catch {
       toast.error("An error occurred. Booking could not be deleted.");
     }
     if (editBookingId === id) {
-      // If deleted while editing, leave edit mode
       resetForm();
-      // toast.info("Booking deleted. Exited edit mode.");
     }
+  }
+
+  // Render short summary: booked slots/total slots for the day (sum of all time slots)
+  function getDaySlotSummary(dateStr: string): { total: number; booked: number } {
+    const slotsObj = dayAvailability && dayAvailability[dateStr] ? dayAvailability[dateStr] : {};
+    let total = 0, booked = 0;
+    for (const slotId of Object.keys(slotsObj)) {
+      total += typeof slotsObj[slotId]?.total === "number" ? slotsObj[slotId]?.total : 0;
+      booked += typeof slotsObj[slotId]?.booked === "number" ? slotsObj[slotId]?.booked : 0;
+    }
+    return { total, booked };
+  }
+
+  // Helper: for a session date, get option status for every slot
+  function getAvailableSlotsForDate(date: string, selectedSessions: {date: string, slotId: string}[], currSelectedSlotId: string) {
+    // Returns a map { [slotId]: { disabled: boolean, reason?: string, (label override) } }
+    const slotInfo: {[slotId: string]: { disabled: boolean, reason: string }} = {};
+    const slots = dayAvailability && dayAvailability[date] ? dayAvailability[date] : {};
+    const slotCountMap: {[slotId: string]: { total: number, booked: number }} = slots;
+
+    // Gather slots already booked by other sessions in the form except this session (for multi-day multi-slot).
+    const sessionsExcludingCurrent = selectedSessions.filter(s => s.date !== date);
+    const pickedSlotIds = sessionsExcludingCurrent.map(s => s.slotId);
+
+    // Finally, for each SESSION_TIME_OPTION slot:
+    for (const opt of SESSION_TIME_OPTIONS) {
+      const av = slotCountMap[opt.id];
+      // Exclude slots already picked for other days in this booking (prevent duplicate time for the same patient per logic)
+      let isPickedInOtherSession = pickedSlotIds.includes(opt.id);
+      let disabled = false;
+      let reason = "";
+
+      // If slot has no data, treat as unavailable
+      if (!av || typeof av.total !== "number" || av.total === 0) {
+        disabled = true;
+        reason = "Not available";
+      } else if (av.booked >= av.total) {
+        // slot exists, but fully booked
+        // But: allow picking if user had already selected this slotId for this date (editing)
+        if (currSelectedSlotId !== opt.id) {
+          disabled = true; reason = "Already full";
+        }
+      }
+      // Block picking the same time slot on multiple days for the same booking (optional, can be removed)
+      if (!disabled && isPickedInOtherSession) {
+        if (currSelectedSlotId !== opt.id) {
+          disabled = true; reason = "Already picked for another day";
+        }
+      }
+      slotInfo[opt.id] = { disabled, reason };
+    }
+    return slotInfo;
   }
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="min-h-screen bg-slate-50 p-8"
+      className="min-h-screen  p-8"
     >
       {/* Optionally place ToastContainer at root or ensure it's rendered in App root */}
-      {/* <ToastContainer /> */}
 
       {/* Guide */}
       <motion.div
@@ -606,7 +774,7 @@ export default function AppointmentBookingSystem() {
                   <FiList /> Steps to Follow
                 </div>
                 <ol className="list-decimal list-inside text-sm text-slate-600 space-y-1">
-                  <li>Use the calendar to view and check bookings.</li>
+                  <li>Use the calendar to view and check bookings. Booked/Total slots for each day are shown.</li>
                   <li>Select a patient, therapy, and package in 'Quick Book'.</li>
                   <li>
                     Select <span className="font-medium text-blue-800">at least one</span> session date; enter a time for the first session. Selecting all dates is <span className="font-medium text-blue-800">not mandatory</span>.
@@ -649,19 +817,23 @@ export default function AppointmentBookingSystem() {
             ))}
             {Array.from({ length: daysInMonth }).map((_, i) => {
               const day = i + 1;
-              const dateKey = `${year}-${month + 1}-${day}`;
+              const dateKey = getDateKey(year, month + 1, day);
               const selected = sessions.find((s) => s.date === dateKey);
               const isAtMax =
                 typeof maxSelectableDates === "number" &&
                 sessions.length >= maxSelectableDates &&
                 !selected;
+
+              // Render availability: booked/total for that day
+              const { total, booked } = getDaySlotSummary(dateKey);
+
               return (
                 <div
                   key={day}
                   onClick={() => {
                     if (!isAtMax) toggleDate(day);
                   }}
-                  className={`h-24 border cursor-pointer p-2 transition ${
+                  className={`h-24 border cursor-pointer flex flex-col justify-between p-2 transition ${
                     selected
                       ? "bg-blue-50 border-blue-400"
                       : isAtMax
@@ -670,13 +842,30 @@ export default function AppointmentBookingSystem() {
                   }`}
                   style={isAtMax ? { pointerEvents: "none" } : {}}
                 >
+                  <div className="flex flex-col justify-start">
                   <div className={`w-7 h-7 flex items-center justify-center rounded-full text-sm ${selected ? "bg-blue-600 text-white" : ""}`}>
                     {day}
                   </div>
+                  
                   {selected && (
-                    <div className="mt-2 text-xs text-blue-700 font-medium">
+                    <div className="mt-1 text-xs text-blue-700 font-medium">
                       Selected
                     </div>
+                  )}
+                  </div>
+                
+                  
+                  {availabilityLoading ? (
+                    <span className="text-gray-300">Loading slots…</span>
+                  ) : total > 0 ? (
+                    <span className="flex items-center w-fit gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-green-200 text-green-700 border border-green-300 shadow">
+                      <FiCheckCircle className="inline mr-0.5 text-green-500" size={13}/>
+                      <span data-testid='booked-total' className="tabular-nums font-semibold">
+                        {booked}/{total}
+                      </span>
+                    </span>
+                  ) : (
+                    <span className="text-gray-400">No slots</span>
                   )}
                 </div>
               );
@@ -692,6 +881,9 @@ export default function AppointmentBookingSystem() {
               )}
             </div>
           )}
+          {availabilityError && (
+            <div className="px-4 text-xs text-red-500 mt-1">{availabilityError}</div>
+          )}
         </div>
 
         {/* Quick Book / Edit Booking */}
@@ -705,6 +897,28 @@ export default function AppointmentBookingSystem() {
             )}
           </h3>
 
+          {/* Appointment ID (non-editable, only visible when editing a booking) */}
+          {editBookingId && (() => {
+            const currentBooking = bookings.find(b => b._id === editBookingId);
+            if (currentBooking && currentBooking.appointmentId) {
+              return (
+                <div className="mb-3">
+                  <label className="block text-sm mb-1 flex items-center gap-1 text-gray-700 font-semibold">
+                    <FiHash /> Appointment ID
+                  </label>
+                  <input
+                    type="text"
+                    value={currentBooking.appointmentId}
+                    className="w-full border rounded px-3 py-2 bg-slate-100 font-mono text-gray-500"
+                    readOnly
+                    disabled
+                  />
+                </div>
+              );
+            }
+            return null;
+          })()}
+
           <label className="block text-sm mb-1 flex items-center gap-1">
             <FiUser /> Patient Name
           </label>
@@ -713,7 +927,6 @@ export default function AppointmentBookingSystem() {
             onChange={e => setPatientId(e.target.value)}
             className="w-full border rounded px-3 py-2 mb-3"
             disabled={!!editBookingId}
-            // Do not allow changing patient when editing
           >
             <option value="">Select Patient</option>
             {patients.map((patient) => (
@@ -764,7 +977,6 @@ export default function AppointmentBookingSystem() {
               className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 focus:outline-none ${discountEnabled ? "bg-blue-600" : "bg-gray-300"}`}
               onClick={() => {
                 setDiscountEnabled((v) => !v);
-                // toast.info(!discountEnabled ? "Discount enabled." : "Discount disabled.");
               }}
               aria-pressed={discountEnabled}
               role="switch"
@@ -775,7 +987,7 @@ export default function AppointmentBookingSystem() {
             </button>
           </div>
 
-          {/* Coupon Fields - shown only if enabled */}
+          {/* Coupon Fields */}
           <AnimatePresence>
             {discountEnabled && (
               <motion.div
@@ -795,7 +1007,6 @@ export default function AppointmentBookingSystem() {
                     max={100}
                     onChange={e => {
                       setDiscount(Number(e.target.value));
-                      // toast.info("Discount percentage changed.");
                     }}
                     className="w-full border rounded px-3 py-2"
                     placeholder="Enter discount percentage"
@@ -829,7 +1040,6 @@ export default function AppointmentBookingSystem() {
                     value={validityDays}
                     onChange={e => {
                       setValidityDays(Number(e.target.value));
-                      // toast.info("Coupon validity days changed.");
                     }}
                     className="w-full border rounded px-3 py-2"
                     placeholder="Number of days coupon is valid"
@@ -849,32 +1059,47 @@ export default function AppointmentBookingSystem() {
               {sessions
                 .slice()
                 .sort((a, b) => a.date.localeCompare(b.date))
-                .map((s, idx) => (
+                .map((s, idx, arr) => {
+                  // For this date, fetch available slot info for options
+                  const slotInfo = getAvailableSlotsForDate(s.date, arr, s.slotId);
+                  return (
                   <div key={s.date} className="flex items-center gap-2 text-sm">
                     <span className="flex-1 font-mono">{s.date}</span>
                     <FiClock className="text-slate-400" />
-                    <input
-                      type="time"
-                      value={s.time}
-                      onChange={e => updateTime(s.date, e.target.value)}
+                    <select
+                      value={s.slotId}
+                      onChange={e => updateSlotId(s.date, e.target.value)}
                       className={`border rounded px-2 py-1 ${
-                        idx === 0 && !s.time ? "border-red-400" : ""
+                        idx === 0 && !s.slotId ? "border-red-400" : ""
                       }`}
                       required={idx === 0}
                       aria-required={idx === 0}
-                      placeholder="Time"
-                      style={{ minWidth: 110 }}
-                    />
-                    {idx === 0 && !s.time && (
+                      style={{ minWidth: 180 }}
+                    >
+                      <option value="">Select Time Slot</option>
+                      {SESSION_TIME_OPTIONS.map((slot) => {
+                        const i = slotInfo[slot.id];
+                        return (
+                          <option
+                            key={slot.id}
+                            value={slot.id}
+                            disabled={i.disabled}
+                          >
+                            {slot.label}
+                            {slot.limited ? " (Limited case)" : ""}
+                            {i.disabled ? `  - ${i.reason}` : ""}
+                          </option>
+                        );
+                      })}
+                    </select>
+                    {idx === 0 && !s.slotId && (
                       <span className="text-xs text-red-500 ml-2">Time required</span>
                     )}
                   </div>
-                ))}
+                )})}
             </div>
           )}
 
-          {/* Booking error/success display */}
-          {/* Hide warnings in favor of toast. You may keep these lines as fallback UX or remove */}
           {bookingError && <div className="text-xs text-red-600 mt-1">{bookingError}</div>}
           {bookingSuccess && <div className="text-xs text-green-600 mt-1">{bookingSuccess}</div>}
 
@@ -911,7 +1136,7 @@ export default function AppointmentBookingSystem() {
           {sessions.length === 0 && (
             <div className="text-xs text-red-600 mt-2">At least one session date must be selected.</div>
           )}
-          {sessions.length > 0 && (!earliestSession || !earliestSession.time) && (
+          {sessions.length > 0 && (!earliestSession || !earliestSession.slotId) && (
             <div className="text-xs text-red-600 mt-2">Please set a time for the first session date.</div>
           )}
         </div>
@@ -936,6 +1161,12 @@ export default function AppointmentBookingSystem() {
                   }`}
                   key={booking._id}
                 >
+                  {/* Appointment ID display row, non-editable, always available */}
+                  {booking.appointmentId && (
+                    <div className="mb-1 flex items-center gap-2 text-xs font-mono text-gray-700">
+                      <FiHash className="text-blue-500" /> <span>Appointment ID: {booking.appointmentId}</span>
+                    </div>
+                  )}
                   <div className="mb-1 font-semibold text-blue-900 flex items-center gap-2">
                     <FiUser className="text-blue-600" />
                     {getPatientDisplayName(booking.patient)}
@@ -953,18 +1184,27 @@ export default function AppointmentBookingSystem() {
                   {Array.isArray(booking.sessions) && booking.sessions.length > 0 && (
                     <div className="mb-1 text-xs text-slate-700">
                       <span className="font-medium">Sessions:</span>{" "}
-                      {booking.sessions.map((s, idx) => (
-                        <span key={s._id || s.date}>
-                          {s.date} {s.time}
-                          {idx < booking.sessions.length - 1 ? ", " : ""}
-                        </span>
-                      ))}
+                      {booking.sessions.map((s, idx) => {
+                        const slot = SESSION_TIME_OPTIONS.find(opt => opt.id === s.slotId);
+                        return (
+                          <span key={s._id || s.date}>
+                            {s.date}{" "}
+                            {slot
+                              ? (
+                                  <>
+                                    {slot.label}
+                                    {slot.limited ? " (Limited case)" : ""}
+                                  </>
+                                )
+                              : s.slotId}
+                            {idx < booking.sessions.length - 1 ? ", " : ""}
+                          </span>
+                        );
+                      })}
                     </div>
                   )}
-                  {/* discount/coupon */}
-                  {(
-                      (typeof booking.discount === "number" && booking.discount > 0) ||
-                      (booking.discountInfo && booking.discountInfo.discountEnabled && booking.discountInfo.discount)
+                  {(typeof booking.discount === "number" && booking.discount > 0 ||
+                  (booking.discountInfo && booking.discountInfo.discountEnabled && booking.discountInfo.discount)
                     ) && (
                     <div className="mb-1 text-xs text-blue-700">
                       Discount: <span className="font-semibold">
@@ -1004,7 +1244,6 @@ export default function AppointmentBookingSystem() {
                       Delete
                     </button>
                   </div>
-                  {/* Edit banner overlay */}
                   {editBookingId === booking._id && (
                     <div className="absolute -top-2 right-2">
                       <span className="text-blue-800 text-xs bg-blue-200 px-2 py-0.5 rounded font-bold shadow">

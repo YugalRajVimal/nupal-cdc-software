@@ -14,8 +14,8 @@ type FormDataType = {
   mobile2: string;
   address: string;
   reference: string;
-  specializations: string; // Added
-  experienceYears: string; // Added
+  specializations: string;
+  experienceYears: string;
   aadhaarFront: NullableFile;
   aadhaarBack: NullableFile;
   photo: NullableFile;
@@ -71,6 +71,25 @@ const initialFormData: FormDataType = {
   remarks: "",
 };
 
+// Add a validation for mandatory fields
+const requiredFields: (keyof FormDataType)[] = [
+  "fullName",
+  "email",
+  "fathersName",
+  "mobile1",
+  "address",
+  "reference",
+  "specializations",
+  "experienceYears",
+];
+
+function validateRequired(formData: FormDataType): { valid: boolean; missing: string[] } {
+  const missing = requiredFields.filter(
+    (k) => !formData[k] || (typeof formData[k] === "string" && formData[k].trim() === "")
+  );
+  return { valid: missing.length === 0, missing };
+}
+
 export default function TherapistRegistration() {
   const [step, setStep] = useState<number>(1);
   const [formData, setFormData] = useState<FormDataType>({ ...initialFormData });
@@ -80,6 +99,29 @@ export default function TherapistRegistration() {
     setFormData({ ...formData, [key]: value });
 
   const submit = async () => {
+    // Validation for required fields
+    const validation = validateRequired(formData);
+    if (!validation.valid) {
+      toast.error(
+        `Please fill all mandatory fields: ${validation.missing
+          .map((k) =>
+            ({
+              fullName: "Full Name",
+              email: "Email",
+              fathersName: "Father's Name",
+              mobile1: "Mobile Number 1",
+              address: "Full Address",
+              reference: "Reference",
+              specializations: "Specializations",
+              experienceYears: "Years of Experience",
+            } as Record<string, string>)[k] || k
+          )
+          .join(", ")}`,
+        { position: "top-center", autoClose: 4000 }
+      );
+      return;
+    }
+
     const payload = new FormData();
     Object.entries(formData).forEach(([key, val]) => {
       if (
@@ -109,21 +151,18 @@ export default function TherapistRegistration() {
     });
 
     if (res.status === 201) {
-   
-
       setSuccessMessage(`Registration submitted successfully!`);
       toast.success("Therapist registered successfully!", {
         position: "top-center",
-        autoClose: 1500, // Shorten duration for quick redirect
+        autoClose: 1500,
       });
 
-      // MUST: Wait for toast to become visible before redirect/reset
       setTimeout(() => {
         setFormData({ ...initialFormData }); // Empty everything
         setStep(1); // Go back to the beginning of the form
-        setSuccessMessage(null); // Remove success message
-        window.location.href = "/admin"; // Redirect to home page without react-router-dom
-      }, 1600); // Wait slightly longer than autoClose above
+        setSuccessMessage(null);
+        window.location.href = "/admin";
+      }, 1600);
     } else {
       let data: any = {};
       try {
@@ -140,6 +179,9 @@ export default function TherapistRegistration() {
     }
   };
 
+  // Step 1 validation for "Next" button
+  // removed canGotoNext logic, now use Next always enabled
+ 
   return (
     <div className=" bg-slate-50 flex items-center justify-center p-6">
       <ToastContainer />
@@ -187,33 +229,37 @@ export default function TherapistRegistration() {
             {step === 1 && (
               <Section title="Personal Information">
                 <Input
-                  label="Full Name"
+                  label="Full Name *"
                   value={formData.fullName}
                   onChange={(e: ChangeEvent<HTMLInputElement>) =>
                     update("fullName", e.target.value)
                   }
+                  required
                 />
                 <Input
-                  label="Email"
+                  label="Email *"
                   type="email"
                   value={formData.email}
                   onChange={(e: ChangeEvent<HTMLInputElement>) =>
                     update("email", e.target.value)
                   }
+                  required
                 />
                 <Input
-                  label="Father's Name"
+                  label="Father's Name *"
                   value={formData.fathersName}
                   onChange={(e: ChangeEvent<HTMLInputElement>) =>
                     update("fathersName", e.target.value)
                   }
+                  required
                 />
                 <Input
-                  label="Mobile Number 1"
+                  label="Mobile Number 1 *"
                   value={formData.mobile1}
                   onChange={(e: ChangeEvent<HTMLInputElement>) =>
                     update("mobile1", e.target.value)
                   }
+                  required
                 />
                 <Input
                   label="Mobile Number 2"
@@ -223,29 +269,32 @@ export default function TherapistRegistration() {
                   }
                 />
                 <Input
-                  label="Full Address"
+                  label="Full Address *"
                   value={formData.address}
                   onChange={(e: ChangeEvent<HTMLInputElement>) =>
                     update("address", e.target.value)
                   }
+                  required
                 />
                 <Input
-                  label="Reference"
+                  label="Reference *"
                   value={formData.reference}
                   onChange={(e: ChangeEvent<HTMLInputElement>) =>
                     update("reference", e.target.value)
                   }
+                  required
                 />
                 <Input
-                  label="Specializations"
+                  label="Specializations *"
                   value={formData.specializations}
                   onChange={(e: ChangeEvent<HTMLInputElement>) =>
                     update("specializations", e.target.value)
                   }
                   placeholder="e.g., Occupational Therapy, Speech Therapy"
+                  required
                 />
                 <Input
-                  label="Years of Experience"
+                  label="Years of Experience *"
                   value={formData.experienceYears}
                   onChange={(e: ChangeEvent<HTMLInputElement>) =>
                     update("experienceYears", e.target.value)
@@ -253,6 +302,7 @@ export default function TherapistRegistration() {
                   type="number"
                   min="0"
                   placeholder="e.g., 5"
+                  required
                 />
               </Section>
             )}
@@ -516,7 +566,29 @@ export default function TherapistRegistration() {
           </button>
           {step < 4 ? (
             <button
-              onClick={() => setStep(step + 1)}
+              onClick={() => {
+                if (step === 1 && !validateRequired(formData).valid) {
+                  toast.error(
+                    `Please fill all mandatory fields: ${validateRequired(formData).missing
+                      .map((k) =>
+                        ({
+                          fullName: "Full Name",
+                          email: "Email",
+                          fathersName: "Father's Name",
+                          mobile1: "Mobile Number 1",
+                          address: "Full Address",
+                          reference: "Reference",
+                          specializations: "Specializations",
+                          experienceYears: "Years of Experience",
+                        } as Record<string, string>)[k] || k
+                      )
+                      .join(", ")}`,
+                    { position: "top-center", autoClose: 4000 }
+                  );
+                  return;
+                }
+                setStep(step + 1);
+              }}
               className="px-6 py-2 bg-blue-600 text-white rounded-lg shadow"
               disabled={!!successMessage}
             >

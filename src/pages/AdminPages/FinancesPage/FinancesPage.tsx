@@ -11,7 +11,7 @@ export default function FinancesPage() {
   const totalExpense = Math.abs(transactions.filter(t => t.amount < 0).reduce((a, b) => a + b.amount, 0));
 
   return (
-    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="min-h-screen bg-slate-50 p-8">
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="min-h-screen  p-8">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-slate-800">Finances</h1>
         <button className="flex items-center gap-2 border px-4 py-2 rounded hover:bg-slate-100">

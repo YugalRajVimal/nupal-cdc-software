@@ -198,7 +198,7 @@ export default function PackagesPage() {
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="min-h-screen bg-slate-50 p-8"
+      className="min-h-screen  p-8"
     >
       <h1 className="text-2xl font-bold text-slate-800 mb-6">
         Therapy Packages

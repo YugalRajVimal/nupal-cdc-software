@@ -13,6 +13,7 @@ import {
   FiTrash2,
   FiArrowRight,
   FiX,
+  FiHash,
 } from "react-icons/fi";
 
 // Set API base URL from environment variable or blank as fallback
@@ -56,6 +57,7 @@ type Lead = {
   status: string;
   actions: string[];
   // Extended properties for typed local use
+  leadId?: string; // <-- add this
   callDate?: string;
   staff?: string;
   staffOther?: string;
@@ -69,6 +71,7 @@ type Lead = {
   visitFinalized?: string;
   appointmentDate?: string;
   appointmentTime?: string;
+  remarks?: string;
 };
 
 export default function ConsultationsLeads() {
@@ -98,7 +101,9 @@ export default function ConsultationsLeads() {
     visitFinalized: "",
     appointmentDate: "",
     appointmentTime: "",
+    remarks: "",
     status: "pending", // Default status set as pending for the edit API
+    // Don't include leadId in enqForm; it's not editable
   });
 
   // Track which lead is being edited (for PUT)
@@ -122,6 +127,7 @@ export default function ConsultationsLeads() {
         if (Array.isArray(data.leads)) {
           const uiLeads: Lead[] = data.leads.map((lead: any) => ({
             id: lead._id,
+            leadId: lead.leadId || "", // <-- get leadId from backend
             parent: lead.parentName,
             child: lead.childName,
             phone: lead.parentMobile,
@@ -141,6 +147,7 @@ export default function ConsultationsLeads() {
             visitFinalized: lead.visitFinalized || "",
             appointmentDate: lead.appointmentDate ? new Date(lead.appointmentDate).toISOString().slice(0, 10) : "",
             appointmentTime: lead.appointmentTime || "",
+            remarks: lead.remarks || "",
           }));
           if (!ignore) setLeads(uiLeads);
         } else {
@@ -268,7 +275,9 @@ export default function ConsultationsLeads() {
       visitFinalized: "",
       appointmentDate: "",
       appointmentTime: "",
+      remarks: "",
       status: "pending", // Reset as per default on close
+      // not leadId
     });
     setEditingLeadId(null);
   }
@@ -284,6 +293,7 @@ export default function ConsultationsLeads() {
             ? enqForm.staffOther
             : enqForm.staff,
         status: enqForm.status || "pending", // ensure status is always present for edit/add
+        // leadId is NOT sent from UI; only for view, non-editable
       };
 
       let res;
@@ -316,6 +326,7 @@ export default function ConsultationsLeads() {
                   ? {
                       ...l,
                       id: updatedLeadData._id || updatedLeadData.id || editingLeadId,
+                      leadId: updatedLeadData.leadId || "",
                       parent: updatedLeadData.parentName,
                       child: updatedLeadData.childName,
                       phone: updatedLeadData.parentMobile,
@@ -340,6 +351,7 @@ export default function ConsultationsLeads() {
                         ? new Date(updatedLeadData.appointmentDate).toISOString().slice(0, 10)
                         : "",
                       appointmentTime: updatedLeadData.appointmentTime || "",
+                      remarks: updatedLeadData.remarks || "",
                       actions: [],
                     }
                   : l
@@ -367,6 +379,7 @@ export default function ConsultationsLeads() {
         // Map backend response to the Lead type (with extras for edit):
         const newLead: Lead = {
           id: createdLeadData._id || createdLeadData.id,
+          leadId: createdLeadData.leadId || "",
           parent: createdLeadData.parentName,
           child: createdLeadData.childName,
           phone: createdLeadData.parentMobile,
@@ -386,6 +399,7 @@ export default function ConsultationsLeads() {
           visitFinalized: createdLeadData.visitFinalized || "",
           appointmentDate: createdLeadData.appointmentDate ? new Date(createdLeadData.appointmentDate).toISOString().slice(0, 10) : "",
           appointmentTime: createdLeadData.appointmentTime || "",
+          remarks: createdLeadData.remarks || "",
         };
         setLeads((prev) => prev ? [newLead, ...prev] : [newLead]);
       }
@@ -423,7 +437,9 @@ export default function ConsultationsLeads() {
       visitFinalized: lead.visitFinalized || "",
       appointmentDate: lead.appointmentDate || "",
       appointmentTime: lead.appointmentTime || "",
+      remarks: lead.remarks || "",
       status: lead.status || "pending", // Propagate current status into form for edit API
+      // not leadId!
     });
   }
 
@@ -517,7 +533,7 @@ export default function ConsultationsLeads() {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, ease: "easeOut" }}
-      className="min-h-screen bg-slate-50 p-8"
+      className="min-h-screen  p-8"
     >
       {/* Modal for New Enquiry or Edit Enquiry */}
       <AnimatePresence>
@@ -558,6 +574,29 @@ export default function ConsultationsLeads() {
                 autoComplete="off"
                 onSubmit={handleModalSubmit}
               >
+                {/* Lead ID (readonly, non-editable, shows only on edit) */}
+                {editingLeadId && (
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 mb-1">
+                      Lead ID
+                    </label>
+                    <input
+                      type="text"
+                      className="w-full border px-3 py-2 rounded bg-slate-100 text-slate-600"
+                      name="leadId"
+                      value={
+                        (leads?.find((l) => l.id === editingLeadId)?.leadId &&
+                          leads.find((l) => l.id === editingLeadId)?.leadId !== ""
+                        )
+                          ? leads?.find((l) => l.id === editingLeadId)?.leadId
+                          : (leads?.find((l) => l.id === editingLeadId)?.id || editingLeadId)
+                      }
+                      readOnly
+                      disabled
+                    />
+                  </div>
+                )}
+
                 {/* Date/Time of Call */}
                 <div className="flex flex-col md:flex-row md:gap-4">
                   <div className="flex-1 mb-2 md:mb-0">
@@ -804,6 +843,20 @@ export default function ConsultationsLeads() {
                     </select>
                   </div>
                 </div>
+                {/* Remarks */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">
+                    Remarks
+                  </label>
+                  <textarea
+                    className="w-full border px-3 py-2 rounded"
+                    name="remarks"
+                    value={enqForm.remarks}
+                    onChange={handleModalInput}
+                    placeholder="Additional notes, comments, next steps, etc."
+                    rows={2}
+                  />
+                </div>
                 {/* Status field: hidden input to propagate value to API (for edit) */}
                 <input type="hidden" name="status" value={enqForm.status || "pending"} />
                 <div className="flex gap-2 justify-end pt-6">
@@ -855,6 +908,7 @@ export default function ConsultationsLeads() {
               visitFinalized: "",
               appointmentDate: "",
               appointmentTime: "",
+              remarks: "",
               status: "pending", // Default status set as pending for new inquiry
             });
           }}
@@ -940,23 +994,30 @@ export default function ConsultationsLeads() {
         <table className="w-full  text-sm">
           <thead className="bg-slate-100 text-slate-600">
             <tr>
+              <th className="px-4 py-3 text-left font-medium">Lead&nbsp;ID</th>
               <th className="px-4 py-3 text-left font-medium">Parent</th>
               <th className="px-4 py-3 text-left font-medium">Child</th>
               <th className="px-4 py-3 text-left font-medium">Contact</th>
               <th className="px-4 py-3 text-left font-medium">Status</th>
+              <th className="px-4 py-3 text-left font-medium">Remarks</th>
               <th className="px-4 py-3 text-right font-medium">Actions</th>
             </tr>
           </thead>
           <tbody>
             {sortedLeads?.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-12 text-center text-slate-400">
+                <td colSpan={7} className="px-4 py-12 text-center text-slate-400">
                   No leads found.
                 </td>
               </tr>
             )}
             {sortedLeads?.map((lead) => (
               <tr className="border-t" key={lead.id}>
+                <td className="px-4 py-4 text-slate-600 font-mono flex items-center gap-2">
+                  <FiHash className="text-blue-500" />
+                  {/* show leadId if present, else fallback to display id */}
+                  {lead.leadId && lead.leadId !== "" ? lead.leadId : lead.id}
+                </td>
                 <td className="px-4 py-4 font-medium text-slate-800">{lead.parent}</td>
                 <td className="px-4 py-4">{lead.child}</td>
                 <td className="px-4 py-4 space-y-1 text-slate-600">
@@ -969,6 +1030,13 @@ export default function ConsultationsLeads() {
                 </td>
                 <td className="px-4 py-4">
                   {renderStatus(lead.status)}
+                </td>
+                <td className="px-4 py-4">
+                  {lead.remarks && lead.remarks.trim() !== "" ? (
+                    <span className="block text-slate-700 break-words whitespace-pre-line">{lead.remarks}</span>
+                  ) : (
+                    <span className="block text-slate-400 italic">—</span>
+                  )}
                 </td>
                 <td className="px-4 py-4 text-right">
                   {renderActions(lead)}

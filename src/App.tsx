@@ -35,8 +35,6 @@ import SupervisorAppLayout from "./layout/Therapist/AppLayout";
 import SupervisorHome from "./pages/TherapistPages/Dashboard/Home";
 // import SupervisorSignIn from "./pages/SuperAdminPages/AuthPages/Supervisor/SignIn";
 
-import SupervisorProfiles from "./pages/TherapistPages/UserProfiles";
-
 // import PrivacyPolicy from "./pages/PrivacyPolicy";
 
 
@@ -55,6 +53,14 @@ import FinancesPage from "./pages/AdminPages/FinancesPage/FinancesPage";
 import TherapyTypesPage from "./pages/AdminPages/TherapyTypesPage/TherapyTypesPage";
 import AuthPage from "./pages/AuthPages/SIgnInPage";
 import PackagesPage from "./pages/AdminPages/PackagesPage/PackagesPage";
+import ManageAvailabilityPage from "./pages/AdminPages/ManageAvailabilityPage/ManageAvailabilityPage";
+import MyChildrens from "./pages/ParentPages/AllChildrens/MyChildrens";
+import MyChildrenAppointmentsPage from "./pages/ParentPages/MyChildrenAppointments/MyChildrenAppointmentsPage";
+import ParentProfile from "./pages/ParentPages/ProfilePage/ParentProfile";
+import TherapistMyAppointments from "./pages/TherapistPages/MyAppointment/MyAppointments";
+import CalendarAndSchedule from "./pages/TherapistPages/CalendarAndSchedule/CalendarAndSchedule";
+import TherpaistProfile from "./pages/TherapistPages/TherapistProfile/TherpaistProfile";
+
 
 export default function App() {
   return (
@@ -157,25 +163,27 @@ export default function App() {
             <Route path="/admin/therapy-types" element={<TherapyTypesPage />} />
             <Route path="/admin/packages" element={<PackagesPage />} />
 
+            <Route path="/admin/manage-availability" element={<ManageAvailabilityPage />} />
+
             {/* Others Page */}
             <Route path="/admin/profile" element={<SubAdminProfiles />} />
           </Route>
 
           <Route element={<SupervisorAppLayout />}>
             <Route index path="/therapist" element={<SupervisorHome />} />
-            <Route path="/therapist/appointments" element={<div>My Appointments Page</div>} />
-            <Route path="/therapist/calendar" element={<div>Schedule & Calendar Page</div>} />
+            <Route path="/therapist/appointments" element={<TherapistMyAppointments />} />
+            <Route path="/therapist/calendar" element={<CalendarAndSchedule />} />
             <Route path="/therapist/earnings" element={<div>My Earnings Page</div>} />
-            <Route path="/therapist/profile" element={<SupervisorProfiles />} />
+            <Route path="/therapist/profile" element={<TherpaistProfile />} />
           </Route>
 
           <Route element={<ParentAppLayout />}>
             <Route index path="/parent" element={<ParentDashboard />} />
-            <Route path="/parent/children" element={<div>My Children Page</div>} />
-            <Route path="/parent/appointments" element={<div>My Appointments Page</div>} />
+            <Route path="/parent/children" element={<MyChildrens />} />
+            <Route path="/parent/appointments" element={<MyChildrenAppointmentsPage  />} />
             <Route path="/parent/invoices-payments" element={<div>Invoices & Payments Page</div>} />
-            <Route path="/parent/profile" element={<div>My Profile Page</div>} />
-          </Route>
+            <Route path="/parent/profile" element={<ParentProfile />} />
+          </Route>       
 
           <Route path="/signin" element={<AuthPage />} />
         

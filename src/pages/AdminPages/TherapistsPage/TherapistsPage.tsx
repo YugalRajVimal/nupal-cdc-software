@@ -1,11 +1,9 @@
 import { useEffect, useState } from "react";
 import {
   FiUser,
-
   FiEdit2,
   FiTrash2,
   FiEye,
-
 } from "react-icons/fi";
 import { motion } from "framer-motion";
 import axios from "axios";
@@ -28,6 +26,7 @@ type TherapistProfile = {
     createdAt?: string;
     updatedAt?: string;
   };
+  therapistId?: string;
   name?: string;
   email?: string;
   role?: string;
@@ -68,6 +67,7 @@ const FIELD_LIST: {
   render?: (value: any, row?: TherapistProfile) => React.ReactNode;
 }[] = [
   // Show name, email, and role correctly, prioritizing userId property if present, then fallback to root.
+  { key: "therapistId", label: "Therapist ID", render: (_, row) => row?.therapistId || "-" },
   { key: "name", label: "Name", render: (_, row) => row?.userId?.name || row?.name || "-" },
   { key: "email", label: "Email", type: "email", render: (_, row) => row?.userId?.email || row?.email || "-" },
   { key: "role", label: "Role", render: (_, row) => row?.userId?.role || row?.role || "-" },
@@ -251,6 +251,11 @@ export default function TherapistsPage() {
           </button>
           <h2 className="text-xl font-bold mb-2">Therapist Details</h2>
           <div className="overflow-y-auto max-h-[70vh]">
+            {/* Show therapistId at the top */}
+            <div className="mb-2">
+              <span className="text-xs text-slate-500 font-semibold">Therapist ID: </span>
+              <span className="text-sm text-slate-700">{selected.therapistId}</span>
+            </div>
             {selected.userId && (
               <div className="mb-4 border-b pb-2 text-md">
                 <div className="font-semibold mb-1 text-slate-800">User Account</div>
@@ -270,6 +275,8 @@ export default function TherapistsPage() {
             )}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
               {FIELD_LIST.map(f => {
+                // therapistId field (shows _id) is already displayed above
+                if (f.key === "therapistId") return null;
                 const value = f.render
                   ? f.render(selected[f.key as keyof typeof selected], selected)
                   : selected[f.key as keyof typeof selected];
@@ -334,6 +341,15 @@ export default function TherapistsPage() {
               ×
             </button>
             <h2 className="text-lg font-bold mb-3 text-center">Edit Therapist</h2>
+            {/* Show therapistId at the top */}
+            <div className="mb-3">
+              <label className="block text-sm mb-1 font-semibold text-slate-600">Therapist ID</label>
+              <input
+                className="w-full border px-2 py-1 rounded bg-slate-100 text-slate-600"
+                value={editTherapist.therapistId}
+                readOnly
+              />
+            </div>
             <form
               onSubmit={e => {
                 e.preventDefault();
@@ -341,46 +357,49 @@ export default function TherapistsPage() {
               }}
               className="grid grid-cols-1 md:grid-cols-2 gap-4"
             >
-              {FIELD_LIST.map(f => (
-                <div key={f.key}>
-                  <label className="block text-sm mb-1">{f.label}</label>
-                  {f.type === "file" ? (
-                    <>
-                      {/* File upload (no preview of old file, only overwrite) */}
+              {FIELD_LIST.map(f => {
+                if (f.key === "therapistId") return null;
+                return (
+                  <div key={f.key}>
+                    <label className="block text-sm mb-1">{f.label}</label>
+                    {f.type === "file" ? (
+                      <>
+                        {/* File upload (no preview of old file, only overwrite) */}
+                        <input
+                          className="w-full border px-2 py-1 rounded"
+                          type="file"
+                          onChange={e => handleFileChange(e, f.key)}
+                          accept="image/*,.pdf"
+                        />
+                        {editTherapist[f.key as keyof typeof editTherapist] && typeof editTherapist[f.key as keyof typeof editTherapist] === "string" && (
+                          <div className="mt-1 text-xs text-blue-700">
+                            <a href={editTherapist[f.key as keyof typeof editTherapist] as any} target="_blank" rel="noopener noreferrer">Current: View</a>
+                          </div>
+                        )}
+                      </>
+                    ) : (
                       <input
                         className="w-full border px-2 py-1 rounded"
-                        type="file"
-                        onChange={e => handleFileChange(e, f.key)}
-                        accept="image/*,.pdf"
+                        type={f.type || "text"}
+                        value={
+                          editField[f.key] !== undefined
+                            ? editField[f.key]
+                            : editTherapist[f.key as keyof typeof editTherapist] ?? ""
+                        }
+                        onChange={e =>
+                          setEditField(prev => ({
+                            ...prev,
+                            [f.key]:
+                              f.type === "number"
+                                ? e.target.value.replace(/[^0-9]/g, "")
+                                : e.target.value,
+                          }))
+                        }
                       />
-                      {editTherapist[f.key as keyof typeof editTherapist] && typeof editTherapist[f.key as keyof typeof editTherapist] === "string" && (
-                        <div className="mt-1 text-xs text-blue-700">
-                          <a href={editTherapist[f.key as keyof typeof editTherapist] as any} target="_blank" rel="noopener noreferrer">Current: View</a>
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <input
-                      className="w-full border px-2 py-1 rounded"
-                      type={f.type || "text"}
-                      value={
-                        editField[f.key] !== undefined
-                          ? editField[f.key]
-                          : editTherapist[f.key as keyof typeof editTherapist] ?? ""
-                      }
-                      onChange={e =>
-                        setEditField(prev => ({
-                          ...prev,
-                          [f.key]:
-                            f.type === "number"
-                              ? e.target.value.replace(/[^0-9]/g, "")
-                              : e.target.value,
-                        }))
-                      }
-                    />
-                  )}
-                </div>
-              ))}
+                    )}
+                  </div>
+                );
+              })}
               <div className="md:col-span-2 text-right pt-4">
                 <button
                   type="submit"
@@ -406,6 +425,7 @@ export default function TherapistsPage() {
 
   // For table, show top-level, most-identifying fields
   const tableHeaders: { label: string; key: keyof TherapistProfile | "actions" }[] = [
+    { label: "Therapist ID", key: "_id" },
     { label: "Name", key: "name" },
     { label: "Email", key: "email" },
     { label: "Mobile1", key: "mobile1" },
@@ -418,7 +438,7 @@ export default function TherapistsPage() {
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="min-h-screen bg-slate-50 p-8"
+      className="min-h-screen  p-8"
     >
       <h1 className="text-2xl font-bold text-slate-800 mb-6">Therapists</h1>
       {error ? <div className="text-red-500 mb-4">{error}</div> : null}
@@ -452,6 +472,7 @@ export default function TherapistsPage() {
             ) : (
               therapists.map((t) => (
                 <tr key={t._id} className="hover:bg-slate-50 transition">
+                  <td className="px-4 py-3 whitespace-nowrap text-slate-700 font-mono">{t.therapistId}</td>
                   <td className="px-4 py-3 whitespace-nowrap font-medium text-slate-800 flex items-center gap-2">
                     <FiUser className="text-slate-400" />
                     {t?.userId?.name || t.name || t.email || "-"}

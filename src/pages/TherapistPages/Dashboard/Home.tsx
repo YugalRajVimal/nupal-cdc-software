@@ -1,12 +1,16 @@
 import { useEffect, useState } from "react";
+import { Card, Spin, Typography, Row, Col, Statistic, Alert } from "antd";
 import PageMeta from "../../../components/common/PageMeta";
 
-export default function SupervisorHome() {
-  const [dashboardData, setDashboardData] = useState<{
-    allVendorsCount: number;
-    milkWeightSum: number;
-  } | null>(null);
+const { Title } = Typography;
 
+export default function TherapistDashboardHome() {
+  const [dashboardData, setDashboardData] = useState<{
+    totalAppointments: number;
+    upcomingAppointments: number;
+    completedAppointments: number;
+    totalEarnings: number;
+  } | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -15,26 +19,36 @@ export default function SupervisorHome() {
       setLoading(true);
       setError(null);
       try {
-        const token = localStorage.getItem("supervisor-token");
+        // Use therapist token if present, else fallback to common token or none
+        const token =
+          localStorage.getItem("therapist-token") ||
+          localStorage.getItem("token") ||
+          "";
         const res = await fetch(
-          `${import.meta.env.VITE_API_URL || ""}/api/supervisor/get-dashboard-details`,
+          `${import.meta.env.VITE_API_URL || ""}/api/therapist/dashboard`,
           {
-            headers: {
-              Authorization: `${token}`,
-            },
+            headers: token ? { Authorization: token } : {},
           }
         );
         if (!res.ok) {
-          const errData = await res.json();
-          throw new Error(
-            errData.message || "Failed to fetch dashboard details."
-          );
+          let errMsg = "Failed to fetch dashboard details.";
+          try {
+            const errData = await res.json();
+            if (errData?.message) errMsg = errData.message;
+          } catch {}
+          throw new Error(errMsg);
         }
         const data = await res.json();
-        setDashboardData({
-          allVendorsCount: data.allVendorsCount || 0,
-          milkWeightSum: data.milkWeightSum || 0,
-        });
+        if (data.success && data.data) {
+          setDashboardData({
+            totalAppointments: data.data.totalAppointments || 0,
+            completedAppointments: data.data.completedAppointments || 0,
+            upcomingAppointments: data.data.upcomingAppointments || 0,
+            totalEarnings: data.data.totalEarnings || 0,
+          });
+        } else {
+          throw new Error(data.message || "No dashboard data returned.");
+        }
       } catch (err: any) {
         setError(err.message || "Failed to fetch dashboard details.");
       } finally {
@@ -48,38 +62,60 @@ export default function SupervisorHome() {
     <>
       <PageMeta
         title="Nupal CDC"
-        description="Supervisor Panel for Nupal CDC"
+        description="Therapist Panel for Nupal CDC"
       />
       <div className="max-w-4xl mx-auto mt-8">
-        <h1 className="text-2xl font-bold mb-6 text-gray-800">
-          Therapist Dashboard
-        </h1>
+        <Title level={2} style={{ marginBottom: 24 }}>Therapist Dashboard</Title>
         {loading ? (
-          <div className="flex items-center justify-center min-h-[200px]">
-            <div className="w-10 h-10 border-4 border-t-brand-500 border-gray-200 rounded-full animate-spin"></div>
-          </div>
+          <Spin spinning>
+            <div style={{ minHeight: 180 }}></div>
+          </Spin>
         ) : error ? (
-          <div className="p-4 text-red-600 bg-red-100 border border-red-300 rounded-md mb-6">
-            {error}
-          </div>
+          <Alert
+            type="error"
+            showIcon
+            message="Error"
+            description={error}
+            style={{ marginBottom: 24 }}
+          />
         ) : (
           dashboardData && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 md:grid-cols-2 mb-10">
-              <div className="rounded-lg shadow bg-white p-5 flex flex-col items-center">
-                <span className="text-3xl font-bold text-green-700">
-                  {dashboardData.allVendorsCount}
-                </span>
-                <span className="text-gray-600 mt-2">Vendors in Route</span>
-              </div>
-              <div className="rounded-lg shadow bg-white p-5 flex flex-col items-center">
-                <span className="text-3xl font-bold text-blue-700">
-                  {dashboardData.milkWeightSum.toLocaleString(undefined, {
-                    maximumFractionDigits: 2,
-                  })} Ltr
-                </span>
-                <span className="text-gray-600 mt-2">Total Milk Collected</span>
-              </div>
-            </div>
+            <Row gutter={[24, 24]} style={{ marginBottom: 32 }}>
+              <Col xs={24} sm={12} md={12}>
+                <Card>
+                  <Statistic
+                    title="Total Appointments"
+                    value={dashboardData.totalAppointments}
+                  />
+                </Card>
+              </Col>
+              <Col xs={24} sm={12} md={12}>
+                <Card>
+                  <Statistic
+                    title="Upcoming Appointments"
+                    value={dashboardData.upcomingAppointments}
+                  />
+                </Card>
+              </Col>
+              <Col xs={24} sm={12} md={12}>
+                <Card>
+                  <Statistic
+                    title="Completed Appointments"
+                    value={dashboardData.completedAppointments}
+                  />
+                </Card>
+              </Col>
+              <Col xs={24} sm={12} md={12}>
+                <Card>
+                  <Statistic
+                    title="Total Earnings"
+                    prefix="₹"
+                    value={dashboardData.totalEarnings}
+                    precision={2}
+                  />
+                </Card>
+              </Col>
+            </Row>
           )
         )}
       </div>
