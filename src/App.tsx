@@ -60,6 +60,7 @@ import ParentProfile from "./pages/ParentPages/ProfilePage/ParentProfile";
 import TherapistMyAppointments from "./pages/TherapistPages/MyAppointment/MyAppointments";
 import CalendarAndSchedule from "./pages/TherapistPages/CalendarAndSchedule/CalendarAndSchedule";
 import TherpaistProfile from "./pages/TherapistPages/TherapistProfile/TherpaistProfile";
+import ManageDiscounts from "./pages/AdminPages/Discounts/ManageDiscounts";
 
 
 export default function App() {
@@ -162,6 +163,7 @@ export default function App() {
             <Route path="/admin/finances" element={<FinancesPage/>} />
             <Route path="/admin/therapy-types" element={<TherapyTypesPage />} />
             <Route path="/admin/packages" element={<PackagesPage />} />
+            <Route path="/admin/discounts" element={<ManageDiscounts />} />
 
             <Route path="/admin/manage-availability" element={<ManageAvailabilityPage />} />
 

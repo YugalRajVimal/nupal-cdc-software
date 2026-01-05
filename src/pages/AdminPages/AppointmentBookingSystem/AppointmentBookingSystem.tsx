@@ -41,11 +41,7 @@ const SESSION_TIME_OPTIONS = [
   { id: '1930-2015', label: '19:30 to 20:15', limited: true }
 ];
 
-// Separate slot IDs for easier logic
-// const NORMAL_SLOT_IDS = SESSION_TIME_OPTIONS.filter(x => !x.limited).map(x => x.id);
-// Next 5 limited slots for "limited case" (enabled in dropdown, and allowed up to 5 per day per therapist)
-// const LIMITED_SLOT_IDS = SESSION_TIME_OPTIONS.filter(x => x.limited).map(x => x.id);
-
+// Types (unchanged)
 type Patient = {
   id: string;
   patientId: string,
@@ -81,18 +77,14 @@ type Therapist = {
     date: string;
     reason?: string;
   }>;
+  userId?:{
+    name?: string;
+  },
   mobile1?: string;
   [key: string]: any;
 };
 
 type BookingSession = { date: string; slotId: string; _id?: string };
-
-type DiscountInfo = {
-  discountEnabled?: boolean;
-  discount?: number;
-  couponCode?: string;
-  validityDays?: number;
-};
 
 type Booking = {
   _id: string;
@@ -102,26 +94,36 @@ type Booking = {
   package: Package | null;
   therapist: Therapist | string;
   sessions: BookingSession[];
-  discountInfo?: DiscountInfo;
-  discount?: number;
-  couponCode?: string;
-  couponValidityDays?: number;
+  // discount-related fields removed for booking form, but kept for summary
+  discountInfo?: {
+    coupon: {
+      couponCode: string; // e.g., "FIRST20"
+      createdAt: string; // ISO date, e.g., "2026-01-05T08:42:24.342Z"
+      discount: number; // e.g., 20
+      discountEnabled: boolean; // e.g., true
+      validityDays: number; // e.g., 5
+      __v?: number;
+      _id: string; // e.g., "695b797035dd1facfbd46696"
+    };
+    time?: string; // redundancy in case time is present directly under discountInfo
+  };
 };
 
+type Coupon = {
+  _id: string;
+  code: string;
+  discount: number;
+  validityDays: number;
+  enabled?: boolean;
+  // add any other relevant fields if needed
+};
+
+// Utility functions (mostly unchanged)
 function pad2(n: number) {
   return n < 10 ? `0${n}` : `${n}`;
 }
 function getDateKey(year: number, month: number, day: number): string {
   return `${year}-${pad2(month)}-${pad2(day)}`;
-}
-
-function generateCouponCode() {
-  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-  let code = "";
-  for (let i = 0; i < 8; ++i) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return code;
 }
 
 function getDaysInMonth(year: number, month: number) {
@@ -152,13 +154,12 @@ export default function AppointmentBookingSystem() {
   const [packageId, setPackageId] = useState<string>("");
   const [sessions, setSessions] = useState<{ date: string; slotId: string }[]>([]);
 
-  // NEW: Therapist selection
+  // Therapist selection
   const [therapistId, setTherapistId] = useState<string>("");
 
-  const [discountEnabled, setDiscountEnabled] = useState<boolean>(false);
-  const [discount, setDiscount] = useState<number>(0);
-  const [couponCode, setCouponCode] = useState<string>(() => generateCouponCode());
-  const [validityDays, setValidityDays] = useState<number>(1);
+  // Coupon selection state
+  const [selectedCouponId, setSelectedCouponId] = useState<string>("");
+  const [coupons, setCoupons] = useState<Coupon[]>([]);
 
   const [patients, setPatients] = useState<Patient[]>([]);
   const [therapies, setTherapies] = useState<Therapy[]>([]);
@@ -169,9 +170,6 @@ export default function AppointmentBookingSystem() {
   const [bookingLoading, setBookingLoading] = useState<boolean>(false);
   const [bookingError, setBookingError] = useState<string | null>(null);
   const [bookingSuccess, setBookingSuccess] = useState<string | null>(null);
-
-  // NEW: Calendar day availability (by computed function, not from API)
-  // const [availabilityError, setAvailabilityError] = useState<string | null>(null);
 
   // EDIT STATE
   const [editBookingId, setEditBookingId] = useState<string | null>(null);
@@ -189,9 +187,9 @@ export default function AppointmentBookingSystem() {
   const daysInMonth = getDaysInMonth(year, month);
   const startDay = getStartDay(year, month);
 
-  // --- Booking Fetch Logic ---
+  // --- Fetch Logic (Master Data + Coupons) ---
   useEffect(() => {
-    async function fetchMasterData() {
+    async function fetchMasterDataAndCoupons() {
       setDataLoading(true);
       setBookingError(null);
       try {
@@ -239,16 +237,21 @@ export default function AppointmentBookingSystem() {
         setTherapies(json.therapyTypes || []);
         setPackages(json.packages || []);
         setTherapists(Array.isArray(json.therapists) ? json.therapists : []);
+          setCoupons(Array.isArray(json.coupons) ? json.coupons : []);
+
+
+   
       } catch {
         setPatients([]);
         setTherapies([]);
         setPackages([]);
         setTherapists([]);
+        setCoupons([]);
         toast.error("Failed to load master data");
       }
       setDataLoading(false);
     }
-    fetchMasterData();
+    fetchMasterDataAndCoupons();
   }, []);
 
   function normalizeBookings(bookings: any[]): Booking[] {
@@ -309,6 +312,8 @@ export default function AppointmentBookingSystem() {
       const json = await res.json();
       let bookingsList: Booking[] =
         Array.isArray(json.bookings) ? normalizeBookings(json.bookings) : [];
+
+        console.log("All Booking Details:", bookingsList);
       setBookings(bookingsList);
     } catch {
       setBookings([]);
@@ -348,6 +353,7 @@ export default function AppointmentBookingSystem() {
     }
   }, [packageId, maxSelectableDates]);
 
+  // If editing, fill form state, including selected coupon
   useEffect(() => {
     if (editBookingId) {
       const booking = bookings.find((b) => b._id === editBookingId);
@@ -365,23 +371,40 @@ export default function AppointmentBookingSystem() {
             }))
             : []
         );
+        // Updated coupon selection for editing: robust logic for mapping right coupon id into dropdown
+        let couponObj: Coupon | undefined = undefined;
+        if (
+          booking.discountInfo &&
+          booking.discountInfo.coupon
+        ) {
+          const couponCandidate = booking.discountInfo.coupon;
+          // Try by coupon _id (from booking)
+          couponObj =
+            coupons.find(c => c._id === couponCandidate._id) ||
+            // Try by code (for new schema)
+            coupons.find(c => c.code === couponCandidate.couponCode) ||
+            // Try by code again (legacy field)
+            coupons.find(c => c.code === (couponCandidate as any).code) ||
+            // Try by legacy couponCode fields
+            coupons.find(c => (c as any).couponCode === couponCandidate.couponCode) ||
+            coupons.find(c => (c as any).couponCode === (couponCandidate as any).code) ||
+            // Extra fallback: try booking.discountInfo.couponCode if present
+            (booking.discountInfo as any).couponCode && coupons.find(c => c.code === (booking.discountInfo as any).couponCode);
 
-        let di = booking.discountInfo || {};
-        setDiscountEnabled(!!di.discountEnabled);
-        setDiscount(
-          typeof di.discount === "number"
-            ? di.discount
-            : booking.discount || 0
-        );
-        setCouponCode(di.couponCode || booking.couponCode || generateCouponCode());
-        setValidityDays(
-          typeof di.validityDays === "number"
-            ? di.validityDays
-            : booking.couponValidityDays || 1
-        );
+        } else if (
+          booking.discountInfo &&
+          (booking.discountInfo as any).couponCode
+        ) {
+          // For old bookings which might not have coupon object, but have couponCode string
+          couponObj =
+            coupons.find(c => c.code === (booking.discountInfo as any).couponCode) ||
+            coupons.find(c => c._id === (booking.discountInfo as any).couponCode);
+        }
+        setSelectedCouponId(couponObj ? couponObj._id : "");
       }
     }
-  }, [editBookingId, bookings]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editBookingId, bookings, coupons.length]); // coupons.length as coupons might update later
 
   function resetForm() {
     setPatientId("");
@@ -389,10 +412,7 @@ export default function AppointmentBookingSystem() {
     setPackageId("");
     setTherapistId("");
     setSessions([]);
-    setDiscountEnabled(false);
-    setDiscount(0);
-    setCouponCode(generateCouponCode());
-    setValidityDays(1);
+    setSelectedCouponId("");
     setEditBookingId(null);
     setBookingError(null);
     setBookingSuccess(null);
@@ -456,6 +476,7 @@ export default function AppointmentBookingSystem() {
   const selectedPatient = patients.find((p) => p.id === patientId) || null;
   const selectedTherapy = therapies.find((t) => t._id === therapyId) || null;
   const selectedTherapist = therapists.find((t) => t._id === therapistId) || null;
+  const selectedCoupon = coupons.find(c => c._id === selectedCouponId) || null;
 
   function getFirstSessionEarliest(sessions: { date: string; slotId: string }[]) {
     if (!sessions || sessions.length === 0) return null;
@@ -507,10 +528,7 @@ export default function AppointmentBookingSystem() {
     return parts.join("; ");
   }
 
-  const handleRegenerateCouponCode = () => {
-    setCouponCode(generateCouponCode());
-  };
-
+  // Modified to send coupon field (object with id) on add and update
   const handleBookOrUpdate = async (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
     setBookingSuccess(null);
@@ -534,12 +552,13 @@ export default function AppointmentBookingSystem() {
         .slice()
         .sort((a, b) => a.date.localeCompare(b.date))
         .map(({ date, slotId }) => ({ date, slotId })),
-      discountEnabled,
     };
-    if (discountEnabled) {
-      payload.discount = discount;
-      payload.couponCode = couponCode;
-      payload.validityDays = validityDays;
+    if (selectedCoupon) {
+      payload.coupon = { id: selectedCoupon._id };
+      // Still send extra fields for API backward compatibility if needed
+      payload.couponCode = selectedCoupon.code;
+      payload.discount = selectedCoupon.discount;
+      payload.validityDays = selectedCoupon.validityDays;
     }
 
     try {
@@ -625,6 +644,32 @@ export default function AppointmentBookingSystem() {
     } else if (booking && booking.therapist && typeof booking.therapist === "object") {
       setTherapistId(booking.therapist._id);
     }
+    // Robust coupon select on edit
+    let couponObj: Coupon | undefined = undefined;
+    if (
+      booking &&
+      booking.discountInfo &&
+      booking.discountInfo.coupon
+    ) {
+      const couponCandidate = booking.discountInfo.coupon;
+      couponObj =
+        coupons.find(c => c._id === couponCandidate._id) ||
+        coupons.find(c => c.code === couponCandidate.couponCode) ||
+        coupons.find(c => c.code === (couponCandidate as any).code) ||
+        coupons.find(c => (c as any).couponCode === couponCandidate.couponCode) ||
+        coupons.find(c => (c as any).couponCode === (couponCandidate as any).code) ||
+        (booking.discountInfo as any).couponCode && coupons.find(c => c.code === (booking.discountInfo as any).couponCode);
+    } else if (
+      booking &&
+      booking.discountInfo &&
+      (booking.discountInfo as any).couponCode
+    ) {
+      couponObj =
+        coupons.find(c => c.code === (booking.discountInfo as any).couponCode) ||
+        coupons.find(c => c._id === (booking.discountInfo as any).couponCode);
+    }
+    setSelectedCouponId(couponObj ? couponObj._id : "");
+
     // Don't auto-fill repeat fields in edit
     setRepeatDay("");
     setRepeatStartDate("");
@@ -656,12 +701,8 @@ export default function AppointmentBookingSystem() {
     }
   }
 
-  // --- DAY AVAILABILITY LOGIC MODIFIED: COUNT SLOTS NOT THERAPISTS ---
-  /**
-   * For each calendar date (yyyy-mm-dd), availability is:
-   *  - total: number of possible BOOKABLE SLOTS for that day (total available therapists * 10)
-   *  - booked: number of sessions booked for that day (across all therapists)
-   */
+  // ------ [All slot/availability and repeat logic - unchanged, omitted for brevity] ------
+  //        ... Copy from original ...
 
   // Helper: For all therapists, count those NOT on holiday for a given date
   function getTotalAvailableTherapists(dateStr: string): number {
@@ -674,14 +715,12 @@ export default function AppointmentBookingSystem() {
     return count;
   }
 
-  // Helper: For a therapist, check if they're on holiday for given date
   function isTherapistOnHoliday(therapist: Therapist | undefined, dateStr: string) {
     if (!therapist) return false;
     const holidays = Array.isArray(therapist.holidays) ? therapist.holidays : [];
     return holidays.some(h => h && h.date === dateStr);
   }
 
-  // Count booked sessions for selected therapist on a date
   function getBookedCountForTherapist(dateStr: string): { normal: number; limited: number } {
     if (!therapistId) return { normal: 0, limited: 0 };
     let normal = 0;
@@ -710,29 +749,11 @@ export default function AppointmentBookingSystem() {
     return { normal, limited };
   }
 
-  // Count booked sessions (total sessions assigned) across ALL therapists for a given date
-  // function getTotalBookedSessionsOnDate(dateStr: string) {
-  //   let count = 0;
-  //   for (const booking of bookings) {
-  //     if (!Array.isArray(booking.sessions)) continue;
-  //     for (const s of booking.sessions) {
-  //       if (s.date === dateStr) {
-  //         count += 1;
-  //       }
-  //     }
-  //   }
-  //   return count;
-  // }
-
-  // Helper: get summary for the calendar day (total slots available, booked sessions for that day)
   function getDaySlotSummary(dateStr: string): { total: number; booked: number, limitedTotal?: number, limitedBooked?: number } {
-    // If a therapist is selected, show for that therapist only
     if (therapistId && selectedTherapist) {
-      // If therapist is on holiday, no slots available
       if (isTherapistOnHoliday(selectedTherapist, dateStr)) {
         return { total: 0, booked: 0, limitedTotal: 0, limitedBooked: 0 };
       }
-      // Total slots for a therapist per day is 10 normal + 5 limited
       const slotsPerTherapist = 10;
       const limitedSlotsPerTherapist = 5;
       const { normal, limited } = getBookedCountForTherapist(dateStr);
@@ -743,11 +764,9 @@ export default function AppointmentBookingSystem() {
         limitedBooked: limited
       };
     } else {
-      // If not filtered, show slots across all not-on-holiday therapists (sum of normal and limited cases)
       const availableTherapists = getTotalAvailableTherapists(dateStr);
       const slotsPerTherapist = 10;
       const limitedSlotsPerTherapist = 5;
-      // Aggregate booked counts for all therapists
       let totalNormal = 0;
       let totalLimited = 0;
       for (const t of therapists) {
@@ -785,7 +804,6 @@ export default function AppointmentBookingSystem() {
     }
   }
 
-  // Helper: in the "slots" dropdown for a session, determine disabled status
   function getAvailableSlotsForDate(
     date: string,
     selectedSessions: { date: string; slotId: string }[],
@@ -793,15 +811,12 @@ export default function AppointmentBookingSystem() {
   ) {
     const slotInfo: { [slotId: string]: { disabled: boolean; reason: string } } = {};
 
-    // If therapist not picked, disable everything
     if (!therapistId || !selectedTherapist) {
       SESSION_TIME_OPTIONS.forEach((opt) => {
         slotInfo[opt.id] = { disabled: true, reason: "Pick therapist first" };
       });
       return slotInfo;
     }
-
-    // If therapist is on holiday, all slots disabled
     if (isTherapistOnHoliday(selectedTherapist, date)) {
       SESSION_TIME_OPTIONS.forEach((opt) => {
         slotInfo[opt.id] = { disabled: true, reason: "Therapist unavailable (holiday)" };
@@ -809,11 +824,9 @@ export default function AppointmentBookingSystem() {
       return slotInfo;
     }
 
-    // Established limits for slots
     const normalSlotsAllowed = 10;
     const limitedSlotsAllowed = 5;
 
-    // Booked slots for this therapist on this date: count normal and limited
     let normalBookedCount = 0;
     let limitedBookedCount = 0;
     const bookedSlotIds: Set<string> = new Set();
@@ -838,31 +851,25 @@ export default function AppointmentBookingSystem() {
       }
     });
 
-    // Count normal and limited in the *currently selected (form) sessions* for this date
     let currFormNormalCount = 0;
     let currFormLimitedCount = 0;
-    // Only for this date
     (selectedSessions.filter(ss => ss.date === date)).forEach((ss) => {
       const opt = SESSION_TIME_OPTIONS.find(o => o.id === ss.slotId);
-      if (!ss.slotId) return; // skip unset
+      if (!ss.slotId) return;
       if (opt && opt.limited) currFormLimitedCount += 1;
       else if (opt) currFormNormalCount += 1;
     });
 
-    // Gather all other sessions' (in form) times to avoid picking same slot on other days (unique per form)
     const sessionsExcludingCurrent = selectedSessions.filter((s) => s.date !== date);
     const pickedSlotIds = sessionsExcludingCurrent.map((s) => s.slotId);
 
     SESSION_TIME_OPTIONS.forEach((opt) => {
       let disabled = false, reason = "";
-      // For normal slots
       if (!opt.limited) {
-        // Only allow 10 normal slots per therapist per day, and each normal slot once per therapist per day
         if (normalBookedCount + currFormNormalCount >= normalSlotsAllowed && (!currSelectedSlotId || currSelectedSlotId !== opt.id)) {
           disabled = true;
           reason = "Max 10 normal slots/day";
         }
-        // Already booked for this therapist on this date (excluding current selection)
         if (
           !disabled &&
           bookedSlotIds.has(opt.id) &&
@@ -872,12 +879,10 @@ export default function AppointmentBookingSystem() {
           reason = "Already booked";
         }
       } else {
-        // For limited slots
         if (limitedBookedCount + currFormLimitedCount >= limitedSlotsAllowed && (!currSelectedSlotId || currSelectedSlotId !== opt.id)) {
           disabled = true;
           reason = "Max 5 limited slots/day";
         }
-        // Already booked for this therapist on this date (excluding current selection)
         if (
           !disabled &&
           bookedSlotIds.has(opt.id) &&
@@ -887,7 +892,6 @@ export default function AppointmentBookingSystem() {
           reason = "Already booked";
         }
       }
-      // Prevent duplicate slot on other days in the current form
       if (
         !disabled &&
         pickedSlotIds.includes(opt.id) &&
@@ -896,7 +900,6 @@ export default function AppointmentBookingSystem() {
         disabled = true;
         reason = "Picked in other date";
       }
-
       slotInfo[opt.id] = { disabled, reason };
     });
 
@@ -919,7 +922,6 @@ export default function AppointmentBookingSystem() {
   }): boolean {
     let found = false;
     for (const booking of bookings) {
-      // If editing, skip the current booking
       if (editBookingId && booking._id === editBookingId) continue;
       let bTid = "";
       if (booking.therapist && typeof booking.therapist === "string") {
@@ -940,8 +942,6 @@ export default function AppointmentBookingSystem() {
     return found;
   }
 
-  // --- REPEAT WEEKLY LOGIC
-  // Calculate and return an array of 'n' YYYY-MM-DD dates, starting from the first given date, for 'dayOfWeek' (0=SUN), skipping holidays. Used by 'repeat mode'
   function getNextNDatesWeekly(
     startDate: Date,
     sessionCount: number,
@@ -950,12 +950,10 @@ export default function AppointmentBookingSystem() {
   ): string[] {
     let dates: string[] = [];
     let date = new Date(startDate);
-    // Move date up to the next desired dayOfWeek if not already
     while (date.getDay() !== dayOfWeek) {
       date.setDate(date.getDate() + 1);
     }
     while (dates.length < sessionCount) {
-      // Check if therapist is on holiday for this date
       const dateKey = `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
       if (!therapist || !isTherapistOnHoliday(therapist, dateKey)) {
         dates.push(dateKey);
@@ -965,7 +963,6 @@ export default function AppointmentBookingSystem() {
     return dates;
   }
 
-  // For repeat weekly, on click, set sessions for N weeks on the given day/time
   function handleRepeatApply() {
     setRepeatError(null);
     setRepeatConflictInfo({});
@@ -986,11 +983,9 @@ export default function AppointmentBookingSystem() {
     // Compute first date to use as base
     const start = new Date(repeatStartDate);
     const wantedDayNum = getDayIndex(repeatDay);
-    // Move forward until we reach the right weekday (or start already).
     while (start.getDay() !== wantedDayNum) {
       start.setDate(start.getDate() + 1);
     }
-    // Get N dates on this weekday
     const sessionsOnTargetDay = getNextNDatesWeekly(
       start,
       maxSelectableDates,
@@ -998,27 +993,18 @@ export default function AppointmentBookingSystem() {
       selectedTherapist
     );
 
-    // Now, test each for slot availability (and skip ones unavailable)
-    // For the repeat feature, ensure that a therapist cannot be booked for the same slot on same date again and not to exceed day limit
-    const slotConflicts: string[] = []; // date keys where slot is unavailable
+    const slotConflicts: string[] = [];
     const conflictReasons: { [date: string]: string } = {};
 
-    // Precompute for limit: for each day, how many normal/limited already booked (+ planned)
-    // We'll add increment logic below while mapping
     let plannedBookingNormalPerDay: { [date: string]: number } = {};
     let plannedBookingLimitedPerDay: { [date: string]: number } = {};
-    // Plan to set
     const newSessions = sessionsOnTargetDay.map((dateStr) => {
-      // Determine type of slot (normal or limited)
       const repeatOpt = SESSION_TIME_OPTIONS.find(opt => opt.id === repeatSlotId);
       let isLimited = repeatOpt?.limited === true;
-      // For given date, get current normal and limited counts booked already for this therapist
       let { normal, limited } = getBookedCountForTherapist(dateStr);
-      // Add current plans (if any) for bulk mode
       normal += plannedBookingNormalPerDay[dateStr] ?? 0;
       limited += plannedBookingLimitedPerDay[dateStr] ?? 0;
 
-      // Check limits for daily normal/limited case
       if (isLimited && limited >= 5) {
         slotConflicts.push(dateStr);
         conflictReasons[dateStr] = `Max 5 limited slots per therapist already booked for ${dateStr}.`;
@@ -1028,7 +1014,6 @@ export default function AppointmentBookingSystem() {
         conflictReasons[dateStr] = `Max 10 normal slots per therapist already booked for ${dateStr}.`;
       }
 
-      // Check if slot is already booked for this therapist at this date/time, even in repeat!
       if (
         isSlotAlreadyBookedForTherapist({
           therapistId,
@@ -1058,7 +1043,6 @@ export default function AppointmentBookingSystem() {
         }
       }
 
-      // Track the planned bookings per type for this date
       if (isLimited) plannedBookingLimitedPerDay[dateStr] = (plannedBookingLimitedPerDay[dateStr] ?? 0) + 1;
       else plannedBookingNormalPerDay[dateStr] = (plannedBookingNormalPerDay[dateStr] ?? 0) + 1;
 
@@ -1068,7 +1052,6 @@ export default function AppointmentBookingSystem() {
     if (slotConflicts.length > 0) {
       setRepeatError(`Some dates have conflicts. See below for details.`);
       setRepeatConflictInfo(conflictReasons);
-      // Set only available sessions, skip those with conflicts
       setSessions(newSessions.filter((s) => !slotConflicts.includes(s.date)));
     } else {
       setRepeatError(null);
@@ -1092,9 +1075,7 @@ export default function AppointmentBookingSystem() {
       animate={{ opacity: 1, y: 0 }}
       className="min-h-screen  p-8"
     >
-      {/* Optionally place ToastContainer at root or ensure it's rendered in App root */}
-
-      {/* Guide */}
+      {/* Guide, Calendar, Quick Book, Session & Booking Summary remain similar */}
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -1149,16 +1130,24 @@ export default function AppointmentBookingSystem() {
                   <li>
                     <span className="font-medium">Each therapist may have up to <span className="text-blue-900">10 normal slots</span> and <span className="text-blue-900">5 limited case slots</span> per day. All 15 slots are available in the dropdown when booking; limited case slots have a "(Limited case)" label.</span>
                   </li>
+                  <li>
+                    {(coupons && coupons.length > 0) ?
+                      <>
+                        Optionally select a valid discount coupon from the Coupon dropdown to apply available discounts.
+                      </>
+                    : ""}
+                  </li>
                 </ol>
               </div>
             </motion.div>
           )}
         </AnimatePresence>
       </motion.div>
-
       <div className="flex md:flex-row flex-col-reverse  gap-6">
         {/* Calendar */}
+        {/* -- calendar code (EXACTLY as before, omitted for brevity) -- */}
         <div className="flex-2 lg:col-span-2 bg-white border rounded-lg">
+          {/* ... (same as original) ... */}
           <div className="flex items-center justify-between p-4 border-b">
             <div className="flex items-center gap-2 font-semibold">
               <FiCalendar />
@@ -1193,7 +1182,6 @@ export default function AppointmentBookingSystem() {
                 sessions.length >= maxSelectableDates &&
                 !selected;
 
-              // Render availability: booked/total for that day (slots per requirement)
               const { total, booked, limitedTotal, limitedBooked } = getDaySlotSummary(dateKey);
 
               return (
@@ -1260,11 +1248,7 @@ export default function AppointmentBookingSystem() {
               <span className="text-blue-700">Each therapist: <b>10 normal</b> and <b>5 limited</b> case slots available per day.</span>
             </div>
           )}
-          {/* {availabilityError && (
-            <div className="px-4 text-xs text-red-500 mt-1">{availabilityError}</div>
-          )} */}
         </div>
-
         {/* Quick Book / Edit Booking */}
         <div className="flex-1 bg-white border rounded-lg p-6">
           <h3 className="font-semibold mb-4">
@@ -1365,89 +1349,30 @@ export default function AppointmentBookingSystem() {
             ))}
           </select>
 
-          {/* Discount Toggle */}
-          <div className="mb-4 flex items-center gap-3">
-            <label className="block text-sm font-semibold text-blue-700" htmlFor="toggle-discount">
-              Enable Discount/Coupon
-            </label>
-            <button
-              id="toggle-discount"
-              type="button"
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 focus:outline-none ${discountEnabled ? "bg-blue-600" : "bg-gray-300"}`}
-              onClick={() => {
-                setDiscountEnabled((v) => !v);
-              }}
-              aria-pressed={discountEnabled}
-              role="switch"
-            >
-              <span
-                className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform duration-200 shadow ${discountEnabled ? "translate-x-5" : "translate-x-1"}`}
-              />
-            </button>
-          </div>
-
-          {/* Coupon Fields */}
-          <AnimatePresence>
-            {discountEnabled && (
-              <motion.div
-                key="discountSection"
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: "auto", opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.2, ease: "easeInOut" }}
-                className="overflow-hidden"
-              >
-                <div className="mb-4">
-                  <label className="block text-sm mb-1 font-semibold text-blue-700">Discount (%)</label>
-                  <input
-                    type="number"
-                    value={discount}
-                    min={0}
-                    max={100}
-                    onChange={e => {
-                      setDiscount(Number(e.target.value));
-                    }}
-                    className="w-full border rounded px-3 py-2"
-                    placeholder="Enter discount percentage"
-                  />
-                </div>
-                <div className="mb-4">
-                  <label className="block text-sm mb-1 font-semibold text-blue-700">Coupon Code</label>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={couponCode}
-                      readOnly
-                      className="flex-1 border rounded px-3 py-2 bg-slate-100 font-mono"
-                    />
-                    <button
-                      type="button"
-                      className="bg-blue-500 text-white px-3 py-2 rounded font-semibold text-xs hover:bg-blue-600"
-                      onClick={handleRegenerateCouponCode}
-                      title="Regenerate Code"
-                    >
-                      Regenerate
-                    </button>
-                  </div>
-                  <p className="text-xs text-slate-500 mt-1">A unique 8 digit alphanumeric code will be generated.</p>
-                </div>
-                <div className="mb-5">
-                  <label className="block text-sm mb-1 font-semibold text-blue-700">Coupon Validity (Days)</label>
-                  <input
-                    type="number"
-                    min={1}
-                    value={validityDays}
-                    onChange={e => {
-                      setValidityDays(Number(e.target.value));
-                    }}
-                    className="w-full border rounded px-3 py-2"
-                    placeholder="Number of days coupon is valid"
-                  />
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-          {/* End Coupon Fields */}
+          {/* Coupon Select Dropdown */}
+          <label className="block text-sm mb-1 font-semibold text-blue-700">
+            Discount Coupon
+          </label>
+          <select
+            value={selectedCouponId}
+            onChange={e => setSelectedCouponId(e.target.value)}
+            className="w-full border rounded px-3 py-2 mb-5"
+          >
+            <option value="">No Coupon / Standard Price</option>
+            {coupons && coupons.length > 0 && coupons.map((c) => (
+              <option key={c._id} value={c._id} disabled={c.enabled === false}>
+                {c.code} - {c.discount}% off
+                {c.validityDays ? ` (${c.validityDays} days)` : ""}
+                {c.enabled === false ? " [Disabled]" : ""}
+              </option>
+            ))}
+          </select>
+          {/* Coupon summary hint */}
+          {selectedCoupon && (
+            <div className="text-xs text-blue-700 mb-4">
+              🔖 Using coupon <span className="font-mono">{selectedCoupon.code}</span> ({selectedCoupon.discount}% off, valid {selectedCoupon.validityDays} days)
+            </div>
+          )}
 
           {/* Repeat Weekly Controls */}
           {!editBookingId && (
@@ -1462,8 +1387,9 @@ export default function AppointmentBookingSystem() {
                     type="date"
                     value={repeatStartDate}
                     onChange={e => setRepeatStartDate(e.target.value)}
-                    className="border rounded px-2 py-1 text-sm"
+                    className="border rounded px-2 py-1 text-sm cursor-pointer"
                     min={today.toISOString().slice(0, 10)}
+                    onFocus={e => e.target.showPicker && e.target.showPicker()}
                   />
                 </div>
                 <div>
@@ -1525,7 +1451,6 @@ export default function AppointmentBookingSystem() {
               {repeatError && (
                 <div className="text-xs text-red-600 mt-1">{repeatError}</div>
               )}
-              {/* Show per-date alerts for repeat conflicts */}
               {Object.keys(repeatConflictInfo).length > 0 && (
                 <ul className="text-xs text-red-600 mt-1 space-y-0.5">
                   {Object.entries(repeatConflictInfo).map(([date, msg]) => (
@@ -1552,9 +1477,7 @@ export default function AppointmentBookingSystem() {
                 .slice()
                 .sort((a, b) => a.date.localeCompare(b.date))
                 .map((s, idx, arr) => {
-                  // For this date, fetch available slot info for options
                   const slotInfo = getAvailableSlotsForDate(s.date, arr, s.slotId);
-                  // If this slot was in repeatConflictInfo, show inline alert as well
                   return (
                     <div key={s.date} className="flex items-center gap-2 text-sm">
                       <span className="flex-1 font-mono">{s.date}</span>
@@ -1596,6 +1519,84 @@ export default function AppointmentBookingSystem() {
                     </div>
                   );
                 })}
+            </div>
+          )}
+
+          {/* Full-width fancy package price/discount/total summary */}
+          {selectedPackage && (
+            <div className="w-full flex flex-col items-stretch mt-3 mb-3">
+              <div className="flex flex-col gap-0.5 w-full rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 shadow-sm">
+                <div className="flex justify-between items-center py-0.5">
+                  <span className="text-sm text-slate-700 font-medium">Package Price</span>
+                  <span className="font-mono text-base text-slate-900">
+                    ₹
+                    {selectedPackage.totalCost ??
+                      (selectedPackage.costPerSession && getTotalSessionsForPackage(selectedPackage)
+                        ? Number(selectedPackage.costPerSession) * Number(getTotalSessionsForPackage(selectedPackage))
+                        : selectedPackage.costPerSession ??
+                          "—"
+                      )}
+                  </span>
+                </div>
+                {/* Discount Row */}
+                {(() => {
+                  let discountValue = 0;
+                  let coupon = null;
+                  if (selectedCouponId) {
+                    coupon = coupons.find(c => c._id === selectedCouponId);
+                    if (coupon && coupon.discount) {
+                      discountValue = Number(coupon.discount);
+                    }
+                  }
+                  let pkgTotal = selectedPackage.totalCost ??
+                    (selectedPackage.costPerSession && getTotalSessionsForPackage(selectedPackage)
+                      ? Number(selectedPackage.costPerSession) * Number(getTotalSessionsForPackage(selectedPackage))
+                      : 0);
+                  if (discountValue > 0 && pkgTotal > 0) {
+                    const discountedAmount = Math.round((pkgTotal * discountValue) / 100);
+                    const afterDiscount = Math.max(pkgTotal - discountedAmount, 0);
+                    return (
+                      <>
+                        <div className="flex justify-between items-center py-0.5">
+                          <span className="text-sm text-emerald-700 font-medium">
+                            Discount
+                            {coupon ? ` (${coupon.code})` : ""}
+                          </span>
+                          <span className="text-base text-emerald-900 font-mono">
+                            -{discountValue}% <span className="opacity-60 text-xs ml-1">(-₹{discountedAmount})</span>
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center border-t border-blue-200 mt-2 pt-2">
+                          <span className="text-base font-semibold text-blue-900">
+                            <FiTag className="inline mr-1 text-blue-400" />Total After Discount
+                          </span>
+                          <span className="font-mono text-lg font-bold text-blue-900">
+                            ₹{afterDiscount}
+                          </span>
+                        </div>
+                      </>
+                    );
+                  }
+                  if (discountValue === 0 && selectedCouponId && coupon) {
+                    return (
+                      <div className="flex justify-between items-center py-0.5">
+                        <span className="text-sm text-orange-700 font-medium">Discount</span>
+                        <span className="text-xs text-orange-700">Coupon "{coupon.code}" has no discount</span>
+                      </div>
+                    );
+                  }
+                  return (
+                    <div className="flex justify-between items-center border-t border-blue-200 mt-2 pt-2">
+                      <span className="text-base font-semibold text-blue-900">
+                        <FiTag className="inline mr-1 text-blue-400" />Total
+                      </span>
+                      <span className="font-mono text-lg font-bold text-blue-900">
+                        ₹{pkgTotal}
+                      </span>
+                    </div>
+                  );
+                })()}
+              </div>
             </div>
           )}
 
@@ -1680,7 +1681,7 @@ export default function AppointmentBookingSystem() {
                       return (
                         <div className="mb-2 flex items-center gap-2">
                           <FiUser className="text-slate-500" />
-                          <span className="text-slate-700">Therapist: {tObj.name}{tObj.therapistId ? ` (${tObj.therapistId})` : ""}</span>
+                          <span className="text-slate-700">Therapist: {tObj?.userId?.name}{tObj.therapistId ? ` (${tObj.therapistId})` : ""}</span>
                         </div>
                       );
                     }
@@ -1701,49 +1702,62 @@ export default function AppointmentBookingSystem() {
                     </span>
                   </div>
                   {Array.isArray(booking.sessions) && booking.sessions.length > 0 && (
-                    <div className="mb-1 text-xs text-slate-700">
-                      <span className="font-medium">Sessions:</span>{" "}
-                      {booking.sessions.map((s, idx) => {
-                        const slot = SESSION_TIME_OPTIONS.find(opt => opt.id === s.slotId);
-                        return (
-                          <span key={s._id || s.date}>
-                            {s.date}{" "}
-                            {slot
-                              ? (
-                                <>
-                                  {slot.label}
-                                  {slot.limited ? " (Limited case)" : ""}
-                                </>
-                              )
-                              : s.slotId}
-                            {idx < booking.sessions.length - 1 ? ", " : ""}
-                          </span>
-                        );
-                      })}
+                    <details className="mb-2 text-xs text-slate-700">
+                      <summary className="font-medium cursor-pointer select-none flex items-center">
+                        <span>Sessions ({booking.sessions.length})</span>
+                        <span className="ml-1">{/* chevron icon? */}<FiChevronDown className="inline ml-1 text-slate-500" /></span>
+                      </summary>
+                      <div className="overflow-x-auto mt-2">
+                        <table className="min-w-[340px] w-fit border-collapse text-xs">
+                          <thead>
+                            <tr>
+                              <th className="px-2 py-1 border border-slate-200 bg-slate-100 font-semibold text-left">#</th>
+                              <th className="px-2 py-1 border border-slate-200 bg-slate-100 font-semibold text-left">Date</th>
+                              <th className="px-2 py-1 border border-slate-200 bg-slate-100 font-semibold text-left">Time Slot</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {booking.sessions.map((s, idx) => {
+                              const slot = SESSION_TIME_OPTIONS.find(opt => opt.id === s.slotId);
+                              return (
+                                <tr key={s._id || s.date}>
+                                  <td className="px-2 py-1 border border-slate-200 text-slate-400">{idx + 1}</td>
+                                  <td className="px-2 py-1 border border-slate-200">
+                                    {s.date}
+                                  </td>
+                                  <td className="px-2 py-1 border border-slate-200 whitespace-nowrap">
+                                    {slot
+                                      ? (
+                                        <>
+                                          {slot.label}
+                                          {slot.limited && <span className="text-amber-700 ml-1">(Limited case)</span>}
+                                        </>
+                                      )
+                                      : s.slotId}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </details>
+                  )}
+                  {booking.discountInfo && booking.discountInfo.coupon && booking.discountInfo.coupon.discountEnabled && (
+                    <div className="mb-1 text-xs text-blue-700">
+                      Discount: <span className="font-semibold">
+                        {booking.discountInfo.coupon.discount}%
+                      </span>
+                      {" "}
+                      (Coupon: <span className="font-mono">
+                        {booking.discountInfo.coupon.couponCode}
+                      </span>
+                        {booking.discountInfo.coupon.validityDays && (
+                          <> {` - valid ${booking.discountInfo.coupon.validityDays}d`}</>
+                        )}
+                      )
                     </div>
                   )}
-                  {(typeof booking.discount === "number" && booking.discount > 0 ||
-                    (booking.discountInfo && booking.discountInfo.discountEnabled && booking.discountInfo.discount)
-                  ) && (
-                      <div className="mb-1 text-xs text-blue-700">
-                        Discount: <span className="font-semibold">
-                          {typeof booking.discount === "number" ? booking.discount : booking.discountInfo?.discount}%</span>
-                        {
-                          (booking.couponCode || booking.discountInfo?.couponCode) && (
-                            <>
-                              {" "}
-                              (Coupon: <span className="font-mono">
-                                {booking.couponCode || booking.discountInfo?.couponCode}
-                              </span>
-                                {(booking.couponValidityDays || booking.discountInfo?.validityDays) && (
-                                  <> {` - valid ${booking.couponValidityDays || booking.discountInfo?.validityDays}d`}</>
-                                )}
-                              )
-                            </>
-                          )
-                        }
-                      </div>
-                    )}
                   <div className="flex gap-2 mt-2">
                     <button
                       className="text-xs rounded px-2 py-1 border border-blue-400 text-blue-700 hover:bg-blue-50 flex items-center gap-1"
@@ -1775,7 +1789,6 @@ export default function AppointmentBookingSystem() {
             </div>
           )}
         </div>
-      
       </div>
     </motion.div>
   );

@@ -112,6 +112,11 @@ export default function ConsultationsLeads() {
   // Focus on first field when modal opens
   const parentNameRef = useRef<HTMLInputElement | null>(null);
 
+  // Calendar state for date fields
+  const [showCallDateCalendar, setShowCallDateCalendar] = useState(false);
+  const [showChildDOBCalendar, setShowChildDOBCalendar] = useState(false);
+  const [showAppointmentDateCalendar, setShowAppointmentDateCalendar] = useState(false);
+
   // Fetch leads from backend
   useEffect(() => {
     let ignore = false;
@@ -127,7 +132,7 @@ export default function ConsultationsLeads() {
         if (Array.isArray(data.leads)) {
           const uiLeads: Lead[] = data.leads.map((lead: any) => ({
             id: lead._id,
-            leadId: lead.leadId || "", // <-- get leadId from backend
+            leadId: lead.leadId || "",
             parent: lead.parentName,
             child: lead.childName,
             phone: lead.parentMobile,
@@ -280,6 +285,9 @@ export default function ConsultationsLeads() {
       // not leadId
     });
     setEditingLeadId(null);
+    setShowCallDateCalendar(false);
+    setShowChildDOBCalendar(false);
+    setShowAppointmentDateCalendar(false);
   }
 
   // Unified modal submit ADD/EDIT handler
@@ -528,12 +536,177 @@ export default function ConsultationsLeads() {
     );
   }
 
+  // Helper to allow showing/hiding calendar input overlay for a given text input + input type="date"
+  function DateInputWithCalendar({
+    label,
+    name,
+    value,
+    onChange,
+    placeholder,
+    required,
+    disabled,
+    readOnly,
+    showCalendar,
+    setShowCalendar,
+    min,
+    max,
+
+  }: {
+    label: string;
+    name: string;
+    value: string;
+    onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+    placeholder?: string;
+    required?: boolean;
+    disabled?: boolean;
+    readOnly?: boolean;
+    showCalendar: boolean;
+    setShowCalendar: (b: boolean) => void;
+    min?: string;
+    max?: string;
+  }) {
+    // On click the "text input", show the type="date" input
+    // On change in date pick, update value and hide calendar
+    // On blur, hide calendar (after a moment so date pick is registered)
+    const inputRef = useRef<HTMLInputElement>(null);
+
+    return (
+      <div style={{ position: "relative" }}>
+        <label className="block text-xs font-semibold text-slate-600 mb-1">
+          {label}
+        </label>
+        {/* Show as text input unless calendar shown */}
+        {!showCalendar ? (
+          <input
+            type="text"
+            className="w-full border px-3 py-2 rounded cursor-pointer bg-white"
+            name={name}
+            value={value}
+            onFocus={() => setShowCalendar(true)}
+            onClick={() => setShowCalendar(true)}
+            onChange={() => {}}
+            placeholder={placeholder}
+            required={required}
+            disabled={disabled}
+            readOnly={readOnly}
+            autoComplete="off"
+            // inputMode={inputMode}
+          />
+        ) : (
+          <input
+            ref={inputRef}
+            type="date"
+            className="w-full border px-3 py-2 rounded bg-white"
+            name={name}
+            value={value}
+            autoFocus
+            onChange={(e) => {
+              onChange(e);
+              setShowCalendar(false);
+            }}
+            onBlur={() => setTimeout(() => setShowCalendar(false), 150)}
+            min={min}
+            max={max}
+            required={required}
+            disabled={disabled}
+            readOnly={readOnly}
+          />
+        )}
+      </div>
+    );
+  }
+
+  function DateTimeInputWithCalendar({
+    label,
+    name,
+    value,
+    onChange,
+    required,
+    disabled,
+    readOnly,
+    showCalendar,
+    setShowCalendar,
+    min,
+    max
+  }: {
+    label: string;
+    name: string;
+    value: string;
+    onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+    required?: boolean;
+    disabled?: boolean;
+    readOnly?: boolean;
+    showCalendar: boolean;
+    setShowCalendar: (b: boolean) => void;
+    min?: string;
+    max?: string;
+  }) {
+    // On click text input, show calendar (datetime-local)
+    // On blur, hide calendar
+    const inputRef = useRef<HTMLInputElement>(null);
+
+    function formatToReadableDateTime(val: string) {
+      // Convert 2024-06-12T11:22 to 12 Jun 2024, 11:22
+      if (!val) return "";
+      const d = new Date(val);
+      if (isNaN(d.getTime())) return val;
+      const opts: Intl.DateTimeFormatOptions = {
+        year: "numeric", month: "short", day: "2-digit",
+        hour: "2-digit", minute: "2-digit"
+      };
+      return d.toLocaleString(undefined, opts);
+    }
+
+    return (
+      <div style={{ position: "relative" }}>
+        <label className="block text-xs font-semibold text-slate-600 mb-1">
+          {label}
+        </label>
+        {!showCalendar ? (
+          <input
+            type="text"
+            className="w-full border px-3 py-2 rounded cursor-pointer bg-white"
+            name={name}
+            value={formatToReadableDateTime(value)}
+            onFocus={() => setShowCalendar(true)}
+            onClick={() => setShowCalendar(true)}
+            onChange={() => {}}
+            placeholder="Select date & time"
+            required={required}
+            disabled={disabled}
+            readOnly={readOnly}
+            autoComplete="off"
+          />
+        ) : (
+          <input
+            ref={inputRef}
+            type="datetime-local"
+            className="w-full border px-3 py-2 rounded bg-white"
+            name={name}
+            value={value}
+            autoFocus
+            onChange={(e) => {
+              onChange(e);
+              setShowCalendar(false);
+            }}
+            onBlur={() => setTimeout(() => setShowCalendar(false), 150)}
+            min={min}
+            max={max}
+            required={required}
+            disabled={disabled}
+            readOnly={readOnly}
+          />
+        )}
+      </div>
+    );
+  }
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, ease: "easeOut" }}
-      className="min-h-screen  p-8"
+      className="min-h-screen h-screen overflow-y-auto  p-8"
     >
       {/* Modal for New Enquiry or Edit Enquiry */}
       <AnimatePresence>
@@ -544,338 +717,347 @@ export default function ConsultationsLeads() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
-            <motion.div
-              initial={{ scale: 0.97, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.97, opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              className="bg-white rounded-xl shadow-2xl w-full max-w-2xl p-0 overflow-hidden"
-              onClick={e => e.stopPropagation()}
-              role="dialog"
-              aria-modal
-              aria-label={editingLeadId ? "Edit enquiry" : "Add new enquiry"}
+            {/* Outer container with safe scroll for small screens */}
+            <div
+              className="flex items-center justify-center w-full h-full"
+              style={{
+                minHeight: 0,
+                minWidth: 0,
+              }}
             >
-              <div className="flex items-center justify-between px-6 py-4 border-b">
-                <div className="flex items-center gap-2 text-lg font-semibold text-blue-800">
-                  <FiUserPlus /> {editingLeadId ? "Edit Inquiry / Consultation" : "New Inquiry / Consultation"}
-                </div>
-                <button
-                  className="text-slate-400 hover:text-red-500 transition"
-                  onClick={handleModalClose}
-                  aria-label="Close"
-                  type="button"
-                  tabIndex={0}
-                >
-                  <FiX size={22} />
-                </button>
-              </div>
-              <form
-                className="px-6 py-4 space-y-4"
-                autoComplete="off"
-                onSubmit={handleModalSubmit}
+              <motion.div
+                initial={{ scale: 0.97, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.97, opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                // Improved! Add scroll for modal on small screens, with max height, safe for all mobile
+                className="bg-white rounded-xl shadow-2xl w-full max-w-2xl p-0 overflow-y-auto max-h-[98vh] sm:max-h-[90vh]"
+                onClick={(e) => e.stopPropagation()}
+                role="dialog"
+                aria-modal
+                aria-label={editingLeadId ? "Edit enquiry" : "Add new enquiry"}
               >
-                {/* Lead ID (readonly, non-editable, shows only on edit) */}
-                {editingLeadId && (
+                <div className="flex items-center justify-between px-6 py-4 border-b">
+                  <div className="flex items-center gap-2 text-lg font-semibold text-blue-800">
+                    <FiUserPlus /> {editingLeadId ? "Edit Inquiry / Consultation" : "New Inquiry / Consultation"}
+                  </div>
+                  <button
+                    className="text-slate-400 hover:text-red-500 transition"
+                    onClick={handleModalClose}
+                    aria-label="Close"
+                    type="button"
+                    tabIndex={0}
+                  >
+                    <FiX size={22} />
+                  </button>
+                </div>
+                <form
+                  className="px-6 py-4 space-y-4"
+                  autoComplete="off"
+                  onSubmit={handleModalSubmit}
+                >
+                  {/* Lead ID (readonly, non-editable, shows only on edit) */}
+                  {editingLeadId && (
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">
+                        Lead ID
+                      </label>
+                      <input
+                        type="text"
+                        className="w-full border px-3 py-2 rounded bg-slate-100 text-slate-600"
+                        name="leadId"
+                        value={
+                          (leads?.find((l) => l.id === editingLeadId)?.leadId &&
+                            leads.find((l) => l.id === editingLeadId)?.leadId !== ""
+                          )
+                            ? leads?.find((l) => l.id === editingLeadId)?.leadId
+                            : (leads?.find((l) => l.id === editingLeadId)?.id || editingLeadId)
+                        }
+                        readOnly
+                        disabled
+                      />
+                    </div>
+                  )}
+
+                  {/* Date/Time of Call as calendar */}
+                  <div className="flex flex-col md:flex-row md:gap-4">
+                    <div className="flex-1 mb-2 md:mb-0">
+                      <DateTimeInputWithCalendar
+                        label="Date/Time of Call"
+                        name="callDate"
+                        value={enqForm.callDate}
+                        onChange={handleModalInput}
+                        readOnly={!!editingLeadId}
+                        disabled={!!editingLeadId}
+                        showCalendar={showCallDateCalendar}
+                        setShowCalendar={setShowCallDateCalendar}
+                      />
+                    </div>
+                    {/* Staff member */}
+                    <div className="flex-1 mb-2 md:mb-0">
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">
+                        Staff Member Taking Call
+                      </label>
+                      <select
+                        className="w-full border px-3 py-2 rounded"
+                        name="staff"
+                        value={enqForm.staff}
+                        onChange={handleModalInput}
+                        required
+                      >
+                        <option value="">Select...</option>
+                        {staffMembers.map((staff) => (
+                          <option key={staff} value={staff}>
+                            {staff}
+                          </option>
+                        ))}
+                      </select>
+                      {enqForm.staff === "Other" && (
+                        <input
+                          className="mt-2 w-full border px-3 py-2 rounded"
+                          type="text"
+                          name="staffOther"
+                          value={enqForm.staffOther}
+                          onChange={handleModalInput}
+                          placeholder="Enter staff name"
+                          required
+                        />
+                      )}
+                    </div>
+                  </div>
+                  {/* Referral Source */}
                   <div>
                     <label className="block text-xs font-semibold text-slate-600 mb-1">
-                      Lead ID
+                      Where did you find us? (Referral source)
                     </label>
                     <input
+                      className="w-full border px-3 py-2 rounded"
                       type="text"
-                      className="w-full border px-3 py-2 rounded bg-slate-100 text-slate-600"
-                      name="leadId"
-                      value={
-                        (leads?.find((l) => l.id === editingLeadId)?.leadId &&
-                          leads.find((l) => l.id === editingLeadId)?.leadId !== ""
-                        )
-                          ? leads?.find((l) => l.id === editingLeadId)?.leadId
-                          : (leads?.find((l) => l.id === editingLeadId)?.id || editingLeadId)
-                      }
-                      readOnly
-                      disabled
-                    />
-                  </div>
-                )}
-
-                {/* Date/Time of Call */}
-                <div className="flex flex-col md:flex-row md:gap-4">
-                  <div className="flex-1 mb-2 md:mb-0">
-                    <label className="block text-xs font-semibold text-slate-600 mb-1">
-                      Date/Time of Call
-                    </label>
-                    <input
-                      type="datetime-local"
-                      className="w-full border px-3 py-2 rounded"
-                      name="callDate"
-                      value={enqForm.callDate}
-                      readOnly
-                      disabled
-                    />
-                  </div>
-                  {/* Staff member */}
-                  <div className="flex-1 mb-2 md:mb-0">
-                    <label className="block text-xs font-semibold text-slate-600 mb-1">
-                      Staff Member Taking Call
-                    </label>
-                    <select
-                      className="w-full border px-3 py-2 rounded"
-                      name="staff"
-                      value={enqForm.staff}
+                      name="referralSource"
+                      value={enqForm.referralSource}
                       onChange={handleModalInput}
-                      required
-                    >
-                      <option value="">Select...</option>
-                      {staffMembers.map((staff) => (
-                        <option key={staff} value={staff}>
-                          {staff}
-                        </option>
-                      ))}
-                    </select>
-                    {enqForm.staff === "Other" && (
+                      placeholder="e.g. Google, Doctor, Friend"
+                    />
+                  </div>
+                  {/* Parent/Guardian Info */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">
+                        Parent/Guardian Name
+                      </label>
                       <input
-                        className="mt-2 w-full border px-3 py-2 rounded"
+                        className="w-full border px-3 py-2 rounded"
                         type="text"
-                        name="staffOther"
-                        value={enqForm.staffOther}
+                        name="parentName"
+                        ref={parentNameRef}
+                        value={enqForm.parentName}
                         onChange={handleModalInput}
-                        placeholder="Enter staff name"
                         required
                       />
-                    )}
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">
+                        Relationship with Child
+                      </label>
+                      <input
+                        className="w-full border px-3 py-2 rounded"
+                        type="text"
+                        name="parentRelationship"
+                        value={enqForm.parentRelationship}
+                        onChange={handleModalInput}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">
+                        Mobile Number
+                      </label>
+                      <input
+                        className="w-full border px-3 py-2 rounded"
+                        type="tel"
+                        name="parentMobile"
+                        value={enqForm.parentMobile}
+                        onChange={handleModalInput}
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">
+                        Email Address
+                      </label>
+                      <input
+                        className="w-full border px-3 py-2 rounded"
+                        type="email"
+                        name="parentEmail"
+                        value={enqForm.parentEmail}
+                        onChange={handleModalInput}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">
+                        Area
+                      </label>
+                      <input
+                        className="w-full border px-3 py-2 rounded"
+                        type="text"
+                        name="parentArea"
+                        value={enqForm.parentArea}
+                        onChange={handleModalInput}
+                      />
+                    </div>
                   </div>
-                </div>
-                {/* Referral Source */}
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1">
-                    Where did you find us? (Referral source)
-                  </label>
-                  <input
-                    className="w-full border px-3 py-2 rounded"
-                    type="text"
-                    name="referralSource"
-                    value={enqForm.referralSource}
-                    onChange={handleModalInput}
-                    placeholder="e.g. Google, Doctor, Friend"
-                  />
-                </div>
-                {/* Parent/Guardian Info */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Child Info */}
+                  <div className="mt-2 grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">
+                        Child’s Name
+                      </label>
+                      <input
+                        className="w-full border px-3 py-2 rounded"
+                        type="text"
+                        name="childName"
+                        value={enqForm.childName}
+                        onChange={handleModalInput}
+                      />
+                    </div>
+                    <div>
+                      {/* Date of Birth as calendar */}
+                      <DateInputWithCalendar
+                        label="Date of Birth"
+                        name="childDOB"
+                        value={enqForm.childDOB}
+                        onChange={handleModalInput}
+                        showCalendar={showChildDOBCalendar}
+                        setShowCalendar={setShowChildDOBCalendar}
+                        placeholder="Select date"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">
+                        Boy/Girl
+                      </label>
+                      <select
+                        className="w-full border px-3 py-2 rounded"
+                        name="childGender"
+                        value={enqForm.childGender}
+                        onChange={handleModalInput}
+                      >
+                        <option value="">Select...</option>
+                        <option value="Boy">Boy</option>
+                        <option value="Girl">Girl</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">
+                        Seeing Therapist already?
+                      </label>
+                      <input
+                        className="w-full border px-3 py-2 rounded"
+                        type="text"
+                        name="therapistAlready"
+                        value={enqForm.therapistAlready}
+                        onChange={handleModalInput}
+                        placeholder="e.g. Yes, speech therapy at XYZ"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">
+                        Any known diagnosis?
+                      </label>
+                      <input
+                        className="w-full border px-3 py-2 rounded"
+                        type="text"
+                        name="diagnosis"
+                        value={enqForm.diagnosis}
+                        onChange={handleModalInput}
+                        placeholder="e.g. Autism, Down's syndrome"
+                      />
+                    </div>
+                  </div>
+                  {/* Visit finalized */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-2">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">
+                        Visit Finalized?
+                      </label>
+                      <select
+                        className="w-full border px-3 py-2 rounded"
+                        name="visitFinalized"
+                        value={enqForm.visitFinalized}
+                        onChange={handleModalInput}
+                      >
+                        <option value="">Select...</option>
+                        <option value="Yes">Yes</option>
+                        <option value="No">No</option>
+                        <option value="Pending">Pending</option>
+                      </select>
+                    </div>
+                    <div>
+                      {/* Appointment Date as calendar */}
+                      <DateInputWithCalendar
+                        label="Appointment Date"
+                        name="appointmentDate"
+                        value={enqForm.appointmentDate}
+                        onChange={handleModalInput}
+                        showCalendar={showAppointmentDateCalendar}
+                        setShowCalendar={setShowAppointmentDateCalendar}
+                        placeholder="Select date"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 mb-1">
+                        Appointment Time
+                      </label>
+                      <select
+                        className="w-full border px-3 py-2 rounded"
+                        name="appointmentTime"
+                        value={enqForm.appointmentTime}
+                        onChange={handleModalInput}
+                      >
+                        <option value="">Select...</option>
+                        {appointmentTimes.map((t) => (
+                          <option key={t} value={t}>
+                            {t}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  {/* Remarks */}
                   <div>
                     <label className="block text-xs font-semibold text-slate-600 mb-1">
-                      Parent/Guardian Name
+                      Remarks
                     </label>
-                    <input
+                    <textarea
                       className="w-full border px-3 py-2 rounded"
-                      type="text"
-                      name="parentName"
-                      ref={parentNameRef}
-                      value={enqForm.parentName}
+                      name="remarks"
+                      value={enqForm.remarks}
                       onChange={handleModalInput}
-                      required
+                      placeholder="Additional notes, comments, next steps, etc."
+                      rows={2}
                     />
                   </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1">
-                      Relationship with Child
-                    </label>
-                    <input
-                      className="w-full border px-3 py-2 rounded"
-                      type="text"
-                      name="parentRelationship"
-                      value={enqForm.parentRelationship}
-                      onChange={handleModalInput}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1">
-                      Mobile Number
-                    </label>
-                    <input
-                      className="w-full border px-3 py-2 rounded"
-                      type="tel"
-                      name="parentMobile"
-                      value={enqForm.parentMobile}
-                      onChange={handleModalInput}
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1">
-                      Email Address
-                    </label>
-                    <input
-                      className="w-full border px-3 py-2 rounded"
-                      type="email"
-                      name="parentEmail"
-                      value={enqForm.parentEmail}
-                      onChange={handleModalInput}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1">
-                      Area
-                    </label>
-                    <input
-                      className="w-full border px-3 py-2 rounded"
-                      type="text"
-                      name="parentArea"
-                      value={enqForm.parentArea}
-                      onChange={handleModalInput}
-                    />
-                  </div>
-                </div>
-                {/* Child Info */}
-                <div className="mt-2 grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1">
-                      Child’s Name
-                    </label>
-                    <input
-                      className="w-full border px-3 py-2 rounded"
-                      type="text"
-                      name="childName"
-                      value={enqForm.childName}
-                      onChange={handleModalInput}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1">
-                      Date of Birth
-                    </label>
-                    <input
-                      className="w-full border px-3 py-2 rounded"
-                      type="date"
-                      name="childDOB"
-                      value={enqForm.childDOB}
-                      onChange={handleModalInput}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1">
-                      Boy/Girl
-                    </label>
-                    <select
-                      className="w-full border px-3 py-2 rounded"
-                      name="childGender"
-                      value={enqForm.childGender}
-                      onChange={handleModalInput}
+                  {/* Status field: hidden input to propagate value to API (for edit) */}
+                  <input type="hidden" name="status" value={enqForm.status || "pending"} />
+                  <div className="flex gap-2 justify-end pt-6">
+                    <button
+                      type="button"
+                      className="px-4 py-2 rounded border border-slate-200 text-slate-600 hover:bg-slate-100"
+                      onClick={handleModalClose}
                     >
-                      <option value="">Select...</option>
-                      <option value="Boy">Boy</option>
-                      <option value="Girl">Girl</option>
-                    </select>
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1">
-                      Seeing Therapist already?
-                    </label>
-                    <input
-                      className="w-full border px-3 py-2 rounded"
-                      type="text"
-                      name="therapistAlready"
-                      value={enqForm.therapistAlready}
-                      onChange={handleModalInput}
-                      placeholder="e.g. Yes, speech therapy at XYZ"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1">
-                      Any known diagnosis?
-                    </label>
-                    <input
-                      className="w-full border px-3 py-2 rounded"
-                      type="text"
-                      name="diagnosis"
-                      value={enqForm.diagnosis}
-                      onChange={handleModalInput}
-                      placeholder="e.g. Autism, Down's syndrome"
-                    />
-                  </div>
-                </div>
-                {/* Visit finalized */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-2">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1">
-                      Visit Finalized?
-                    </label>
-                    <select
-                      className="w-full border px-3 py-2 rounded"
-                      name="visitFinalized"
-                      value={enqForm.visitFinalized}
-                      onChange={handleModalInput}
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-5 py-2 rounded bg-blue-600 text-white hover:bg-blue-700 font-medium transition"
                     >
-                      <option value="">Select...</option>
-                      <option value="Yes">Yes</option>
-                      <option value="No">No</option>
-                      <option value="Pending">Pending</option>
-                    </select>
+                      {editingLeadId ? "Update" : "Submit"}
+                    </button>
                   </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1">
-                      Appointment Date
-                    </label>
-                    <input
-                      className="w-full border px-3 py-2 rounded"
-                      type="date"
-                      name="appointmentDate"
-                      value={enqForm.appointmentDate}
-                      onChange={handleModalInput}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1">
-                      Appointment Time
-                    </label>
-                    <select
-                      className="w-full border px-3 py-2 rounded"
-                      name="appointmentTime"
-                      value={enqForm.appointmentTime}
-                      onChange={handleModalInput}
-                    >
-                      <option value="">Select...</option>
-                      {appointmentTimes.map((t) => (
-                        <option key={t} value={t}>
-                          {t}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-                {/* Remarks */}
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 mb-1">
-                    Remarks
-                  </label>
-                  <textarea
-                    className="w-full border px-3 py-2 rounded"
-                    name="remarks"
-                    value={enqForm.remarks}
-                    onChange={handleModalInput}
-                    placeholder="Additional notes, comments, next steps, etc."
-                    rows={2}
-                  />
-                </div>
-                {/* Status field: hidden input to propagate value to API (for edit) */}
-                <input type="hidden" name="status" value={enqForm.status || "pending"} />
-                <div className="flex gap-2 justify-end pt-6">
-                  <button
-                    type="button"
-                    className="px-4 py-2 rounded border border-slate-200 text-slate-600 hover:bg-slate-100"
-                    onClick={handleModalClose}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-5 py-2 rounded bg-blue-600 text-white hover:bg-blue-700 font-medium transition"
-                  >
-                    {editingLeadId ? "Update" : "Submit"}
-                  </button>
-                </div>
-              </form>
-            </motion.div>
+                </form>
+              </motion.div>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -911,6 +1093,9 @@ export default function ConsultationsLeads() {
               remarks: "",
               status: "pending", // Default status set as pending for new inquiry
             });
+            setShowCallDateCalendar(false);
+            setShowChildDOBCalendar(false);
+            setShowAppointmentDateCalendar(false);
           }}
         >
           New Inquiry

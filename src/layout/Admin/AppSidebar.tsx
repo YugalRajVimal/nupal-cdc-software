@@ -72,6 +72,11 @@ const navItems: NavItem[] = [
     name: "Packages",
     path: "/admin/packages",
   },
+  {
+    icon: <FileIcon />,
+    name: "Discounts",
+    path: "/admin/discounts",
+  },
 
   {
     icon: <FileIcon />,
