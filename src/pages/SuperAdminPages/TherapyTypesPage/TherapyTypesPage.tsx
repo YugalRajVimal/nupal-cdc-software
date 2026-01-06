@@ -4,8 +4,8 @@ import { FiPlus, FiEdit, FiTrash, FiX, FiCheck } from "react-icons/fi";
 
 // Set your API base url here
 const API_BASE = import.meta.env.VITE_API_URL
-  ? `${import.meta.env.VITE_API_URL}/api/admin/therapy-types`
-  : "/api/admin/therapy-types";
+  ? `${import.meta.env.VITE_API_URL}/api/super-admin/therapy-types`
+  : "/api/super-admin/therapy-types";
 
 type TherapyType = {
   _id: string;

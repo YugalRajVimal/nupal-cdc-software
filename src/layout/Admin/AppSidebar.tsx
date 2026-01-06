@@ -62,21 +62,21 @@ const navItems: NavItem[] = [
     name: "Finances",
     path: "/admin/finances",
   },
-  {
-    icon: <ChevronDownIcon />,
-    name: "Therapy Types",
-    path: "/admin/therapy-types",
-  },
-  {
-    icon: <FileIcon />,
-    name: "Packages",
-    path: "/admin/packages",
-  },
-  {
-    icon: <FileIcon />,
-    name: "Discounts",
-    path: "/admin/discounts",
-  },
+  // {
+  //   icon: <ChevronDownIcon />,
+  //   name: "Therapy Types",
+  //   path: "/admin/therapy-types",
+  // },
+  // {
+  //   icon: <FileIcon />,
+  //   name: "Packages",
+  //   path: "/admin/packages",
+  // },
+  // {
+  //   icon: <FileIcon />,
+  //   name: "Discounts",
+  //   path: "/admin/discounts",
+  // },
 
   {
     icon: <FileIcon />,

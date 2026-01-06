@@ -1,16 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router";
-
 // Assume these icons are imported from an icon library
 import {
   ArrowDownIcon,
   ChevronDownIcon,
-
   GridIcon,
   HorizontaLDots,
-
   UserCircleIcon,
-  UserIcon,
 } from "../icons";
 import { useSidebar } from "../context/SidebarContext";
 
@@ -21,42 +17,47 @@ type NavItem = {
   subItems?: { name: string; path: string; pro?: boolean; new?: boolean }[];
 };
 
+// Updated navItems as per prompt:
 const navItems: NavItem[] = [
-
   {
     icon: <GridIcon />,
-    name: "Dashboard Overview",
+    name: "Dashboard",
     path: "/super-admin",
   },
   {
     icon: <UserCircleIcon />,
-    name: "Account Access",
-    path: "/super-admin/account-access",
+    name: "All Users",
+    path: "/super-admin/all-users",
   },
   {
     icon: <ChevronDownIcon />,
-    name: "Data Management",
-    path: "/super-admin/data-management",
+    name: "All Appointments",
+    path: "/super-admin/all-appointments",
   },
   {
     icon: <ArrowDownIcon />,
-    name: "Data Import",
-    path: "/super-admin/data-import",
+    name: "Finances",
+    path: "/super-admin/finances",
   },
-  {
-    icon: <ArrowDownIcon />,
-    name: "Data Export",
-    path: "/super-admin/data-export",
-  },
+  // {
+  //   icon: <UserIcon />,
+  //   name: "Onboard Sub Admin",
+  //   path: "/super-admin/onboard-sub-admin",
+  // },
   {
     icon: <HorizontaLDots />,
-    name: "App Configuration",
-    path: "/super-admin/app-configuration",
+    name: "Therapy Types",
+    path: "/super-admin/therapy-types",
   },
   {
-    icon: <UserIcon />,
-    name: "Roles & Permissions",
-    path: "/super-admin/roles-permissions",
+    icon: <ChevronDownIcon />,
+    name: "Packages",
+    path: "/super-admin/packages",
+  },
+  {
+    icon: <ArrowDownIcon />,
+    name: "Discount Coupons",
+    path: "/super-admin/discount-coupons",
   },
   {
     icon: <HorizontaLDots />,
@@ -66,34 +67,7 @@ const navItems: NavItem[] = [
 ];
 
 const othersItems: NavItem[] = [
-  // {
-  //   icon: <PieChartIcon />,
-  //   name: "Charts",
-  //   subItems: [
-  //     { name: "Line Chart", path: "/line-chart", pro: false },
-  //     { name: "Bar Chart", path: "/bar-chart", pro: false },
-  //   ],
-  // },
-  // {
-  //   icon: <BoxCubeIcon />,
-  //   name: "UI Elements",
-  //   subItems: [
-  //     { name: "Alerts", path: "/alerts", pro: false },
-  //     { name: "Avatar", path: "/avatars", pro: false },
-  //     { name: "Badge", path: "/badge", pro: false },
-  //     { name: "Buttons", path: "/buttons", pro: false },
-  //     { name: "Images", path: "/images", pro: false },
-  //     { name: "Videos", path: "/videos", pro: false },
-  //   ],
-  // },
-  // {
-  //   icon: <PlugInIcon />,
-  //   name: "Authentication",
-  //   subItems: [
-  //     { name: "Sign In", path: "/signin", pro: false },
-  //     { name: "Sign Up", path: "/signup", pro: false },
-  //   ],
-  // },
+  // No 'others' items in the updated design, these can be added if needed later
 ];
 
 const AppSidebar: React.FC = () => {
@@ -109,7 +83,6 @@ const AppSidebar: React.FC = () => {
   );
   const subMenuRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
-  // const isActive = (path: string) => location.pathname === path;
   const isActive = useCallback(
     (path: string) => location.pathname === path,
     [location.pathname]
@@ -342,22 +315,7 @@ const AppSidebar: React.FC = () => {
               </h2>
               {renderMenuItems(navItems, "main")}
             </div>
-            {/* <div className="">
-              <h2
-                className={`mb-4 text-xs uppercase flex leading-[20px] text-gray-400 ${
-                  !isExpanded && !isHovered
-                    ? "lg:justify-center"
-                    : "justify-start"
-                }`}
-              >
-                {isExpanded || isHovered || isMobileOpen ? (
-                  "Others"
-                ) : (
-                  <HorizontaLDots />
-                )}
-              </h2>
-              {renderMenuItems(othersItems, "others")}
-            </div> */}
+            {/* No additional "Others" section */}
           </div>
         </nav>
         {/* {isExpanded || isHovered || isMobileOpen ? <SidebarWidget /> : null} */}

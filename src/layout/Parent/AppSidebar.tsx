@@ -34,6 +34,11 @@ const navItems: NavItem[] = [
   },
   {
     icon: <FileIcon />,
+    name: "Request Appointment",
+    path: "/parent/request-appointment",
+  },
+  {
+    icon: <FileIcon />,
     name: "My Appointments",
     path: "/parent/appointments",
   },

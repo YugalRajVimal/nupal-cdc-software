@@ -12,7 +12,7 @@ const showToast = (msg: string, type: "success" | "error") => {
 };
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "";
-const API_BASE = `${API_BASE_URL}/api/admin/discount-coupons`;
+const API_BASE = `${API_BASE_URL}/api/super-admin/discount-coupons`;
 
 interface DiscountCoupon {
   _id?: string;

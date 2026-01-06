@@ -1,108 +1,100 @@
-import { useEffect, useState } from "react";
-import PageMeta from "../../../components/common/PageMeta";
+import {
+  FiUsers,
+  FiCalendar,
+  FiHeart,
+  FiClock,
+} from "react-icons/fi";
+import { MdCurrencyRupee } from "react-icons/md";
 
 export default function Home() {
-  const [dashboardData, setDashboardData] = useState<{
-    allSubAdminCount: number;
-    allSupervisorCount: number;
-    allVendorsCount: number;
-    allRoutesCount: number;
-  } | null>(null);
-
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const fetchDashboardDetails = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const token = localStorage.getItem("admin-token");
-        const res = await fetch(
-          `${import.meta.env.VITE_API_URL || ""}/api/admin/get-dashboard-details`,
-          {
-            headers: {
-              Authorization: `${token}`,
-            },
-          }
-        );
-        if (!res.ok) {
-          const errData = await res.json();
-          throw new Error(
-            errData.message || "Failed to fetch dashboard details."
-          );
-        }
-        const data = await res.json();
-        setDashboardData({
-          allSubAdminCount: data.allSubAdminCount || 0,
-          allSupervisorCount: data.allSupervisorCount || 0,
-          allVendorsCount: data.allVendorsCount || 0,
-          allRoutesCount: data.allRoutesCount || 0,
-        });
-      } catch (err: any) {
-        setError(err.message || "Failed to fetch dashboard details.");
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchDashboardDetails();
-  }, []);
-
   return (
-    <>
-      <PageMeta
-        title="Nupal CDC"
-        description="Admin and Sub-Admin Panel for Nupal CDC"
-      />
-      <div className="max-w-6xl mx-auto mt-8">
-        <h1 className="text-2xl font-bold mb-6 text-gray-800">
-          Super Admin Dashboard
-        </h1>
-        {loading ? (
-          <div className="flex items-center justify-center min-h-[200px]">
-            <div className="w-10 h-10 border-4 border-t-brand-500 border-gray-200 rounded-full animate-spin"></div>
-          </div>
-        ) : error ? (
-          <div className="p-4 text-red-600 bg-red-100 border border-red-300 rounded-md mb-6">
-            {error}
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 md:grid-cols-4 mb-10">
-            <div className="rounded-lg shadow bg-white p-5 flex flex-col items-center">
-              <span className="text-3xl font-semibold text-indigo-700">
-                {dashboardData?.allSubAdminCount ?? "--"}
-              </span>
-              <span className="text-gray-500 mt-1 text-sm text-center">
-                Sub Admins
-              </span>
-            </div>
-            <div className="rounded-lg shadow bg-white p-5 flex flex-col items-center">
-              <span className="text-3xl font-semibold text-blue-700">
-                {dashboardData?.allSupervisorCount ?? "--"}
-              </span>
-              <span className="text-gray-500 mt-1 text-sm text-center">
-                Supervisors
-              </span>
-            </div>
-            <div className="rounded-lg shadow bg-white p-5 flex flex-col items-center">
-              <span className="text-3xl font-semibold text-green-700">
-                {dashboardData?.allVendorsCount ?? "--"}
-              </span>
-              <span className="text-gray-500 mt-1 text-sm text-center">
-                Vendors
-              </span>
-            </div>
-            <div className="rounded-lg shadow bg-white p-5 flex flex-col items-center">
-              <span className="text-3xl font-semibold text-pink-700">
-                {dashboardData?.allRoutesCount ?? "--"}
-              </span>
-              <span className="text-gray-500 mt-1 text-sm text-center">
-                Routes
-              </span>
-            </div>
-          </div>
-        )}
+    <div className="max-w-7xl mx-auto px-6 py-6">
+      {/* Top Stat Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <StatCard
+          title="Total Children"
+          value="536"
+          icon={<FiUsers />}
+          bg="bg-blue-100"
+          iconColor="text-blue-600"
+        />
+
+        <StatCard
+          title="Total Sessions"
+          value="5"
+          icon={<FiCalendar />}
+          bg="bg-purple-100"
+          iconColor="text-purple-600"
+        />
+
+        <StatCard
+          title="Active Therapists"
+          value="1"
+          icon={<FiHeart />}
+          bg="bg-green-100"
+          iconColor="text-green-600"
+        />
+
+        <StatCard
+          title="Revenue (Unpaid)"
+          value="₹700.00"
+          icon={<MdCurrencyRupee />}
+          bg="bg-orange-100"
+          iconColor="text-orange-600"
+        />
       </div>
-    </>
+
+      {/* Bottom Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Recent Activity */}
+        <div className="lg:col-span-3 bg-white border rounded-xl p-6 min-h-[360px]">
+          <div className="flex items-center gap-2 mb-2">
+            <FiClock className="w-5 h-5 text-gray-500" />
+            <h2 className="text-lg font-semibold text-gray-800">
+              Recent Activity Feed
+            </h2>
+          </div>
+
+          <p className="text-sm text-gray-500 mb-6">
+            Latest actions performed by users and system.
+          </p>
+
+          <div className="flex items-center justify-center h-56 text-gray-400">
+            No recent activity logs.
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- Reusable Components ---------------- */
+
+function StatCard({
+  title,
+  value,
+  icon,
+  bg,
+  iconColor,
+}: {
+  title: string;
+  value: string;
+  icon: React.ReactNode;
+  bg: string;
+  iconColor: string;
+}) {
+  return (
+    <div className="bg-white border rounded-xl p-6 flex items-center justify-between">
+      <div>
+        <p className="text-sm text-gray-500 mb-1">{title}</p>
+        <h3 className="text-2xl font-bold text-gray-900">{value}</h3>
+      </div>
+
+      <div
+        className={`w-12 h-12 rounded-full flex items-center justify-center ${bg}`}
+      >
+        <div className={`w-6 h-6 ${iconColor}`}>{icon}</div>
+      </div>
+    </div>
   );
 }

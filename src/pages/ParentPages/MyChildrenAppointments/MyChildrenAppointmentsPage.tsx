@@ -1,23 +1,20 @@
-import React, { useEffect, useState } from 'react';
-import axios from 'axios';
-import { Table, Card, Spin, Typography, message, Tag, Collapse } from 'antd';
-import dayjs from 'dayjs';
-const { Title, Text } = Typography;
-const { Panel } = Collapse;
+import { useEffect, useState } from "react";
+import { FiCalendar, FiUser } from "react-icons/fi";
+import { motion } from "framer-motion";
+import dayjs from "dayjs";
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || '';
+const API_BASE_URL = import.meta.env.VITE_API_URL || "";
 
-// Used only for typing convenience/safety in this file:
-interface SessionType {
-  date: string; // ISO String
+type SessionType = {
+  date: string;
   time?: string;
   status?: string;
   notes?: string;
-}
+};
 
-interface AppointmentType {
+type AppointmentType = {
   _id: string;
-  appointmentId: string;
+  appointmentId?: string;
   discountInfo?: any;
   package?: {
     _id: string;
@@ -40,226 +37,333 @@ interface AppointmentType {
   createdAt: string;
   updatedAt: string;
   [key: string]: any;
+};
+
+// Helper to format date
+function formatDate(date?: string) {
+  if (!date) return "-";
+  const d = new Date(date);
+  if (isNaN(d.getTime())) return "-";
+  return dayjs(d).format("DD MMM YYYY");
 }
 
-const MyChildrenAppointmentsPage: React.FC = () => {
-  const [fullData, setFullData] = useState<AppointmentType[]>([]);
+export default function MyChildrenAppointmentsPage() {
+  const [appointments, setAppointments] = useState<AppointmentType[]>([]);
   const [loading, setLoading] = useState(false);
+
+  // Modal: details
+  const [viewAppointment, setViewAppointment] = useState<AppointmentType | null>(null);
 
   useEffect(() => {
     setLoading(true);
-    axios
-      .get(`${API_BASE_URL}/api/parent/appointments`)
-      .then((res) => {
-        if (res.data && res.data.success && Array.isArray(res.data.data)) {
-          setFullData(res.data.data);
+    fetch(`${API_BASE_URL}/api/parent/appointments`)
+      .then(async (res) => {
+        if (!res.ok) throw new Error(await res.text());
+        const raw = await res.json();
+        if (raw && raw.success && Array.isArray(raw.data)) {
+          setAppointments(raw.data);
         } else {
-          setFullData([]);
-          message.error('Failed to fetch appointments data.');
+          setAppointments([]);
+          window.alert("Failed to fetch appointments.");
         }
       })
       .catch(() => {
-        message.error('Error fetching appointments.');
+        window.alert("Error fetching appointments.");
       })
       .finally(() => setLoading(false));
   }, []);
 
-  const appointmentColumns = [
-    {
-      title: 'Appointment ID',
-      dataIndex: 'appointmentId',
-      key: 'appointmentId',
-    },
-    {
-      title: 'Created At',
-      dataIndex: 'createdAt',
-      key: 'createdAt',
-      render: (d: string) => (d ? dayjs(d).format('YYYY-MM-DD HH:mm') : '-'),
-    },
-    {
-      title: 'Updated At',
-      dataIndex: 'updatedAt',
-      key: 'updatedAt',
-      render: (d: string) => (d ? dayjs(d).format('YYYY-MM-DD HH:mm') : '-'),
-    }
-  ];
-
-  const patientColumns = [
-    {
-      title: 'Child Name',
-      dataIndex: 'name',
-      key: 'name',
-    },
-    {
-      title: 'Patient ID',
-      dataIndex: 'patientId',
-      key: 'patientId',
-      render: (text: string) => <Tag color="blue">{text}</Tag>,
-    },
-    {
-      title: 'Gender',
-      dataIndex: 'gender',
-      key: 'gender',
-    },
-    {
-      title: "Date of Birth",
-      dataIndex: "childDOB",
-      key: "childDOB"
-    }
-  ];
-
-  const packageColumns = [
-    {
-      title: 'Package',
-      dataIndex: 'name',
-      key: 'name',
-    },
-    {
-      title: 'Sessions',
-      dataIndex: 'sessionCount',
-      key: 'sessionCount',
-    },
-    {
-      title: 'Cost/Session',
-      dataIndex: 'costPerSession',
-      key: 'costPerSession',
-    },
-    {
-      title: 'Total Cost',
-      dataIndex: 'totalCost',
-      key: 'totalCost',
-    }
-  ];
-
-  const sessionColumns = [
-    {
-      title: 'Session Date',
-      dataIndex: 'date',
-      key: 'date',
-      render: (d: string) => (d ? dayjs(d).format('YYYY-MM-DD') : 'N/A'),
-    },
-    {
-      title: 'Session Time',
-      dataIndex: 'time',
-      key: 'time',
-      render: (t: string, rec: SessionType) =>
-        t || (rec.date ? dayjs(rec.date).format('HH:mm') : '--'),
-    },
-    {
-      title: 'Status',
-      dataIndex: 'status',
-      key: 'status',
-      render: (status: string) => {
-        let color = 'processing';
-        if (status === 'Completed') color = 'green';
-        else if (status === 'Cancelled') color = 'red';
-        else if (status === 'Scheduled') color = 'geekblue';
-        return <Tag color={color}>{status || 'Scheduled'}</Tag>;
-      },
-    },
-    {
-      title: 'Notes',
-      dataIndex: 'notes',
-      key: 'notes',
-      render: (text: string) => text || '-'
-    },
-  ];
-
   return (
-    <Card style={{ margin: 32 }}>
-      <Title level={3}>My Children's Appointments (All Data)</Title>
-      <Spin spinning={loading}>
-        <Collapse accordion>
-          {fullData.map((appt) => (
-            <Panel
-              header={
-                <>
-                  <b>Appointment:</b> {appt.appointmentId || appt._id}{' '}
-                  {appt.patient?.name && (
-                    <>
-                      — <b>Child:</b> {appt.patient.name}{' '}
-                      <Tag color="blue">{appt.patient.patientId}</Tag>
-                    </>
-                  )}
-                  {appt.package && (
-                    <span>
-                      {' '}| <b>Package:</b> {appt.package.name}
-                    </span>
-                  )}
-                </>
-              }
-              key={appt._id}
-            >
-              {/* <div style={{ marginBottom: 8 }}>
-                <Text strong>Raw Data</Text>
-                <pre
-                  style={{
-                    background: "#f7f7f7",
-                    padding: "8px",
-                    borderRadius: "4px",
-                    fontSize: 12,
-                    maxHeight: 280,
-                    overflow: "auto"
-                  }}
-                >
-                  {JSON.stringify(appt, null, 2)}
-                </pre>
-              </div> */}
-              <br />
-              <Table
-                title={() => 'Appointment Info'}
-                columns={appointmentColumns}
-                dataSource={[appt]}
-                size="small"
-                pagination={false}
-                rowKey={() => 'appt.' + appt._id}
-              />
-              {appt.patient &&
-                <Table
-                  style={{ marginTop: 10 }}
-                  title={() => 'Child Info'}
-                  columns={patientColumns}
-                  dataSource={[appt.patient]}
-                  size="small"
-                  pagination={false}
-                  rowKey={() => 'pat.' + appt.patient?._id}
-                />
-              }
-              {appt.package &&
-                <Table
-                  style={{ marginTop: 10 }}
-                  title={() => 'Package Info'}
-                  columns={packageColumns}
-                  dataSource={[appt.package]}
-                  size="small"
-                  pagination={false}
-                  rowKey={() => 'pkg.' + (appt.package?._id || Math.random())}
-                />
-              }
-              {/* Sessions Table */}
-              <Table
-                style={{ marginTop: 10 }}
-                title={() => 'Sessions'}
-                columns={sessionColumns}
-                dataSource={Array.isArray(appt.sessions) && appt.sessions.length ? appt.sessions.map((s, idx) => ({ ...s, key: idx })) : []}
-                size="small"
-                pagination={false}
-                // rowKey={(row, idx) => `${appt._id}_sess_${idx}`}
-                locale={{
-                  emptyText: "No session data"
-                }}
-              />
-            </Panel>
-          ))}
-        </Collapse>
-        {(!loading && !fullData.length) && (
-          <div style={{ marginTop: 32, textAlign: 'center' }}>
-            <Text type="secondary">No appointments found.</Text>
-          </div>
-        )}
-      </Spin>
-    </Card>
-  );
-};
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="min-h-screen p-8"
+    >
+      <h1 className="text-2xl font-bold text-slate-800 mb-6">
+        My Children's Appointments
+      </h1>
+      {loading ? (
+        <div className="text-center text-slate-400">Loading...</div>
+      ) : (
+        <div className="bg-white border border-slate-200 rounded-lg overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-100 text-slate-600">
+              <tr>
+                <th className="px-4 py-3 text-left">Appointment ID</th>
+                <th className="px-4 py-3 text-left">Patient</th>
+                <th className="px-4 py-3 text-left">Patient ID</th>
+                <th className="px-4 py-3 text-left">Therapy</th>
+                <th className="px-4 py-3 text-left">Package</th>
+                <th className="px-4 py-3 text-left">Created</th>
+                <th className="px-4 py-3 text-center"># Sessions</th>
+                <th className="px-4 py-3 text-left">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {appointments.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="px-4 py-8 text-slate-400 text-center">
+                    No appointments found.
+                  </td>
+                </tr>
+              )}
+              {appointments.map((a) => (
+                <tr key={a._id} className="border-t">
+                  <td className="px-4 py-4 font-semibold text-slate-700">
+                    {a.appointmentId || a._id}
+                  </td>
+                  <td className="px-4 py-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-full bg-sky-100 flex items-center justify-center">
+                        <FiUser className="text-sky-600" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-slate-800">
+                          {a.patient?.name || <span className="italic text-slate-400">N/A</span>}
+                        </p>
+                        <p className="text-xs text-slate-500">{a.patient?.gender ? a.patient.gender.charAt(0).toUpperCase() + a.patient.gender.slice(1) : "-"}</p>
+                        {a.patient?.childDOB && (
+                          <p className="text-xs text-slate-500">
+                            DOB: {formatDate(a.patient.childDOB)}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-4 py-4">
+                    {a.patient?.patientId ? (
+                      <span className="inline-block rounded bg-blue-50 text-blue-700 px-2 py-1 text-xs font-semibold">
+                        {a.patient.patientId}
+                      </span>
+                    ) : (
+                      <span className="italic text-slate-400">N/A</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-4">
+                    {a.therapy ?? <span className="italic text-slate-400">N/A</span>}
+                  </td>
+                  <td className="px-4 py-4">
+                    {a.package?.name ?? <span className="italic text-slate-400">N/A</span>}
+                  </td>
+                  <td className="px-4 py-4">
+                    {formatDate(a.createdAt)}
+                  </td>
+                  <td className="px-4 py-4 text-center font-semibold">
+                    {a.sessions?.length ?? 0}
+                  </td>
+                  <td className="px-4 py-4">
+                    <button
+                      type="button"
+                      className="flex items-center gap-1 px-3 py-1 rounded bg-slate-100 hover:bg-blue-50 border border-slate-200 text-blue-700 shadow-sm text-xs"
+                      onClick={() => setViewAppointment(a)}
+                    >
+                      <FiCalendar className="text-blue-500" /> View Details
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
-export default MyChildrenAppointmentsPage;
+      {/* Detail Modal - design matched to patient edit modal */}
+      {viewAppointment && (
+        <div className="fixed z-50 inset-0  bg-black/40 z-30 flex items-center justify-center">
+          <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto relative animate-[fadeIn_0.15s]">
+            <button
+              className="absolute top-3 right-4 text-xl text-slate-500 hover:text-red-500"
+              onClick={() => setViewAppointment(null)}
+            >
+              &times;
+            </button>
+            <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
+              <FiCalendar className="inline text-blue-500" /> Appointment Details
+            </h2>
+            <div className="mb-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block mb-1 text-sm font-medium text-slate-700">Appointment ID</label>
+                <input
+                  type="text"
+                  className="w-full border rounded px-3 py-2 bg-gray-100 text-gray-600 cursor-not-allowed"
+                  value={viewAppointment.appointmentId || viewAppointment._id}
+                  readOnly
+                  disabled
+                  tabIndex={-1}
+                  style={{ opacity: 1 }}
+                />
+              </div>
+              <div>
+                <label className="block mb-1 text-sm font-medium text-slate-700">Package</label>
+                <input
+                  type="text"
+                  className="w-full border rounded px-3 py-2 bg-gray-100"
+                  value={viewAppointment.package?.name ?? ""}
+                  readOnly
+                  disabled
+                />
+              </div>
+              <div>
+                <label className="block mb-1 text-sm font-medium text-slate-700">Therapy</label>
+                <input
+                  type="text"
+                  className="w-full border rounded px-3 py-2 bg-gray-100"
+                  value={viewAppointment.therapy ?? ""}
+                  readOnly
+                  disabled
+                />
+              </div>
+              <div>
+                <label className="block mb-1 text-sm font-medium text-slate-700">Created At</label>
+                <input
+                  type="text"
+                  className="w-full border rounded px-3 py-2 bg-gray-100"
+                  value={formatDate(viewAppointment.createdAt)}
+                  readOnly
+                  disabled
+                />
+              </div>
+              <div>
+                <label className="block mb-1 text-sm font-medium text-slate-700">Updated At</label>
+                <input
+                  type="text"
+                  className="w-full border rounded px-3 py-2 bg-gray-100"
+                  value={formatDate(viewAppointment.updatedAt)}
+                  readOnly
+                  disabled
+                />
+              </div>
+            </div>
+            {/* Child Info */}
+            <h3 className="font-semibold mb-2 mt-6 text-blue-900">Child Info</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block mb-1 text-sm font-medium">Name</label>
+                <input
+                  type="text"
+                  className="w-full border rounded px-3 py-2 bg-gray-100"
+                  value={viewAppointment.patient?.name || ""}
+                  readOnly
+                  disabled
+                />
+              </div>
+              <div>
+                <label className="block mb-1 text-sm font-medium">Patient ID</label>
+                <input
+                  type="text"
+                  className="w-full border rounded px-3 py-2 bg-gray-100"
+                  value={viewAppointment.patient?.patientId || ""}
+                  readOnly
+                  disabled
+                />
+              </div>
+              <div>
+                <label className="block mb-1 text-sm font-medium">Gender</label>
+                <input
+                  type="text"
+                  className="w-full border rounded px-3 py-2 bg-gray-100"
+                  value={viewAppointment.patient?.gender || ""}
+                  readOnly
+                  disabled
+                />
+              </div>
+              <div>
+                <label className="block mb-1 text-sm font-medium">DOB</label>
+                <input
+                  type="text"
+                  className="w-full border rounded px-3 py-2 bg-gray-100"
+                  value={formatDate(viewAppointment.patient?.childDOB)}
+                  readOnly
+                  disabled
+                />
+              </div>
+            </div>
+            {viewAppointment.package && (
+              <>
+                <h3 className="font-semibold mb-2 mt-6 text-blue-900">Package Info</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-2">
+                  <div>
+                    <label className="block mb-1 text-sm font-medium">Sessions</label>
+                    <input
+                      type="text"
+                      className="w-full border rounded px-3 py-2 bg-gray-100"
+                      value={viewAppointment.package?.sessionCount}
+                      readOnly
+                      disabled
+                    />
+                  </div>
+                  <div>
+                    <label className="block mb-1 text-sm font-medium">Cost/Session</label>
+                    <input
+                      type="text"
+                      className="w-full border rounded px-3 py-2 bg-gray-100"
+                      value={viewAppointment.package?.costPerSession}
+                      readOnly
+                      disabled
+                    />
+                  </div>
+                  <div>
+                    <label className="block mb-1 text-sm font-medium">Total Cost</label>
+                    <input
+                      type="text"
+                      className="w-full border rounded px-3 py-2 bg-gray-100"
+                      value={viewAppointment.package?.totalCost}
+                      readOnly
+                      disabled
+                    />
+                  </div>
+                </div>
+              </>
+            )}
+
+            <h3 className="font-semibold mb-2 mt-6 text-blue-900">Sessions</h3>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs border mb-2">
+                <thead className="bg-slate-50 border-b">
+                  <tr>
+                    <th className="px-3 py-2 text-left">Date</th>
+                    <th className="px-3 py-2 text-left">Time</th>
+                    <th className="px-3 py-2 text-left">Status</th>
+                    <th className="px-3 py-2 text-left">Notes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(Array.isArray(viewAppointment.sessions) && viewAppointment.sessions.length > 0) ? (
+                    viewAppointment.sessions.map((s, idx) => (
+                      <tr key={idx} className="border-t">
+                        <td className="px-3 py-2">{s.date ? dayjs(s.date).format("YYYY-MM-DD") : "-"}</td>
+                        <td className="px-3 py-2">{s.time || (s.date ? dayjs(s.date).format("HH:mm") : "--")}</td>
+                        <td className="px-3 py-2">
+                          {s.status === "Completed" ? (
+                            <span className="inline-block px-2 py-1 rounded bg-green-50 text-green-700 font-semibold">{s.status}</span>
+                          ) : s.status === "Cancelled" ? (
+                            <span className="inline-block px-2 py-1 rounded bg-red-50 text-red-700 font-semibold">{s.status}</span>
+                          ) : (
+                            <span className="inline-block px-2 py-1 rounded bg-blue-50 text-blue-700 font-semibold">{s.status || "Scheduled"}</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2">{s.notes || "-"}</td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={4} className="px-3 py-5 text-center text-slate-400">No session data</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex justify-end mt-4">
+              <button
+                className="px-5 py-2 rounded border font-semibold"
+                onClick={() => setViewAppointment(null)}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </motion.div>
+  );
+}

@@ -7,6 +7,7 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || "";
 type Patient = {
   _id: string;
   patientId?: string;
+  name?:string,
   childFullName: string;
   gender?: string;
   childDOB?: string;
@@ -145,7 +146,7 @@ export default function PatientsPage() {
                         <FiUser className="text-green-600" />
                       </div>
                       <div>
-                        <p className="font-medium text-slate-800">{p.userId?.name}</p>
+                        <p className="font-medium text-slate-800">{p.name}</p>
                         {p.childDOB && (
                           <p className="text-xs text-slate-500">
                             DOB: {new Date(p.childDOB).toLocaleDateString()}

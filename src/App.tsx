@@ -50,9 +50,9 @@ import AppointmentBookingSystem from "./pages/AdminPages/AppointmentBookingSyste
 import TherapistsPage from "./pages/AdminPages/TherapistsPage/TherapistsPage";
 import PatientsPage from "./pages/AdminPages/PatientsPage/PatientsPage";
 import FinancesPage from "./pages/AdminPages/FinancesPage/FinancesPage";
-import TherapyTypesPage from "./pages/AdminPages/TherapyTypesPage/TherapyTypesPage";
+import TherapyTypesPage from "./pages/SuperAdminPages/TherapyTypesPage/TherapyTypesPage";
 import AuthPage from "./pages/AuthPages/SIgnInPage";
-import PackagesPage from "./pages/AdminPages/PackagesPage/PackagesPage";
+import PackagesPage from "./pages/SuperAdminPages/PackagesPage/PackagesPage";
 import ManageAvailabilityPage from "./pages/AdminPages/ManageAvailabilityPage/ManageAvailabilityPage";
 import MyChildrens from "./pages/ParentPages/AllChildrens/MyChildrens";
 import MyChildrenAppointmentsPage from "./pages/ParentPages/MyChildrenAppointments/MyChildrenAppointmentsPage";
@@ -60,7 +60,11 @@ import ParentProfile from "./pages/ParentPages/ProfilePage/ParentProfile";
 import TherapistMyAppointments from "./pages/TherapistPages/MyAppointment/MyAppointments";
 import CalendarAndSchedule from "./pages/TherapistPages/CalendarAndSchedule/CalendarAndSchedule";
 import TherpaistProfile from "./pages/TherapistPages/TherapistProfile/TherpaistProfile";
-import ManageDiscounts from "./pages/AdminPages/Discounts/ManageDiscounts";
+import ManageDiscounts from "./pages/SuperAdminPages/Discounts/ManageDiscounts";
+import OnboardSubAdmin from "./pages/SuperAdminPages/OnboardSubAdmin/OnboardSubAdmin";
+import AllUsers from "./pages/SuperAdminPages/AllUsers/AllUsers";
+import AllAppointments from "./pages/SuperAdminPages/AllAppointments/AllAppointments";
+import RequestAppointment from "./pages/ParentPages/RequestAppointment/RequestAppointment";
 
 
 export default function App() {
@@ -97,34 +101,14 @@ export default function App() {
               (Admin custom routes below these, as before...)
             */}
             <Route index path="/super-admin" element={<Home />} />
-            <Route
-              path="/super-admin/account-access"
-              element={<h1>Account Access</h1>}
-            />
-            <Route
-              path="/super-admin/data-management"
-              element={<h1>Data Management</h1>}
-            />
-            <Route
-              path="/super-admin/data-import"
-              element={<h1>Data Import</h1>}
-            />
-            <Route
-              path="/super-admin/data-export"
-              element={<h1>Data Export</h1>}
-            />
-            <Route
-              path="/super-admin/app-configuration"
-              element={<h1>App Configuration</h1>}
-            />
-            <Route
-              path="/super-admin/roles-permissions"
-              element={<h1>Roles &amp; Permissions</h1>}
-            />
-            <Route
-              path="/super-admin/audit-logs"
-              element={<h1>Audit Logs</h1>}
-            />
+            <Route path="/super-admin/all-users" element={<AllUsers />} />
+            <Route path="/super-admin/all-appointments" element={<AllAppointments />} />
+            <Route path="/super-admin/finances" element={<div>Finances</div>} />
+            <Route path="/super-admin/onboard-sub-admin" element={<OnboardSubAdmin />} />
+            <Route path="/super-admin/therapy-types" element={<TherapyTypesPage />} />
+            <Route path="/super-admin/packages" element={<PackagesPage />} />
+            <Route path="/super-admin/discount-coupons" element={<ManageDiscounts />} />
+            <Route path="/super-admin/audit-logs" element={<h1>Audit Logs</h1>} />
             {/* Others Page */}
             <Route path="/super-admin/profile" element={<UserProfiles />} />
             <Route path="/calendar" element={<Calendar />} />
@@ -161,9 +145,9 @@ export default function App() {
             <Route path="/admin/therapists" element={<TherapistsPage/>} />
             <Route path="/admin/children" element={<PatientsPage/>} />
             <Route path="/admin/finances" element={<FinancesPage/>} />
-            <Route path="/admin/therapy-types" element={<TherapyTypesPage />} />
+            {/* <Route path="/admin/therapy-types" element={<TherapyTypesPage />} />
             <Route path="/admin/packages" element={<PackagesPage />} />
-            <Route path="/admin/discounts" element={<ManageDiscounts />} />
+            <Route path="/admin/discounts" element={<ManageDiscounts />} /> */}
 
             <Route path="/admin/manage-availability" element={<ManageAvailabilityPage />} />
 
@@ -185,6 +169,8 @@ export default function App() {
             <Route path="/parent/appointments" element={<MyChildrenAppointmentsPage  />} />
             <Route path="/parent/invoices-payments" element={<div>Invoices & Payments Page</div>} />
             <Route path="/parent/profile" element={<ParentProfile />} />
+            <Route path="/parent/request-appointment" element={<RequestAppointment />} />
+
           </Route>       
 
           <Route path="/signin" element={<AuthPage />} />

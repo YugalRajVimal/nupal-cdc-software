@@ -4,8 +4,8 @@ import { FiPlus, FiEdit, FiTrash, FiX, FiCheck } from "react-icons/fi";
 
 // Set your API base url here for packages
 const API_BASE = import.meta.env.VITE_API_URL
-  ? `${import.meta.env.VITE_API_URL}/api/admin/packages`
-  : "/api/admin/packages";
+  ? `${import.meta.env.VITE_API_URL}/api/super-admin/packages`
+  : "/api/super-admin/packages";
 
 type PackageType = {
   _id: string;
