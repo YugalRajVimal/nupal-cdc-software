@@ -65,6 +65,7 @@ import OnboardSubAdmin from "./pages/SuperAdminPages/OnboardSubAdmin/OnboardSubA
 import AllUsers from "./pages/SuperAdminPages/AllUsers/AllUsers";
 import AllAppointments from "./pages/SuperAdminPages/AllAppointments/AllAppointments";
 import RequestAppointment from "./pages/ParentPages/RequestAppointment/RequestAppointment";
+import BookingRequests from "./pages/AdminPages/BookingRequest/BookingRequests";
 
 
 export default function App() {
@@ -142,6 +143,8 @@ export default function App() {
             <Route path="/admin/reports-analytics" element={<AnalyticsReports />} />
 
             <Route path="/admin/bookings" element={<AppointmentBookingSystem/>} />
+            <Route path="/admin/booking-requests" element={<BookingRequests/>} />
+
             <Route path="/admin/therapists" element={<TherapistsPage/>} />
             <Route path="/admin/children" element={<PatientsPage/>} />
             <Route path="/admin/finances" element={<FinancesPage/>} />

@@ -48,6 +48,11 @@ const navItems: NavItem[] = [
     path: "/admin/bookings",
   },
   {
+    icon: <FileIcon />,
+    name: "Booking Requests",
+    path: "/admin/booking-requests",
+  },
+  {
     icon: <UserCircleIcon />,
     name: "Therapists",
     path: "/admin/therapists",

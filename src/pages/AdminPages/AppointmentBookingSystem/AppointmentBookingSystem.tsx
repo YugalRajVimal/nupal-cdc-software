@@ -20,9 +20,9 @@ import {
 } from "react-icons/fi";
 import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
+import { useLocation } from "react-router";
 
 const DAYS = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
-
 const SESSION_TIME_OPTIONS = [
   { id: '1000-1045', label: '10:00 to 10:45', limited: false },
   { id: '1045-1130', label: '10:45 to 11:30', limited: false },
@@ -84,7 +84,20 @@ type Therapist = {
   [key: string]: any;
 };
 
-type BookingSession = { date: string; slotId: string; _id?: string };
+type BookingSession = {
+  date: string;
+  slotId: string;
+  therapistId?: string;
+  _id?: string;
+  therapist?: {
+    _id: string;
+    name: string;
+    therapistId: string;
+    userId:{
+      name:string
+    }
+  };
+};
 
 type Booking = {
   _id: string;
@@ -94,18 +107,17 @@ type Booking = {
   package: Package | null;
   therapist: Therapist | string;
   sessions: BookingSession[];
-  // discount-related fields removed for booking form, but kept for summary
   discountInfo?: {
     coupon: {
-      couponCode: string; // e.g., "FIRST20"
-      createdAt: string; // ISO date, e.g., "2026-01-05T08:42:24.342Z"
-      discount: number; // e.g., 20
-      discountEnabled: boolean; // e.g., true
-      validityDays: number; // e.g., 5
+      couponCode: string;
+      createdAt: string;
+      discount: number;
+      discountEnabled: boolean;
+      validityDays: number;
       __v?: number;
-      _id: string; // e.g., "695b797035dd1facfbd46696"
+      _id: string;
     };
-    time?: string; // redundancy in case time is present directly under discountInfo
+    time?: string;
   };
 };
 
@@ -115,33 +127,33 @@ type Coupon = {
   discount: number;
   validityDays: number;
   enabled?: boolean;
-  // add any other relevant fields if needed
 };
 
-// Utility functions (mostly unchanged)
+// Utility functions
 function pad2(n: number) {
   return n < 10 ? `0${n}` : `${n}`;
 }
 function getDateKey(year: number, month: number, day: number): string {
   return `${year}-${pad2(month)}-${pad2(day)}`;
 }
-
 function getDaysInMonth(year: number, month: number) {
   return new Date(year, month + 1, 0).getDate();
 }
 function getStartDay(year: number, month: number) {
   return new Date(year, month, 1).getDay();
 }
-
 const API_BASE_URL = import.meta.env.VITE_API_URL as string;
-
-// Helper function: Get the number 0-6 corresponding to a day short code, i.e. "SUN" to 0
 function getDayIndex(dayShort: string): number {
   const idx = DAYS.findIndex(d => d === dayShort.toUpperCase());
   return idx >= 0 ? idx : 0;
 }
 
+// ---------------------------------------------
+// USE THE monthlySlotSummary BookedSlots DATA:
+// ---------------------------------------------
+
 export default function AppointmentBookingSystem() {
+  const location = useLocation();
   const [loading, setLoading] = useState(true);
   const [guideOpen, setGuideOpen] = useState(false);
 
@@ -149,18 +161,17 @@ export default function AppointmentBookingSystem() {
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
 
+  // Form state
   const [patientId, setPatientId] = useState<string>("");
   const [therapyId, setTherapyId] = useState<string>("");
   const [packageId, setPackageId] = useState<string>("");
-  const [sessions, setSessions] = useState<{ date: string; slotId: string }[]>([]);
-
-  // Therapist selection
+  const [sessions, setSessions] = useState<BookingSession[]>([]);
   const [therapistId, setTherapistId] = useState<string>("");
 
-  // Coupon selection state
   const [selectedCouponId, setSelectedCouponId] = useState<string>("");
   const [coupons, setCoupons] = useState<Coupon[]>([]);
 
+  // Master lists
   const [patients, setPatients] = useState<Patient[]>([]);
   const [therapies, setTherapies] = useState<Therapy[]>([]);
   const [packages, setPackages] = useState<Package[]>([]);
@@ -170,31 +181,91 @@ export default function AppointmentBookingSystem() {
   const [bookingLoading, setBookingLoading] = useState<boolean>(false);
   const [bookingError, setBookingError] = useState<string | null>(null);
   const [bookingSuccess, setBookingSuccess] = useState<string | null>(null);
-
-  // EDIT STATE
   const [editBookingId, setEditBookingId] = useState<string | null>(null);
 
-  // "Repeat weekly" mode state
+  // Repeat controls
   const [repeatDay, setRepeatDay] = useState<string>("");
   const [repeatStartDate, setRepeatStartDate] = useState<string>("");
   const [repeatSlotId, setRepeatSlotId] = useState<string>("");
   const [repeatError, setRepeatError] = useState<string | null>(null);
-
-  // ---- New: To offer granular conflict message per date in repeat mode ----
   const [repeatConflictInfo, setRepeatConflictInfo] = useState<{ [date: string]: string }>({});
 
-  // Calendar
+  // Edit mode - booking row slot info
+  const [bookedSlotsPerRow, setBookedSlotsPerRow] = useState<{ [rowKey: string]: string[] }>({});
+
   const daysInMonth = getDaysInMonth(year, month);
   const startDay = getStartDay(year, month);
 
+  const [isBookingRequest, setIsBookingRequest] = useState<boolean>(false);
+  const [bookingRequestId, setBookingRequestId] = useState<string>("");
+
+  // Monthly summary
+  type MonthlySlotsSummary = {
+    [date: string]: {
+      bookedSlots: number;
+      totalAvailableSlots: number;
+      limitedBookedSlots: number;
+      totalLimitedAvailableSlots: number;
+      BookedSlots: { [therapistId: string]: string[] };
+    };
+  };
+  const [monthlySlotSummary, setMonthlySlotSummary] = useState<MonthlySlotsSummary>({});
+  // const [availabilityTherapistId, setAvailabilityTherapistId] = useState<string>("");
+
+  // --- BACKEND MONTHLY SLOT SUMMARY FETCH (unchanged fetch) ---
   useEffect(() => {
-    async function fetchMasterDataAndCoupons() {
+    const apiMonth = month + 1;
+    let url = `${API_BASE_URL}/api/admin/availability-slots/summary/monthly?month=${apiMonth}&year=${year}`;
+    if (therapistId) {
+      url += `&therapistId=${encodeURIComponent(therapistId)}`;
+    }
+    // setAvailabilityTherapistId(therapistId || "");
+    setMonthlySlotSummary({}); // Clear immediately while loading
+    fetch(url)
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.success && data.data && data.data.data) {
+          setMonthlySlotSummary(data.data.data);
+          console.log(data.data.data);
+        } else {
+          setMonthlySlotSummary({});
+        }
+      })
+      .catch(err => {
+        setMonthlySlotSummary({});
+        console.error('Error fetching monthly summary:', err);
+      });
+  }, [month, year, therapistId]);
+
+  // read bookingRequest for prefill
+  useEffect(() => {
+    if (location.state && (location.state as any).bookingRequest) {
+      const req = (location.state as any).bookingRequest;
+      setPatientId(req.patient?._id || "");
+      setTherapyId(req.therapy?._id || "");
+      setPackageId(req.package?._id || "");
+      setIsBookingRequest(true);
+      setBookingRequestId(req._id || "");
+      if (Array.isArray(req.sessions)) {
+        setSessions(req.sessions.map((s: any) => ({
+          date: s.date || "",
+          slotId: s.slotId || s.time || "",
+          therapistId: req.therapist?._id || req.therapist || "",
+        })));
+        setTherapistId(req.therapist?._id || req.therapist || "");
+      }
+    }
+    // eslint-disable-next-line
+  }, [location.state]);
+
+  // Fetch master data (unchanged)
+  useEffect(() => {
+    async function fetchAllMasterData() {
       setDataLoading(true);
       setBookingError(null);
       try {
         const res = await fetch(`${API_BASE_URL}/api/admin/bookings/home-details`);
         const json = await res.json();
-
         let processedPatients: Patient[] = [];
         if (Array.isArray(json.patients)) {
           processedPatients = json.patients.map((raw: any) => {
@@ -204,18 +275,15 @@ export default function AppointmentBookingSystem() {
                 : typeof raw._id === "string"
                   ? raw._id
                   : "";
-
             let patientName = raw.name;
             if (
               (!patientName || patientName.trim() === "") &&
-              raw.userId &&
-              typeof raw.userId === "object" &&
+              raw.userId && typeof raw.userId === "object" &&
               typeof raw.userId.name === "string" &&
               raw.userId.name.trim() !== ""
             ) {
               patientName = raw.userId.name;
             }
-
             let userId = raw.userId;
             if (raw.userId && typeof raw.userId === "object") {
               userId = {
@@ -223,7 +291,6 @@ export default function AppointmentBookingSystem() {
                 name: (raw.userId.name != null ? raw.userId.name : patientName),
               };
             }
-
             return {
               ...raw,
               id,
@@ -247,7 +314,7 @@ export default function AppointmentBookingSystem() {
       }
       setDataLoading(false);
     }
-    fetchMasterDataAndCoupons();
+    fetchAllMasterData();
   }, []);
 
   function normalizeBookings(bookings: any[]): Booking[] {
@@ -278,14 +345,24 @@ export default function AppointmentBookingSystem() {
           }
         };
       }
-      // Patch sessions: normalize any 'time' field to 'slotId' for display
+      let mainTherapistId =
+        typeof b.therapist === "object"
+          ? b.therapist?._id
+          : typeof b.therapist === "string"
+          ? b.therapist
+          : "";
       let normalizedSessions = Array.isArray(b.sessions)
-        ? b.sessions.map((s: any) => ({
-          ...s,
-          slotId: s.slotId ?? s.time ?? "",
-        }))
+        ? b.sessions.map((s: any) => {
+            let sessionTid = s.therapistId
+              || (typeof s.therapist === "string" ? s.therapist : s.therapist?._id)
+              || mainTherapistId;
+            return {
+              ...s,
+              slotId: s.slotId ?? s.time ?? "",
+              therapistId: sessionTid
+            };
+          })
         : [];
-
       if (b.discountInfo && typeof b.discountInfo === "object") {
         return {
           ...b,
@@ -308,8 +385,6 @@ export default function AppointmentBookingSystem() {
       const json = await res.json();
       let bookingsList: Booking[] =
         Array.isArray(json.bookings) ? normalizeBookings(json.bookings) : [];
-
-      console.log("All Booking Details:", bookingsList);
       setBookings(bookingsList);
     } catch {
       setBookings([]);
@@ -328,6 +403,7 @@ export default function AppointmentBookingSystem() {
     return () => clearTimeout(t);
   }, []);
 
+  // Package/session logic
   const selectedPackage = packages.find((p) => p._id === packageId) || null;
   const getTotalSessionsForPackage = (pkg: Package | null) => {
     if (!pkg) return undefined;
@@ -349,6 +425,7 @@ export default function AppointmentBookingSystem() {
     }
   }, [packageId, maxSelectableDates]);
 
+  // Edit booking
   useEffect(() => {
     if (editBookingId) {
       const booking = bookings.find((b) => b._id === editBookingId);
@@ -358,12 +435,27 @@ export default function AppointmentBookingSystem() {
         );
         setTherapyId(booking.therapy?._id || "");
         setPackageId(booking.package?._id || "");
+
+        let resolvedTherapistId =
+          (typeof booking.therapist === "string" && booking.therapist) ||
+          (typeof booking.therapist === "object" && booking.therapist?._id) ||
+          "";
+        setTherapistId(resolvedTherapistId);
         setSessions(
           Array.isArray(booking.sessions)
-            ? booking.sessions.map((s) => ({
-              date: s.date,
-              slotId: s.slotId ?? "",
-            }))
+            ? booking.sessions.map((s) => {
+                let sessionTid =
+                  (typeof s.therapistId === "string" && s.therapistId) ||
+                  (typeof s.therapist === "string" && s.therapist) ||
+                  (s.therapist && typeof s.therapist === "object" && s.therapist?._id) ||
+                  resolvedTherapistId ||
+                  "";
+                return {
+                  date: s.date,
+                  slotId: s.slotId ?? "",
+                  therapistId: sessionTid,
+                };
+              })
             : []
         );
         let couponObj: Coupon | undefined = undefined;
@@ -379,7 +471,6 @@ export default function AppointmentBookingSystem() {
             coupons.find(c => (c as any).couponCode === couponCandidate.couponCode) ||
             coupons.find(c => (c as any).couponCode === (couponCandidate as any).code) ||
             (booking.discountInfo as any).couponCode && coupons.find(c => c.code === (booking.discountInfo as any).couponCode);
-
         } else if (
           booking.discountInfo &&
           (booking.discountInfo as any).couponCode
@@ -393,37 +484,23 @@ export default function AppointmentBookingSystem() {
     }
   }, [editBookingId, bookings, coupons.length]);
 
-  function resetForm() {
-    setPatientId("");
-    setTherapyId("");
-    setPackageId("");
-    setTherapistId("");
-    setSessions([]);
-    setSelectedCouponId("");
-    setEditBookingId(null);
-    setBookingError(null);
-    setBookingSuccess(null);
-    setRepeatDay("");
-    setRepeatStartDate("");
-    setRepeatSlotId("");
-    setRepeatError(null);
-    setRepeatConflictInfo({});
+  // -- UTILITY: For a given dateKey, get the server-available/used slot info for summary
+  function getServerDaySlotSummary(dateKey: string) {
+    // The API data is keyed as "dd-mm-yyyy", but our generation is yyyy-mm-dd.
+    // We must map/convert our key to their format for lookup.
+    // But, in the sample-dump shown above, it's actually "dd-mm-yyyy". Let's do that conversion:
+    const parts = dateKey.split("-");
+    if (parts.length !== 3) return undefined;
+    // input yyyy-mm-dd, want dd-mm-yyyy
+    const apiKey = `${pad2(Number(parts[2]))}-${pad2(Number(parts[1]))}-${parts[0]}`;
+    const day = monthlySlotSummary[apiKey];
+    if (!day) {
+      return undefined;
+    }
+    return day;
   }
 
-  if (loading || dataLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="text-slate-600 font-semibold"
-        >
-          Loading Bookings & Data…
-        </motion.div>
-      </div>
-    );
-  }
-
+  // -- Calendar month navigation unchanged --
   const changeMonth = (dir: "prev" | "next") => {
     if (dir === "prev") {
       if (month === 0) {
@@ -438,6 +515,7 @@ export default function AppointmentBookingSystem() {
     }
   };
 
+  // Date selection
   const toggleDate = (day: number) => {
     const dateKey = getDateKey(year, month + 1, day);
     const exists = sessions.find((s) => s.date === dateKey);
@@ -451,13 +529,37 @@ export default function AppointmentBookingSystem() {
     ) {
       return;
     }
-    setSessions((prev) => [...prev, { date: dateKey, slotId: "" }]);
+    setSessions((prev) => [...prev, { date: dateKey, slotId: "", therapistId: therapistId || "" }]);
   };
 
+  // Set time slot in session row
   const updateSlotId = (date: string, slotId: string) => {
     setSessions((prev) =>
       prev.map((s) => (s.date === date ? { ...s, slotId } : s))
     );
+    if (editBookingId) {
+      // Always match session.therapistId or fallback to current
+      const sessionTherapistId =
+        sessions.find((s) => s.date === date)?.therapistId
+        || therapistId;
+      setBookedSlotsPerRow((prevMap) => ({
+        ...prevMap,
+        [`${date}:${sessionTherapistId}`]: getAlreadyBookedSlotIds(date, sessionTherapistId)
+      }));
+    }
+  };
+
+  // Set therapist in session row (only available in edit mode)
+  const updateSessionTherapist = (date: string, therapistIdVal: string) => {
+    setSessions((prev) =>
+      prev.map((s) => (s.date === date ? { ...s, therapistId: therapistIdVal } : s))
+    );
+    if (editBookingId) {
+      setBookedSlotsPerRow((prevMap) => ({
+        ...prevMap,
+        [`${date}:${therapistIdVal}`]: getAlreadyBookedSlotIds(date, therapistIdVal)
+      }));
+    }
   };
 
   const selectedPatient = patients.find((p) => p.id === patientId) || null;
@@ -465,26 +567,27 @@ export default function AppointmentBookingSystem() {
   const selectedTherapist = therapists.find((t) => t._id === therapistId) || null;
   const selectedCoupon = coupons.find(c => c._id === selectedCouponId) || null;
 
+  // Helper: earliest session (for minimum submission check)
   function getFirstSessionEarliest(sessions: { date: string; slotId: string }[]) {
     if (!sessions || sessions.length === 0) return null;
     const sorted = [...sessions].sort((a, b) => a.date.localeCompare(b.date));
     return sorted[0];
   }
-
   const earliestSession = getFirstSessionEarliest(sessions);
 
+  // Writeable structure - as requested (strong check, see instructions)
   const canBook =
-    !!selectedPatient &&
-    !!selectedTherapy &&
-    !!selectedPackage &&
-    !!selectedTherapist &&
+    Boolean(selectedPatient) &&
+    Boolean(selectedTherapy) &&
+    Boolean(selectedPackage) &&
+    Boolean(selectedTherapist) &&
     sessions.length > 0 &&
-    !!(earliestSession && earliestSession.slotId);
+    Boolean(earliestSession && earliestSession.slotId);
 
+  // UI helpers
   function getPatientDisplayName(patient: Patient | undefined | null) {
     if (!patient) return "";
-    const name =
-      patient.name;
+    const name = patient.name;
     const pid = patient.patientId ? patient.patientId : "";
     return pid ? `${name} (${pid})` : name;
   }
@@ -514,6 +617,7 @@ export default function AppointmentBookingSystem() {
     return parts.join("; ");
   }
 
+  // Book or update
   const handleBookOrUpdate = async (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
     setBookingSuccess(null);
@@ -533,11 +637,18 @@ export default function AppointmentBookingSystem() {
       therapy: therapyId,
       package: packageId,
       therapist: therapistId,
+      isBookingRequest,
+      bookingRequestId,
       sessions: sessions
         .slice()
         .sort((a, b) => a.date.localeCompare(b.date))
-        .map(({ date, slotId }) => ({ date, slotId })),
+        .map(({ date, slotId, therapistId }) => ({
+          date,
+          slotId,
+          therapist: therapistId || therapistId, // Always pass therapistId for each session
+        })),
     };
+
     if (selectedCoupon) {
       payload.coupon = { id: selectedCoupon._id };
       payload.couponCode = selectedCoupon.code;
@@ -618,15 +729,36 @@ export default function AppointmentBookingSystem() {
     setBookingLoading(false);
   };
 
+  // Edit controls
   function handleEditBooking(bookingId: string) {
     setEditBookingId(bookingId);
     setBookingError(null);
     setBookingSuccess(null);
     const booking = bookings.find(b => b._id === bookingId);
-    if (booking && booking.therapist && typeof booking.therapist === "string") {
-      setTherapistId(booking.therapist);
-    } else if (booking && booking.therapist && typeof booking.therapist === "object") {
-      setTherapistId(booking.therapist._id);
+    // Always set correct therapistId for all sessions
+    if (booking) {
+      let resolvedTherapistId =
+        (typeof booking.therapist === "string" && booking.therapist) ||
+        (typeof booking.therapist === "object" && booking.therapist?._id) ||
+        "";
+      setTherapistId(resolvedTherapistId);
+      setSessions(
+        Array.isArray(booking.sessions)
+          ? booking.sessions.map((s) => {
+              let sessionTid =
+                (typeof s.therapistId === "string" && s.therapistId) ||
+                (typeof s.therapist === "string" && s.therapist) ||
+                (s.therapist && typeof s.therapist === "object" && s.therapist?._id) ||
+                resolvedTherapistId ||
+                "";
+              return {
+                date: s.date,
+                slotId: s.slotId ?? "",
+                therapistId: sessionTid,
+              };
+            })
+          : []
+      );
     }
     let couponObj: Coupon | undefined = undefined;
     if (
@@ -652,7 +784,6 @@ export default function AppointmentBookingSystem() {
         coupons.find(c => c._id === (booking.discountInfo as any).couponCode);
     }
     setSelectedCouponId(couponObj ? couponObj._id : "");
-
     setRepeatDay("");
     setRepeatStartDate("");
     setRepeatSlotId("");
@@ -683,249 +814,177 @@ export default function AppointmentBookingSystem() {
     }
   }
 
-  // --- Helper logic omitted for brevity (unchanged) ---
-
-  function getTotalAvailableTherapists(dateStr: string): number {
-    let count = 0;
-    for (const t of therapists) {
-      const holidays = Array.isArray(t.holidays) ? t.holidays : [];
-      const isOnHoliday = holidays.some(h => h && h.date === dateStr);
-      if (!isOnHoliday) count += 1;
+  // Only show day slot summary via server monthlySlotSummary API (not local calculation)
+  function getDaySlotSummary(dateStr: string) {
+    const daySummary = getServerDaySlotSummary(dateStr);
+    if (!daySummary) {
+      return { total: undefined, booked: undefined, limitedTotal: undefined, limitedBooked: undefined };
     }
-    return count;
-  }
-
-  function isTherapistOnHoliday(therapist: Therapist | undefined, dateStr: string) {
-    if (!therapist) return false;
-    const holidays = Array.isArray(therapist.holidays) ? therapist.holidays : [];
-    return holidays.some(h => h && h.date === dateStr);
-  }
-
-  function getBookedCountForTherapist(dateStr: string): { normal: number; limited: number } {
-    if (!therapistId) return { normal: 0, limited: 0 };
-    let normal = 0;
-    let limited = 0;
-    for (const booking of bookings) {
-      let bTid = "";
-      if (booking.therapist && typeof booking.therapist === "string") {
-        bTid = booking.therapist;
-      } else if (booking.therapist && typeof booking.therapist === "object") {
-        bTid = booking.therapist._id || "";
-      }
-      if (bTid === therapistId) {
-        if (Array.isArray(booking.sessions)) {
-          for (const s of booking.sessions) {
-            if (s.date === dateStr) {
-              const opt = SESSION_TIME_OPTIONS.find(x => x.id === s.slotId);
-              if (opt) {
-                if (opt.limited) limited += 1;
-                else normal += 1;
-              }
-            }
-          }
-        }
-      }
-    }
-    return { normal, limited };
-  }
-
-  function getDaySlotSummary(dateStr: string): { total: number; booked: number, limitedTotal?: number, limitedBooked?: number } {
-    if (therapistId && selectedTherapist) {
-      if (isTherapistOnHoliday(selectedTherapist, dateStr)) {
-        return { total: 0, booked: 0, limitedTotal: 0, limitedBooked: 0 };
-      }
-      const slotsPerTherapist = 10;
-      const limitedSlotsPerTherapist = 5;
-      const { normal, limited } = getBookedCountForTherapist(dateStr);
-      return {
-        total: slotsPerTherapist,
-        booked: normal,
-        limitedTotal: limitedSlotsPerTherapist,
-        limitedBooked: limited
-      };
-    } else {
-      const availableTherapists = getTotalAvailableTherapists(dateStr);
-      const slotsPerTherapist = 10;
-      const limitedSlotsPerTherapist = 5;
-      let totalNormal = 0;
-      let totalLimited = 0;
-      for (const t of therapists) {
-        if (isTherapistOnHoliday(t, dateStr)) continue;
-        let tid = t._id;
-        let { normal, limited } = (() => {
-          let n = 0, l = 0;
-          for (const booking of bookings) {
-            let bTid = "";
-            if (booking.therapist && typeof booking.therapist === "string") bTid = booking.therapist;
-            else if (booking.therapist && typeof booking.therapist === "object") bTid = booking.therapist._id || "";
-            if (bTid === tid && Array.isArray(booking.sessions)) {
-              for (const s of booking.sessions) {
-                if (s.date === dateStr) {
-                  const opt = SESSION_TIME_OPTIONS.find(x => x.id === s.slotId);
-                  if (opt) {
-                    if (opt.limited) l += 1;
-                    else n += 1;
-                  }
-                }
-              }
-            }
-          }
-          return { normal: n, limited: l };
-        })();
-        totalNormal += normal;
-        totalLimited += limited;
-      }
-      return {
-        total: availableTherapists * slotsPerTherapist,
-        booked: totalNormal,
-        limitedTotal: availableTherapists * limitedSlotsPerTherapist,
-        limitedBooked: totalLimited,
-      };
+    return {
+      total: daySummary.totalAvailableSlots,
+      booked: daySummary.bookedSlots,
+      limitedTotal: daySummary.totalLimitedAvailableSlots,
+      limitedBooked: daySummary.limitedBookedSlots
     }
   }
 
-  // ---------- Key rewrite here: Remove "disable if picked in other dates" ----------
+  // For slot-by-slot: Pull slot disables directly from API BookedSlots field -- but fallback to old calc if not available (edit mode)
+  /**
+   * Calculate available slots for a date using the monthlySlotSummary.daySummary, BookedSlots, and limit counts.
+   * This ensures only slots that are not already booked for the selected therapist are available.
+   */
   function getAvailableSlotsForDate(
     date: string,
-    selectedSessions: { date: string; slotId: string }[],
-    currSelectedSlotId: string
+    selectedSessions: { date: string; slotId: string; therapistId?: string }[],
+    currSelectedSlotId: string,
+    currRowTherapistId?: string,
+    currRowIsEdit?: boolean
   ) {
+    // Key fix: always use BookedSlots data for slot disables, don't only rely on summary booked counts
     const slotInfo: { [slotId: string]: { disabled: boolean; reason: string } } = {};
+    const rowTherapistId = currRowTherapistId || therapistId;
 
-    if (!therapistId || !selectedTherapist) {
+    // Get the day's summary info from the monthlySlotSummary API (from backend)
+    const daySummary = getServerDaySlotSummary(date);
+    console.log("[getAvailableSlotsForDate] date:", date);
+    console.log("[getAvailableSlotsForDate] therapistId (resolved):", rowTherapistId);
+    console.log(currRowIsEdit);
+    console.log("[getAvailableSlotsForDate] daySummary:", daySummary);
+
+    // If no therapist selected, block all slots
+    if (!rowTherapistId) {
+      console.log("[getAvailableSlotsForDate] No therapist selected, all slots disabled.");
       SESSION_TIME_OPTIONS.forEach((opt) => {
         slotInfo[opt.id] = { disabled: true, reason: "Pick therapist first" };
       });
       return slotInfo;
     }
-    if (isTherapistOnHoliday(selectedTherapist, date)) {
-      SESSION_TIME_OPTIONS.forEach((opt) => {
-        slotInfo[opt.id] = { disabled: true, reason: "Therapist unavailable (holiday)" };
-      });
-      return slotInfo;
+
+    // 1. Get the BookedSlots list for the current therapist for this date (API authority)
+    let therapistSlotsBooked: string[] = [];
+    // Fix: rowTherapistId may be coming as a number or string (normalize to string for object key matching)
+    const rowTherapistIdStr = String(rowTherapistId);
+    if (
+      daySummary &&
+      daySummary.BookedSlots &&
+      typeof daySummary.BookedSlots === 'object' &&
+      rowTherapistIdStr in daySummary.BookedSlots &&
+      Array.isArray(daySummary.BookedSlots[rowTherapistIdStr])
+    ) {
+      therapistSlotsBooked = daySummary.BookedSlots[rowTherapistIdStr];
     }
+    console.log("[getAvailableSlotsForDate] therapistSlotsBooked:", therapistSlotsBooked);
 
-    const normalSlotsAllowed = 10;
-    const limitedSlotsAllowed = 5;
-
-    let normalBookedCount = 0;
-    let limitedBookedCount = 0;
-    const bookedSlotIds: Set<string> = new Set();
-    bookings.forEach((booking) => {
-      let bTid = "";
-      if (booking.therapist && typeof booking.therapist === "string") {
-        bTid = booking.therapist;
-      } else if (booking.therapist && typeof booking.therapist === "object") {
-        bTid = booking.therapist._id || "";
-      }
-      if (bTid === therapistId && Array.isArray(booking.sessions)) {
-        for (const s of booking.sessions) {
-          if (s.date === date && s.slotId) {
-            bookedSlotIds.add(s.slotId);
-            const opt = SESSION_TIME_OPTIONS.find(x => x.id === s.slotId);
-            if (opt) {
-              if (opt.limited) limitedBookedCount += 1;
-              else normalBookedCount += 1;
-            }
-          }
+    // 2. Count form-local slot usage (for this therapist & date)
+    let countNormal = 0, countLimited = 0;
+    selectedSessions
+      .filter(ss => ss.date === date && (ss.therapistId ?? therapistId) === rowTherapistId)
+      .forEach(ss => {
+        const slotOption = SESSION_TIME_OPTIONS.find(o => o.id === ss.slotId);
+        if (ss.slotId && slotOption) {
+          if (slotOption.limited) countLimited++;
+          else countNormal++;
         }
-      }
-    });
+      });
+    console.log("[getAvailableSlotsForDate] countNormal:", countNormal, "countLimited:", countLimited);
 
-    let currFormNormalCount = 0;
-    let currFormLimitedCount = 0;
-    (selectedSessions.filter(ss => ss.date === date)).forEach((ss) => {
-      const opt = SESSION_TIME_OPTIONS.find(o => o.id === ss.slotId);
-      if (!ss.slotId) return;
-      if (opt && opt.limited) currFormLimitedCount += 1;
-      else if (opt) currFormNormalCount += 1;
-    });
+    // 3. API summary caps
+    let maxNormal = daySummary?.totalAvailableSlots ?? 10;
+    let maxLimited = daySummary?.totalLimitedAvailableSlots ?? 5;
+    let bookedNormal = daySummary?.bookedSlots ?? 0;
+    let bookedLimited = daySummary?.limitedBookedSlots ?? 0;
+    console.log("[getAvailableSlotsForDate] maxNormal:", maxNormal, "maxLimited:", maxLimited, "bookedNormal:", bookedNormal, "bookedLimited:", bookedLimited);
 
-    // The following two lines (and the related disable logic) are REMOVED as per instruction
-    // const sessionsExcludingCurrent = selectedSessions.filter((s) => s.date !== date);
-    // const pickedSlotIds = sessionsExcludingCurrent.map((s) => s.slotId);
-
+    // 4. Compute disables for each slot
     SESSION_TIME_OPTIONS.forEach((opt) => {
-      let disabled = false, reason = "";
-      if (!opt.limited) {
-        if (normalBookedCount + currFormNormalCount >= normalSlotsAllowed && (!currSelectedSlotId || currSelectedSlotId !== opt.id)) {
-          disabled = true;
-          reason = "Max 10 normal slots/day";
-        }
+      let apiDisable = false;
+      let reason = "";
+
+      // (A) Hard block if slot is already booked by anyone for this therapist on this date in API BookedSlots
+      if (therapistSlotsBooked.includes(opt.id) && currSelectedSlotId !== opt.id) {
+        apiDisable = true;
+        reason = "Already booked";
+        console.log(`[getAvailableSlotsForDate] Slot ${opt.id}: Already booked (API)`);
+      } else if (!opt.limited) {
+        // (B) Normal slots: if trying to select > max normal slots (API: totalAvailableSlots), block
+        // Only block if user is trying to add additional (currSelectedSlotId means form row's selection)
         if (
-          !disabled &&
-          bookedSlotIds.has(opt.id) &&
-          currSelectedSlotId !== opt.id
+          currSelectedSlotId !== opt.id &&
+          typeof bookedNormal === "number" &&
+          typeof maxNormal === "number" &&
+          bookedNormal + countNormal >= maxNormal
         ) {
-          disabled = true;
-          reason = "Already booked";
+          apiDisable = true;
+          reason = `Max ${maxNormal} normal slots/day`;
+          console.log(`[getAvailableSlotsForDate] Slot ${opt.id}: Max normal slots reached (${bookedNormal} + ${countNormal} >= ${maxNormal})`);
         }
       } else {
-        if (limitedBookedCount + currFormLimitedCount >= limitedSlotsAllowed && (!currSelectedSlotId || currSelectedSlotId !== opt.id)) {
-          disabled = true;
-          reason = "Max 5 limited slots/day";
-        }
+        // (C) Limited slots: block if limit reached (API: totalLimitedAvailableSlots)
         if (
-          !disabled &&
-          bookedSlotIds.has(opt.id) &&
-          currSelectedSlotId !== opt.id
+          currSelectedSlotId !== opt.id &&
+          typeof bookedLimited === "number" &&
+          typeof maxLimited === "number" &&
+          bookedLimited + countLimited >= maxLimited
         ) {
-          disabled = true;
-          reason = "Already booked";
+          apiDisable = true;
+          reason = `Max ${maxLimited} limited slots/day`;
+          console.log(`[getAvailableSlotsForDate] Slot ${opt.id}: Max limited slots reached (${bookedLimited} + ${countLimited} >= ${maxLimited})`);
         }
       }
-      // The following is REMOVED (per edit prompt):
-      // if (
-      //   !disabled &&
-      //   pickedSlotIds.includes(opt.id) &&
-      //   currSelectedSlotId !== opt.id
-      // ) {
-      //   disabled = true;
-      //   reason = "Picked in other date";
-      // }
-      slotInfo[opt.id] = { disabled, reason };
+
+      slotInfo[opt.id] = { disabled: apiDisable, reason };
     });
 
+    console.log("[getAvailableSlotsForDate] slotInfo result:", slotInfo);
     return slotInfo;
   }
-  // ---------- End key rewrite ----------
 
-  // --- remainder of helpers unchanged, omitted for brevity ---
+  // --- All the rest of the business logic ---
 
-  function isSlotAlreadyBookedForTherapist({
-    therapistId,
-    date,
-    slotId,
-    bookings,
-    editBookingId,
-  }: {
-    therapistId: string;
-    date: string;
-    slotId: string;
-    bookings: Booking[];
-    editBookingId: string | null;
-  }): boolean {
-    let found = false;
-    for (const booking of bookings) {
-      if (editBookingId && booking._id === editBookingId) continue;
-      let bTid = "";
-      if (booking.therapist && typeof booking.therapist === "string") {
-        bTid = booking.therapist;
-      } else if (booking.therapist && typeof booking.therapist === "object") {
-        bTid = booking.therapist._id || "";
-      }
-      if (bTid === therapistId && Array.isArray(booking.sessions)) {
-        for (const s of booking.sessions) {
-          if (s.date === date && s.slotId === slotId) {
-            found = true;
-            break;
-          }
-        }
-      }
-      if (found) break;
-    }
-    return found;
+  // Repeat, summary, etc, remain as before
+  function resetForm() {
+    setPatientId("");
+    setTherapyId("");
+    setPackageId("");
+    setTherapistId("");
+    setSessions([]);
+    setSelectedCouponId("");
+    setEditBookingId(null);
+    setBookingError(null);
+    setBookingSuccess(null);
+    setRepeatDay("");
+    setRepeatStartDate("");
+    setRepeatSlotId("");
+    setRepeatError(null);
+    setRepeatConflictInfo({});
+    setBookedSlotsPerRow({});
   }
+
+  function getAlreadyBookedSlotIds(date: string, therapistIdForSession: string) {
+    // Uses API summary if available
+    const apiSummary = getServerDaySlotSummary(date);
+    if (apiSummary && apiSummary.BookedSlots && apiSummary.BookedSlots[therapistIdForSession]) {
+      return apiSummary.BookedSlots[therapistIdForSession];
+    }
+    // Fallback: local empty
+    return [];
+  }
+
+  // function isSlotAlreadyBookedForTherapist({
+  //   therapistId,
+  //   date,
+  //   slotId
+  // }: {
+  //   therapistId: string;
+  //   date: string;
+  //   slotId: string;
+  // }): boolean {
+  //   const apiSummary = getServerDaySlotSummary(date);
+  //   if (apiSummary && apiSummary.BookedSlots && apiSummary.BookedSlots[therapistId]) {
+  //     return apiSummary.BookedSlots[therapistId].includes(slotId);
+  //   }
+  //   return false;
+  // }
 
   function getNextNDatesWeekly(
     startDate: Date,
@@ -940,7 +999,9 @@ export default function AppointmentBookingSystem() {
     }
     while (dates.length < sessionCount) {
       const dateKey = `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
-      if (!therapist || !isTherapistOnHoliday(therapist, dateKey)) {
+      // Check therapist holiday (unchanged)
+      if (!therapist || !Array.isArray(therapist.holidays)
+          || !therapist.holidays.some(h => h && h.date === dateKey)) {
         dates.push(dateKey);
       }
       date.setDate(date.getDate() + 7);
@@ -948,6 +1009,7 @@ export default function AppointmentBookingSystem() {
     return dates;
   }
 
+  // Repeat section apply/clear logic (now relies on server slot API for disable-check)
   function handleRepeatApply() {
     setRepeatError(null);
     setRepeatConflictInfo({});
@@ -965,7 +1027,6 @@ export default function AppointmentBookingSystem() {
       return;
     }
 
-    // Compute first date to use as base
     const start = new Date(repeatStartDate);
     const wantedDayNum = getDayIndex(repeatDay);
     while (start.getDay() !== wantedDayNum) {
@@ -980,58 +1041,15 @@ export default function AppointmentBookingSystem() {
 
     const slotConflicts: string[] = [];
     const conflictReasons: { [date: string]: string } = {};
-
-    let plannedBookingNormalPerDay: { [date: string]: number } = {};
-    let plannedBookingLimitedPerDay: { [date: string]: number } = {};
     const newSessions = sessionsOnTargetDay.map((dateStr) => {
-      const repeatOpt = SESSION_TIME_OPTIONS.find(opt => opt.id === repeatSlotId);
-      let isLimited = repeatOpt?.limited === true;
-      let { normal, limited } = getBookedCountForTherapist(dateStr);
-      normal += plannedBookingNormalPerDay[dateStr] ?? 0;
-      limited += plannedBookingLimitedPerDay[dateStr] ?? 0;
-
-      if (isLimited && limited >= 5) {
-        slotConflicts.push(dateStr);
-        conflictReasons[dateStr] = `Max 5 limited slots per therapist already booked for ${dateStr}.`;
-      }
-      if (!isLimited && normal >= 10) {
-        slotConflicts.push(dateStr);
-        conflictReasons[dateStr] = `Max 10 normal slots per therapist already booked for ${dateStr}.`;
-      }
-
-      if (
-        isSlotAlreadyBookedForTherapist({
-          therapistId,
-          date: dateStr,
-          slotId: repeatSlotId,
-          bookings,
-          editBookingId,
-        })
-      ) {
-        slotConflicts.push(dateStr);
-
-        const slotOption = SESSION_TIME_OPTIONS.find((opt) => opt.id === repeatSlotId);
-        conflictReasons[dateStr] =
-          `Select different time for ${dateStr}${slotOption ? ` (${slotOption.label})` : ""} — already booked a slot here.`;
-      }
-
-      const slotInfo = getAvailableSlotsForDate(dateStr, [], repeatSlotId);
-
+      // Use API slot summary for slot disables
+      const slotInfo = getAvailableSlotsForDate(dateStr, [], repeatSlotId, therapistId);
       if (slotInfo[repeatSlotId]?.disabled) {
         slotConflicts.push(dateStr);
-        if (slotInfo[repeatSlotId]?.reason === "Already booked") {
-          const slotOption = SESSION_TIME_OPTIONS.find((opt) => opt.id === repeatSlotId);
-          conflictReasons[dateStr] =
-            `Select different time for ${dateStr}${slotOption ? ` (${slotOption.label})` : ""} — already booked a slot here.`;
-        } else if (!conflictReasons[dateStr]) {
-          conflictReasons[dateStr] = `Slot not available on ${dateStr}.`;
-        }
+        conflictReasons[dateStr] =
+          `Select different time for ${dateStr} — ${slotInfo[repeatSlotId]?.reason || "slot not available"}`;
       }
-
-      if (isLimited) plannedBookingLimitedPerDay[dateStr] = (plannedBookingLimitedPerDay[dateStr] ?? 0) + 1;
-      else plannedBookingNormalPerDay[dateStr] = (plannedBookingNormalPerDay[dateStr] ?? 0) + 1;
-
-      return { date: dateStr, slotId: repeatSlotId };
+      return { date: dateStr, slotId: repeatSlotId, therapistId: therapistId || "" };
     });
 
     if (slotConflicts.length > 0) {
@@ -1044,7 +1062,6 @@ export default function AppointmentBookingSystem() {
       setSessions(newSessions);
     }
   }
-
   function handleRepeatClear() {
     setRepeatDay("");
     setRepeatStartDate("");
@@ -1054,18 +1071,33 @@ export default function AppointmentBookingSystem() {
     setSessions([]);
   }
 
+  // Therapist lookups for session table/summary: always use therapistId!
+  // function getTherapistObjectForSession(session: BookingSession): Therapist | undefined {
+  //   let sessionTherapistId =
+  //     (typeof session.therapistId === "string" && session.therapistId)
+  //     || (typeof session.therapist === "string" && session.therapist)
+  //     || (session.therapist && typeof session.therapist === "object" && session.therapist?._id)
+  //     || therapistId;
+  //   return sessionTherapistId ? therapists.find(t => t._id === sessionTherapistId) : undefined;
+  // }
+  function getTherapistObject(booking: Booking): Therapist | undefined {
+    if (booking.therapist && typeof booking.therapist === "object" && "_id" in booking.therapist) {
+      return booking.therapist as Therapist;
+    }
+    if (typeof booking.therapist === "string") {
+      return therapists.find(t => t._id === booking.therapist);
+    }
+    return undefined;
+  }
+
+  // ... rest of the component: unchanged rendering, UI, booking summary, etc.
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       className="min-h-screen  p-8"
     >
-      {/* ... remainder unchanged ... */}
-      {/* (The rest of the code rendering and all .map options, etc, remain unchanged.) */}
-      {/* (Any rendering of time slots will use getAvailableSlotsForDate, which now doesn't disable slots just because they're picked in another date.) */}
-      {/* ... (See above code for actual rendering; only logic is changed) ... */}
-   
-     {/* Guide, Calendar, Quick Book, Session & Booking Summary remain similar */}
+      {/* Guide, Calendar, Quick Book, Session & Booking Summary remain similar */}
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -1133,11 +1165,9 @@ export default function AppointmentBookingSystem() {
           )}
         </AnimatePresence>
       </motion.div>
-      <div className="flex md:flex-row flex-col-reverse  gap-6">
-        {/* Calendar */}
-        {/* -- calendar code (EXACTLY as before, omitted for brevity) -- */}
+      <div className={`flex gap-6 ${editBookingId ? 'flex-col' : 'md:flex-row flex-col-reverse'}`}>
+        {/* Calendar as before */}
         <div className="flex-2 lg:col-span-2 bg-white border rounded-lg">
-          {/* ... (same as original) ... */}
           <div className="flex items-center justify-between p-4 border-b">
             <div className="flex items-center gap-2 font-semibold">
               <FiCalendar />
@@ -1193,7 +1223,6 @@ export default function AppointmentBookingSystem() {
                     <div className={`w-7 h-7 flex items-center justify-center rounded-full text-sm ${selected ? "bg-blue-600 text-white" : ""}`}>
                       {day}
                     </div>
-
                     {selected && (
                       <div className="mt-1 text-xs text-blue-700 font-medium">
                         Selected
@@ -1240,8 +1269,9 @@ export default function AppointmentBookingSystem() {
           )}
         </div>
         {/* Quick Book / Edit Booking */}
+
         <div className="flex-1 bg-white border rounded-lg p-6">
-          <h3 className="font-semibold mb-4">
+        <h3 className="font-semibold mb-4">
             {editBookingId ? "Edit Booking" : "Quick Book"}
             {editBookingId && (
               <span className="ml-2 px-2 py-0.5 rounded text-xs bg-blue-100 text-blue-800 font-normal">
@@ -1256,7 +1286,10 @@ export default function AppointmentBookingSystem() {
           </label>
           <select
             value={therapistId}
-            onChange={e => setTherapistId(e.target.value)}
+            onChange={e => {
+              setTherapistId(e.target.value);
+              // Fetch only that therapist's availability via useEffect will run
+            }}
             className="w-full border rounded px-3 py-2 mb-3"
             disabled={!!editBookingId}
           >
@@ -1357,7 +1390,6 @@ export default function AppointmentBookingSystem() {
               </option>
             ))}
           </select>
-          {/* Coupon summary hint */}
           {selectedCoupon && (
             <div className="text-xs text-blue-700 mb-4">
               🔖 Using coupon <span className="font-mono">{selectedCoupon.code}</span> ({selectedCoupon.discount}% off, valid {selectedCoupon.validityDays} days)
@@ -1463,56 +1495,124 @@ export default function AppointmentBookingSystem() {
                 <FiClock />
                 Session Dates &#38; Times
               </div>
-              {sessions
-                .slice()
-                .sort((a, b) => a.date.localeCompare(b.date))
-                .map((s, idx, arr) => {
-                  const slotInfo = getAvailableSlotsForDate(s.date, arr, s.slotId);
-                  return (
-                    <div key={s.date} className="flex items-center gap-2 text-sm">
-                      <span className="flex-1 font-mono">{s.date}</span>
-                      <FiClock className="text-slate-400" />
-                      <select
-                        value={s.slotId}
-                        onChange={e => updateSlotId(s.date, e.target.value)}
-                        className={`border rounded px-2 py-1 ${
-                          idx === 0 && !s.slotId ? "border-red-400" : ""
-                        }`}
-                        required={idx === 0}
-                        aria-required={idx === 0}
-                        style={{ minWidth: 180 }}
-                      >
-                        <option value="">Select Time Slot</option>
-                        {SESSION_TIME_OPTIONS.map((slot) => {
-                          const i = slotInfo[slot.id];
-                          return (
-                            <option
-                              key={slot.id}
-                              value={slot.id}
-                              disabled={i.disabled}
-                            >
-                              {slot.label}
-                              {slot.limited ? " (Limited case)" : ""}
-                              {i.disabled ? `  - ${i.reason}` : ""}
-                            </option>
-                          );
-                        })}
-                      </select>
-                      {idx === 0 && !s.slotId && (
-                        <span className="text-xs text-red-500 ml-2">Time required</span>
+              <div className="overflow-x-auto">
+                <table className="min-w-[440px] w-fit border-collapse text-xs">
+                  <thead>
+                    <tr>
+                      <th className="px-2 py-1 border border-slate-200 bg-slate-100 font-semibold text-left">Date</th>
+                      <th className="px-2 py-1 border border-slate-200 bg-slate-100 font-semibold text-left">
+                        <FiClock className="inline mr-1" />Time Slot
+                      </th>
+                      {editBookingId && (
+                        <th className="px-2 py-1 border border-slate-200 bg-slate-100 font-semibold text-left">
+                          <FiUser className="inline mr-1" />Therapist
+                        </th>
                       )}
-                      {repeatConflictInfo[s.date] && (
-                        <span className="inline-block ml-2 text-xs text-red-600">
-                          {repeatConflictInfo[s.date]}
-                        </span>
-                      )}
-                    </div>
-                  );
-                })}
+                      <th className="px-2 py-1 border border-slate-200 bg-slate-100" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sessions
+                      .slice()
+                      .sort((a, b) => a.date.localeCompare(b.date))
+                      .map((s, idx, arr) => {
+                        // Show already booked slots for this session row in edit mode
+                        const rowTherapistId = (s as any).therapistId || selectedTherapist?.therapistId;
+                        const slotInfo = getAvailableSlotsForDate(
+                          s.date,
+                          arr,
+                          s.slotId,
+                          rowTherapistId,
+                          !!editBookingId
+                        );
+                        console.log(selectedTherapist?.therapistId);
+
+                        console.log(slotInfo);
+
+                        const bookedSlotsForRow = bookedSlotsPerRow[`${s.date}:${rowTherapistId}`];
+                        // const therapistSessionObj = getTherapistObjectForSession(s as any);
+                        return (
+                          <tr key={s.date} className="text-sm">
+                            <td className="px-2 py-1 border border-slate-200 font-mono">{s.date}</td>
+                            <td className="px-2 py-1 border border-slate-200 whitespace-nowrap">
+                              <select
+                                value={s.slotId}
+                                onChange={e => updateSlotId(s.date, e.target.value)}
+                                className={`border rounded px-2 py-1 ${
+                                  idx === 0 && !s.slotId ? "border-red-400" : ""
+                                }`}
+                                required={idx === 0}
+                                aria-required={idx === 0}
+                                style={{ minWidth: 180 }}
+                              >
+                                  <option value="">Select Time Slot</option>
+                                {SESSION_TIME_OPTIONS.map((slot) => {
+                                  const i = slotInfo[slot.id];
+                                  // --- Main required change is here: ---
+                                  // If slot is disabled and reason is "Already booked", add "Already Booked" to label
+                                  let labelContent = slot.label;
+                                  if (slot.limited) labelContent += " (Limited case)";
+                                  if (i.disabled && i.reason === "Already booked")
+                                    labelContent += " - Already Booked";
+                                  else if (i.disabled && i.reason)
+                                    labelContent += `  - ${i.reason}`;
+                                  return (
+                                    <option
+                                      key={slot.id}
+                                      value={slot.id}
+                                      disabled={i.disabled}
+                                    >
+                                      {labelContent}
+                                    </option>
+                                  );
+                                })}
+                              </select>
+                              {editBookingId && bookedSlotsForRow && bookedSlotsForRow.length > 0 && (
+                                <span className="block mt-1 text-xs text-amber-700">
+                                  Already booked: {bookedSlotsForRow
+                                  .map(
+                                    id =>
+                                      SESSION_TIME_OPTIONS.find(opt => opt.id === id)?.label || id
+                                  ).join(", ")}
+                                </span>
+                              )}
+                              {idx === 0 && !s.slotId && (
+                                <span className="text-xs text-red-500 ml-2">Time required</span>
+                              )}
+                            </td>
+                            {editBookingId && (
+                              <td className="px-2 py-1 border border-slate-200 whitespace-nowrap">
+                                <select
+                                  value={(s as any).therapistId || therapistId}
+                                  onChange={e => updateSessionTherapist(s.date, e.target.value)}
+                                  className="border rounded px-2 py-1 min-w-[120px]"
+                                >
+                                  <option value="">Select Therapist</option>
+                                  {therapists.map((t) => (
+                                    <option value={t._id} key={t._id}>
+                                      {t.userId?.name ?? t.name}{t.therapistId ? ` (${t.therapistId})` : ""}
+                                    </option>
+                                  ))}
+                                </select>
+                              </td>
+                            )}
+                            <td className="px-2 py-1 border border-slate-200 whitespace-nowrap">
+                              {repeatConflictInfo[s.date] && (
+                                <span className="inline-block text-xs text-red-600">
+                                  {repeatConflictInfo[s.date]}
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
 
-          {/* Full-width fancy package price/discount/total summary */}
+          {/* Package/discount/total summary unchanged */}
           {selectedPackage && (
             <div className="w-full flex flex-col items-stretch mt-3 mb-3">
               <div className="flex flex-col gap-0.5 w-full rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 shadow-sm">
@@ -1528,7 +1628,6 @@ export default function AppointmentBookingSystem() {
                       )}
                   </span>
                 </div>
-                {/* Discount Row */}
                 {(() => {
                   let discountValue = 0;
                   let coupon = null;
@@ -1644,141 +1743,158 @@ export default function AppointmentBookingSystem() {
             </div>
           ) : (
             <div className="flex flex-col gap-4">
-              {bookings.map((booking) => (
-                <div
-                  className={`border p-3 rounded bg-sky-50 relative ${
-                    editBookingId === booking._id
-                      ? "ring ring-blue-400 ring-offset-2"
-                      : ""
-                  }`}
-                  key={booking._id}
-                >
-                  {/* Appointment ID display row, non-editable, always available */}
-                  {booking.appointmentId && (
-                    <div className="mb-1 flex items-center gap-2 text-xs font-mono text-gray-700">
-                      <FiHash className="text-blue-500" /> <span>Appointment ID: {booking.appointmentId}</span>
-                    </div>
-                  )}
-                  {/* Show therapist info */}
-                  {(() => {
-                    let tObj: Therapist | undefined = undefined;
-                    if (typeof booking.therapist === "object" && booking.therapist !== null) {
-                      tObj = booking.therapist;
-                    } else if (typeof booking.therapist === "string") {
-                      tObj = therapists.find(t => t._id === booking.therapist);
-                    }
-                    if (tObj) {
-                      return (
-                        <div className="mb-2 flex items-center gap-2">
-                          <FiUser className="text-slate-500" />
-                          <span className="text-slate-700">Therapist: {tObj?.userId?.name}{tObj.therapistId ? ` (${tObj.therapistId})` : ""}</span>
-                        </div>
-                      );
-                    }
-                    return null;
-                  })()}
-                  <div className="mb-1 font-semibold text-blue-900 flex items-center gap-2">
-                    <FiUser className="text-blue-600" />
-                    {getPatientDisplayName(booking.patient)}
-                  </div>
-                  <div className="mb-2 flex items-center gap-2">
-                    <FiTag className="text-slate-500" />
-                    <span className="text-slate-700">{booking.therapy?.name}</span>
-                  </div>
-                  <div className="mb-2 flex items-center gap-2">
-                    <FiPackage className="text-purple-500" />
-                    <span className="text-purple-700">
-                      {getPackageDisplay(booking.package)}
-                    </span>
-                  </div>
-                  {Array.isArray(booking.sessions) && booking.sessions.length > 0 && (
-                    <details className="mb-2 text-xs text-slate-700">
-                      <summary className="font-medium cursor-pointer select-none flex items-center">
-                        <span>Sessions ({booking.sessions.length})</span>
-                        <span className="ml-1">{/* chevron icon? */}<FiChevronDown className="inline ml-1 text-slate-500" /></span>
-                      </summary>
-                      <div className="overflow-x-auto mt-2">
-                        <table className="min-w-[340px] w-fit border-collapse text-xs">
-                          <thead>
-                            <tr>
-                              <th className="px-2 py-1 border border-slate-200 bg-slate-100 font-semibold text-left">#</th>
-                              <th className="px-2 py-1 border border-slate-200 bg-slate-100 font-semibold text-left">Date</th>
-                              <th className="px-2 py-1 border border-slate-200 bg-slate-100 font-semibold text-left">Time Slot</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {booking.sessions.map((s, idx) => {
-                              const slot = SESSION_TIME_OPTIONS.find(opt => opt.id === s.slotId);
-                              return (
-                                <tr key={s._id || s.date}>
-                                  <td className="px-2 py-1 border border-slate-200 text-slate-400">{idx + 1}</td>
-                                  <td className="px-2 py-1 border border-slate-200">
-                                    {s.date}
-                                  </td>
-                                  <td className="px-2 py-1 border border-slate-200 whitespace-nowrap">
-                                    {slot
-                                      ? (
-                                        <>
-                                          {slot.label}
-                                          {slot.limited && <span className="text-amber-700 ml-1">(Limited case)</span>}
-                                        </>
-                                      )
-                                      : s.slotId}
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
+              {bookings.map((booking) => {
+                const therapistObj = getTherapistObject(booking);
+                return (
+                  <div
+                    className={`border p-3 rounded bg-sky-50 relative ${
+                      editBookingId === booking._id
+                        ? "ring ring-blue-400 ring-offset-2"
+                        : ""
+                    }`}
+                    key={booking._id}
+                  >
+                    {/* Appointment ID display row, non-editable, always available */}
+                    {booking.appointmentId && (
+                      <div className="mb-1 flex items-center gap-2 text-xs font-mono text-gray-700">
+                        <FiHash className="text-blue-500" /> <span>Appointment ID: {booking.appointmentId}</span>
                       </div>
-                    </details>
-                  )}
-                  {booking.discountInfo && booking.discountInfo.coupon && booking.discountInfo.coupon.discountEnabled && (
-                    <div className="mb-1 text-xs text-blue-700">
-                      Discount: <span className="font-semibold">
-                        {booking.discountInfo.coupon.discount}%
-                      </span>
-                      {" "}
-                      (Coupon: <span className="font-mono">
-                        {booking.discountInfo.coupon.couponCode}
-                      </span>
-                        {booking.discountInfo.coupon.validityDays && (
-                          <> {` - valid ${booking.discountInfo.coupon.validityDays}d`}</>
-                        )}
-                      )
+                    )}
+
+                    {/* Show therapist info */}
+                    {therapistObj && (
+                      <div className="mb-2 flex items-center gap-2">
+                        <FiUser className="text-slate-500" />
+                        <span className="text-slate-700">
+                          Therapist: {therapistObj.userId?.name ?? therapistObj.name}
+                          {therapistObj.therapistId ? ` (${therapistObj.therapistId})` : ""}
+                        </span>
+                      </div>
+                    )}
+
+                    <div className="mb-1 font-semibold text-blue-900 flex items-center gap-2">
+                      <FiUser className="text-blue-600" />
+                      {getPatientDisplayName(booking.patient)}
                     </div>
-                  )}
-                  <div className="flex gap-2 mt-2">
-                    <button
-                      className="text-xs rounded px-2 py-1 border border-blue-400 text-blue-700 hover:bg-blue-50 flex items-center gap-1"
-                      onClick={() => handleEditBooking(booking._id)}
-                      title="Edit booking"
-                      disabled={!!editBookingId && editBookingId !== booking._id}
-                    >
-                      <FiEdit2 />
-                      Edit
-                    </button>
-                    <button
-                      className="text-xs rounded px-2 py-1 border border-red-400 text-red-600 hover:bg-red-50"
-                      onClick={() => handleDeleteBooking(booking._id)}
-                      title="Delete booking"
-                      disabled={!!editBookingId && editBookingId === booking._id}
-                    >
-                      Delete
-                    </button>
+                    <div className="mb-2 flex items-center gap-2">
+                      <FiTag className="text-slate-500" />
+                      <span className="text-slate-700">{booking.therapy?.name}</span>
+                    </div>
+                    <div className="mb-2 flex items-center gap-2">
+                      <FiPackage className="text-purple-500" />
+                      <span className="text-purple-700">
+                        {getPackageDisplay(booking.package)}
+                      </span>
+                    </div>
+                    {Array.isArray(booking.sessions) && booking.sessions.length > 0 && (
+                      <details className="mb-2 text-xs text-slate-700">
+                        <summary className="font-medium cursor-pointer select-none flex items-center">
+                          <span>Sessions ({booking.sessions.length})</span>
+                          <span className="ml-1">
+                            <FiChevronDown className="inline ml-1 text-slate-500" />
+                          </span>
+                        </summary>
+                        <div className="overflow-x-auto mt-2">
+                          <table className="min-w-[440px] w-fit border-collapse text-xs">
+                            <thead>
+                              <tr>
+                                <th className="px-2 py-1 border border-slate-200 bg-slate-100 font-semibold text-left">#</th>
+                                <th className="px-2 py-1 border border-slate-200 bg-slate-100 font-semibold text-left">Date</th>
+                                <th className="px-2 py-1 border border-slate-200 bg-slate-100 font-semibold text-left">Time Slot</th>
+                                <th className="px-2 py-1 border border-slate-200 bg-slate-100 font-semibold text-left">Therapist</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {booking.sessions.map((s, idx) => {
+                                const slot = SESSION_TIME_OPTIONS.find(opt => opt.id === s.slotId);
+                                const tObj = s.therapist;
+                                return (
+                                  <tr key={s._id || s.date}>
+                                    <td className="px-2 py-1 border border-slate-200 text-slate-400">{idx + 1}</td>
+                                    <td className="px-2 py-1 border border-slate-200">
+                                      {s.date}
+                                    </td>
+                                    <td className="px-2 py-1 border border-slate-200 whitespace-nowrap">
+                                      {slot
+                                        ? (
+                                          <>
+                                            {slot.label}
+                                            {slot.limited && <span className="text-amber-700 ml-1">(Limited case)</span>}
+                                          </>
+                                        )
+                                        : s.slotId}
+                                    </td>
+                                    <td className="px-2 py-1 border border-slate-200 whitespace-nowrap">
+                                      {tObj
+                                        ? <>
+                                            {tObj 
+                                                && tObj.userId.name
+                                              }
+                                              {/* {tObj.userId.name} */}
+                                            {tObj.therapistId ? ` (${tObj.therapistId})` : ""}
+                                          </>
+                                        : <span className="text-gray-400">—</span>}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </details>
+                    )}
+                    {booking.discountInfo && booking.discountInfo.coupon && booking.discountInfo.coupon.discountEnabled && (
+                      <div className="mb-1 text-xs text-blue-700">
+                        Discount: <span className="font-semibold">
+                          {booking.discountInfo.coupon.discount}%
+                        </span>
+                        {" "}
+                        (Coupon: <span className="font-mono">
+                          {booking.discountInfo.coupon.couponCode}
+                        </span>
+                          {booking.discountInfo.coupon.validityDays && (
+                            <> {` - valid ${booking.discountInfo.coupon.validityDays}d`}</>
+                          )}
+                        )
+                      </div>
+                    )}
+                    <div className="flex gap-2 mt-2">
+                      <button
+                        className="text-xs rounded px-2 py-1 border border-blue-400 text-blue-700 hover:bg-blue-50 flex items-center gap-1"
+                        onClick={() => handleEditBooking(booking._id)}
+                        title="Edit booking"
+                        disabled={!!editBookingId && editBookingId !== booking._id}
+                      >
+                        <FiEdit2 />
+                        Edit
+                      </button>
+                      <button
+                        className="text-xs rounded px-2 py-1 border border-red-400 text-red-600 hover:bg-red-50"
+                        onClick={() => handleDeleteBooking(booking._id)}
+                        title="Delete booking"
+                        disabled={!!editBookingId && editBookingId === booking._id}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                    {editBookingId === booking._id && (
+                      <div className="absolute -top-2 right-2">
+                        <span className="text-blue-800 text-xs bg-blue-200 px-2 py-0.5 rounded font-bold shadow">
+                          Editing
+                        </span>
+                      </div>
+                    )}
                   </div>
-                  {editBookingId === booking._id && (
-                    <div className="absolute -top-2 right-2">
-                      <span className="text-blue-800 text-xs bg-blue-200 px-2 py-0.5 rounded font-bold shadow">
-                        Editing
-                      </span>
-                    </div>
-                  )}
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
+
+
+        {/* ...rest of component displays & controls remain unchanged... */}
+        {/* ...FULL Quick Book/Edit Booking, Session Times, etc... */}
+        {/* ...snipped here for brevity, see original selection... */}
       </div>
     </motion.div>
   );
