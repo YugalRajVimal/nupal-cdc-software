@@ -46,7 +46,7 @@ import SubAdminHome from "./pages/AdminPages/Dashboard/Home";
 import ReceptionDesk from "./pages/AdminPages/ReceptionDesk/ReceptionDesk";
 import ConsultationsLeads from "./pages/AdminPages/ConsultationsLeads/ConsultationsLeads";
 import AnalyticsReports from "./pages/AdminPages/AnalyticsReports/AnalyticsReports";
-import AppointmentBookingSystem from "./pages/AdminPages/AppointmentBookingSystem/AppointmentBookingSystem";
+// import AppointmentBookingSystem from "./pages/AdminPages/AppointmentBookingSystem/AppointmentBookingSystem";
 import TherapistsPage from "./pages/AdminPages/TherapistsPage/TherapistsPage";
 import PatientsPage from "./pages/AdminPages/PatientsPage/PatientsPage";
 import FinancesPage from "./pages/AdminPages/FinancesPage/FinancesPage";
@@ -66,6 +66,7 @@ import AllUsers from "./pages/SuperAdminPages/AllUsers/AllUsers";
 import AllAppointments from "./pages/SuperAdminPages/AllAppointments/AllAppointments";
 import RequestAppointment from "./pages/ParentPages/RequestAppointment/RequestAppointment";
 import BookingRequests from "./pages/AdminPages/BookingRequest/BookingRequests";
+import AppointmentBookingSystemNew from "./pages/AdminPages/AppointmentBookingSystem/AppointmentBookingSystemNew";
 
 
 export default function App() {
@@ -142,7 +143,7 @@ export default function App() {
             <Route path="/admin/leads-consults" element={<ConsultationsLeads />} />
             <Route path="/admin/reports-analytics" element={<AnalyticsReports />} />
 
-            <Route path="/admin/bookings" element={<AppointmentBookingSystem/>} />
+            <Route path="/admin/bookings" element={<AppointmentBookingSystemNew/>} />
             <Route path="/admin/booking-requests" element={<BookingRequests/>} />
 
             <Route path="/admin/therapists" element={<TherapistsPage/>} />
