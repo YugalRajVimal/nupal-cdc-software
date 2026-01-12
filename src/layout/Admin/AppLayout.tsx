@@ -2,7 +2,6 @@ import { SidebarProvider, useSidebar } from "../../context/SidebarContext";
 import { Outlet } from "react-router";
 import SubAdminAppSidebar from "./AppSidebar";
 import SubAdminBackdrop from "./Backdrop";
-
 import { useEffect, useState } from "react";
 import AdminHeader from "../../pages/AdminPages/AdminHeader/AdminHeader";
 
@@ -37,53 +36,53 @@ const LayoutContent: React.FC = () => {
 };
 
 const SubAdminAppLayout: React.FC = () => {
-  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<
-    boolean | null
-  >(null);
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean | null>(null);
 
-  useEffect(()=>{
-    setIsAdminAuthenticated(true);
-  })
+  useEffect(() => {
+    const checkAdminAuth = async () => {
+      try {
+        // Get token and email from localStorage (admin-token & admin-email)
+        const token = localStorage.getItem("admin-token");
+        if (!token) {
+          setIsAdminAuthenticated(false);
+          if (window.location.pathname.startsWith("/admin")) {
+            window.location.href = "/signin";
+          }
+          return;
+        }
 
-  // useEffect(() => {
-  //   const checkAuth = async () => {
-  //     try {
-  //       const token = localStorage.getItem("sub-admin-token");
-  //       if (!token) {
-  //         setIsSubAdminAuthenticated(false);
-  //         if (window.location.pathname.startsWith("/sub-admin")) {
-  //           window.location.href = "/signin";
-  //         }
-  //         return;
-  //       }
+        // Call the check-auth endpoint (as per auth.routes.js /auth/check-auth)
+        const res = await fetch(
+          `${import.meta.env.VITE_API_URL}/api/auth/`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: token,
+            },
+            body: JSON.stringify({ role: "admin" }),
+          }
+        );
 
-  //       const res = await axios.post(
-  //         `${import.meta.env.VITE_API_URL}/api/auth`,
-  //         {},
-  //         {
-  //           headers: { Authorization: `${token}` },
-  //         }
-  //       );
+        if (res.ok) {
+          setIsAdminAuthenticated(true);
+          // If already logged in but on /signin, redirect to /admin
+          if (window.location.pathname === "/signin") {
+            window.location.href = "/admin";
+          }
+        } else {
+          setIsAdminAuthenticated(false);
+          window.location.href = "/signin";
+        }
+      } catch (err) {
+        // In case of error, force re-login
+        setIsAdminAuthenticated(false);
+        window.location.href = "/signin";
+      }
+    };
 
-  //       if (res.status === 200) {
-  //         setIsSubAdminAuthenticated(true);
-  //         // redirect only if logged in but not already on an admin page
-  //         if (window.location.pathname === "/signin") {
-  //           window.location.href = "/sub-admin";
-  //         }
-  //       } else {
-  //         setIsSubAdminAuthenticated(false);
-  //         window.location.href = "/signin";
-  //       }
-  //     } catch (err) {
-  //       console.error("Auth check failed:", err);
-  //       setIsSubAdminAuthenticated(false);
-  //       window.location.href = "/signin";
-  //     }
-  //   };
-
-  //   checkAuth();
-  // }, []);
+    checkAdminAuth();
+  }, []);
 
   if (isAdminAuthenticated === null || !isAdminAuthenticated) {
     return (

@@ -3,10 +3,11 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   FiInfo, FiCalendar, FiChevronLeft, FiChevronRight, FiClock, FiUser, FiTag,
   FiChevronUp, FiChevronDown, FiList, FiPackage, FiEdit2, FiX, FiHash,
-  FiCheckCircle, FiRepeat
+  FiCheckCircle, FiRepeat, FiCreditCard
 } from "react-icons/fi";
 import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
+import { useLocation } from "react-router";
 
 const DAYS = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
 const SESSION_TIME_OPTIONS = [
@@ -41,13 +42,7 @@ type Therapist = {
   bookedSlotCount?: { [date: string]: number };
 };
 type BookingSession = { date: string; slotId: string; therapistId?: string; _id?: string; therapist?: { _id: string; name: string; therapistId: string } };
-// type Coupon = {
-//   _id: string;
-//   couponCode: string;
-//   discount: number;
-//   validityDays: number;
-//   discountEnabled: boolean;
-// };
+
 type Booking = { 
   _id: string; 
   appointmentId?: string; 
@@ -57,6 +52,10 @@ type Booking = {
   therapist: Therapist | string; 
   sessions: BookingSession[]; 
   discountInfo?: { coupon: any; time?: string }; 
+  isPaid?: boolean; // for displaying payment status
+  payment?:{
+    status?:string
+  }
 };
 
 function pad2(n: number) { return n < 10 ? `0${n}` : `${n}`; }
@@ -64,9 +63,11 @@ function getDateKey(year: number, month: number, day: number): string { return `
 function getDaysInMonth(year: number, month: number) { return new Date(year, month + 1, 0).getDate(); }
 function getStartDay(year: number, month: number) { return new Date(year, month, 1).getDay(); }
 function getDayIndex(dayShort: string): number { const idx = DAYS.findIndex(d => d === dayShort.toUpperCase()); return idx >= 0 ? idx : 0; }
-// function isSunday(year: number, month: number, day: number) { return new Date(year, month, day).getDay() === 0; }
 
 export default function AppointmentBookingSystemNew() {
+
+  const location = useLocation();
+
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
@@ -78,7 +79,6 @@ export default function AppointmentBookingSystemNew() {
   const [therapists, setTherapists] = useState<Therapist[]>([]);
   const [therapies, setTherapies] = useState<Therapy[]>([]);
   const [packages, setPackages] = useState<Package[]>([]);
-  // const [apiCoupons, setApiCoupons] = useState<any[]>([]);
   const [coupons, setCoupons] = useState<any[]>([]);
   const [apiLoading, setApiLoading] = useState<boolean>(false);
   const [apiError, setApiError] = useState<string | null>(null);
@@ -104,6 +104,9 @@ export default function AppointmentBookingSystemNew() {
   const [bookingSuccess, setBookingSuccess] = useState<string | null>(null);
   const [editBookingId, setEditBookingId] = useState<string | null>(null);
 
+  // Payment tracking
+  const [paymentLoadingBookingId, setPaymentLoadingBookingId] = useState<string | null>(null);
+
   // Repeat/weekly
   const [repeatDay, setRepeatDay] = useState<string>("");
   const [repeatStartDate, setRepeatStartDate] = useState<string>("");
@@ -114,7 +117,51 @@ export default function AppointmentBookingSystemNew() {
   // Booked slot info per row
   const [bookedSlotsPerRow, setBookedSlotsPerRow] = useState<{ [rowKey: string]: string[] }>({});
 
+  //   useEffect(() => { /* as before */ 
+  //   if (location.state && (location.state as any).bookingRequest) {
+  //     const req = (location.state as any).bookingRequest;
+  //     setPatientId(req.patient?._id || "");
+  //     setTherapyId(req.therapy?._id || "");
+  //     setPackageId(req.package?._id || "");
+  //     setIsBookingRequest(true);
+  //     setBookingRequestId(req._id || "");
+  //     if (Array.isArray(req.sessions)) {
+  //       setSessions(req.sessions.map((s: any) => ({
+  //         date: s.date || "",
+  //         slotId: s.slotId || s.time || "",
+  //         therapistId: req.therapist?._id || req.therapist || "",
+  //       })));
+  //       setTherapistId(req.therapist?._id || req.therapist || "");
+  //     }
+  //   }
+  // }, [location.state]);
+
   // Calendar slot summary
+
+  const [isBookingRequest, setIsBookingRequest] = useState<boolean>(false);
+  const [bookingRequestId, setBookingRequestId] = useState<string>("");
+
+
+  useEffect(() => { /* as before */ 
+    if (location.state && (location.state as any).bookingRequest) {
+      const req = (location.state as any).bookingRequest;
+
+      setPatientId(req.patient?._id || "");
+      setTherapyId(req.therapy?._id || "");
+      setPackageId(req.package?._id || "");
+      setIsBookingRequest(true);
+      setBookingRequestId(req._id || "");
+      if (Array.isArray(req.sessions)) {
+        setSessions(req.sessions.map((s: any) => ({
+          date: s.date || "",
+          slotId: s.slotId || s.time || "",
+        })));
+
+      }
+    }
+  }, [location.state]);
+
+
   type DaySlotSummary = {
     bookedSlots: number;
     totalAvailableSlots: number;
@@ -133,7 +180,6 @@ export default function AppointmentBookingSystemNew() {
     setApiLoading(true);
     setApiError(null);
     setPatients([]); setTherapists([]); setTherapies([]); setPackages([]); 
-    // setApiCoupons([]); 
     setCoupons([]);
     let endpoint = import.meta.env.VITE_API_URL || (window as any).VITE_API_URL;
     if (endpoint) endpoint = endpoint.replace(/\/$/, "");
@@ -152,13 +198,11 @@ export default function AppointmentBookingSystemNew() {
         setTherapists(parsed.therapists || []);
         setTherapies(parsed.therapyTypes || []);
         setPackages(parsed.packages || []);
-        // setApiCoupons(couponArr);
         setCoupons(couponArr);
         setApiLoading(false);
       })
       .catch(e => { 
         console.log(e);
-        
         setApiError("Could not load booking data."); setApiLoading(false); });
   }, []);
 
@@ -418,10 +462,10 @@ export default function AppointmentBookingSystemNew() {
           therapistId: sess.therapistId || selectedTherapist?._id,
         })),
         coupon: appliedCoupon?._id ?? null,
+        bookingRequestId,
+        isBookingRequest
       };
 
-      // let result;
-      
       if (!editBookingId) {
         // CREATE NEW BOOKING
         const resp = await fetch(`${endpoint}/api/admin/bookings`, {
@@ -433,7 +477,6 @@ export default function AppointmentBookingSystemNew() {
           const err = await resp.json();
           throw new Error(err?.message || "Failed to create booking.");
         }
-        // result = await resp.json();
         setBookingSuccess("Booking successfully created.");
       } else {
         // UPDATE BOOKING
@@ -446,7 +489,6 @@ export default function AppointmentBookingSystemNew() {
           const err = await resp.json();
           throw new Error(err?.message || "Failed to update booking.");
         }
-        // result = await resp.json();
         setBookingSuccess("Booking successfully updated.");
       }
       resetForm();
@@ -572,7 +614,8 @@ export default function AppointmentBookingSystemNew() {
   function handleCouponClear() {
     setCouponInput(""); setAppliedCoupon(null); setCouponStatus(null);
   }
-  const selectedCouponId = appliedCoupon?._id || "";
+
+  // const selectedCouponId = appliedCoupon?._id || "";
 
   // Session slot logic
   function getAvailableSlotsForDate(
@@ -582,12 +625,37 @@ export default function AppointmentBookingSystemNew() {
     currRowTherapistId?: string,
     currRowIsEdit?: boolean
   ) {
+
+    console.log(selectedSessions,currSelectedSlotId,currRowIsEdit);
+    // Defensive fix: if therapists array is empty, return all slots disabled
+    if (!therapists || therapists.length === 0) {
+      const disabledAll: { [slotId: string]: { disabled: boolean; reason: string } } = {};
+      SESSION_TIME_OPTIONS.forEach(opt => {
+        disabledAll[opt.id] = { disabled: true, reason: "No therapist data" };
+      });
+      return disabledAll;
+    }
+    // Find the therapist
+    let therapist: Therapist | undefined = undefined;
+    if (currRowTherapistId) {
+      therapist = therapists.find(t => t._id === currRowTherapistId);
+    }
+    // Therapist fallback: if not found, fallback to therapists[0], else return all slots disabled
+    if (!therapist) therapist = therapists[0];
+    if (!therapist) {
+      const disabledAll: { [slotId: string]: { disabled: boolean; reason: string } } = {};
+      SESSION_TIME_OPTIONS.forEach(opt => {
+        disabledAll[opt.id] = { disabled: true, reason: "No therapist selected" };
+      });
+      return disabledAll;
+    }
+    // Defensive: Holidays and BookedSlots fallback to empty array/object
+    const holidays: TherapistHoliday[] = Array.isArray(therapist.holidays) ? therapist.holidays! : [];
+    const bookedSlotsObj: Record<string, string[]> = therapist.bookedSlots || {};
+
     const slotInfo: { [slotId: string]: { disabled: boolean; reason: string } } = {};
-    const therapist = therapists.find(t => t._id === currRowTherapistId) || therapists[0];
     const jsDate = new Date(date);
     const apiDate = `${jsDate.getFullYear()}-${pad2(jsDate.getMonth() + 1)}-${pad2(jsDate.getDate())}`;
-
-    console.log(selectedCouponId,selectedSessions, currSelectedSlotId, currRowIsEdit);
 
     if (jsDate.getDay() === 0) {
       SESSION_TIME_OPTIONS.forEach(opt => {
@@ -597,7 +665,7 @@ export default function AppointmentBookingSystemNew() {
     }
 
     // Check if full day holiday
-    let isFullDayHoliday = (therapist.holidays || []).find(
+    let isFullDayHoliday = holidays.find(
       h => h.date === apiDate && (h.isFullDay === true || h.isFullDay === undefined)
     );
     if (isFullDayHoliday) {
@@ -609,14 +677,26 @@ export default function AppointmentBookingSystemNew() {
 
     // Get partial slot holidays list
     let slotsOut: string[] = [];
-    for (const h of (therapist.holidays || [])) {
-      if (h.date === apiDate && h.isFullDay === false && h.slots && h.slots.length > 0) {
+    for (const h of holidays) {
+      if (
+        h.date === apiDate &&
+        h.isFullDay === false &&
+        Array.isArray(h.slots) &&
+        h.slots.length > 0
+      ) {
         slotsOut.push(...h.slots.map((s: any) => s.slotId));
       }
     }
-    const booked = (therapist.bookedSlots && therapist.bookedSlots[apiDate]) ? therapist.bookedSlots[apiDate] : [];
-    let normalSlotsLeft = 10 - booked.filter(id => !SESSION_TIME_OPTIONS.find(opt => opt.id === id)?.limited).length;
-    let limitedSlotsLeft = 5 - booked.filter(id => SESSION_TIME_OPTIONS.find(opt => opt.id === id)?.limited).length;
+    // Defensive: Ensure booked is always array
+    const booked = Array.isArray(bookedSlotsObj[apiDate]) ? bookedSlotsObj[apiDate] : [];
+    let normalSlotsLeft = 10 - booked.filter(id => {
+      const s = SESSION_TIME_OPTIONS.find(opt => opt.id === id);
+      return s ? !s.limited : false;
+    }).length;
+    let limitedSlotsLeft = 5 - booked.filter(id => {
+      const s = SESSION_TIME_OPTIONS.find(opt => opt.id === id);
+      return s ? !!s.limited : false;
+    }).length;
     for (const so of slotsOut) {
       const slotData = SESSION_TIME_OPTIONS.find(opt => opt.id === so);
       if (!slotData) continue;
@@ -654,8 +734,14 @@ export default function AppointmentBookingSystemNew() {
       if (date.getDay() !== 0) {
         const dApi = `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
         let isHoliday = false;
-        if (therapist?.holidays?.find(h => h.date === dApi && (h.isFullDay === true || h.isFullDay === undefined)))
+        // Defensive: therapist and holidays array
+        if (
+          therapist &&
+          Array.isArray(therapist.holidays) &&
+          therapist.holidays.find(h => h.date === dApi && (h.isFullDay === true || h.isFullDay === undefined))
+        ) {
           isHoliday = true;
+        }
         if (!isHoliday) dates.push(`${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`);
       }
       date.setDate(date.getDate() + 7);
@@ -717,6 +803,32 @@ export default function AppointmentBookingSystemNew() {
 
   function handleReset() {
     resetForm();
+  }
+
+  // --- PAYMENT HANDLER
+  async function handleCollectPayment(booking: Booking) {
+    if (!booking || !booking._id) return;
+    if (!window.confirm("Confirm collect payment for this booking?")) return;
+    let endpoint = import.meta.env.VITE_API_URL || (window as any).VITE_API_URL;
+    if (endpoint) endpoint = endpoint.replace(/\/$/, "");
+    setPaymentLoadingBookingId(booking._id);
+    try {
+      const resp = await fetch(`${endpoint}/api/admin/bookings/${booking._id}/collect-payment`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      // @bookings-admin.routes.js => POST /api/admin/bookings/:id/collect-payment
+      if (!resp.ok) {
+        const err = await resp.json();
+        throw new Error(err?.message || "Payment collection failed.");
+      }
+      toast.success("Payment marked as collected.");
+      fetchAllBookings();
+    } catch (err: any) {
+      toast.error(err?.message || "Payment collection failed.");
+    } finally {
+      setPaymentLoadingBookingId(null);
+    }
   }
 
   // --- UI ---
@@ -904,8 +1016,6 @@ export default function AppointmentBookingSystemNew() {
           {selectedPackage && (
             <PricingSummary
               selectedPackage={selectedPackage}
-              // coupons={coupons}
-              // selectedCouponId={selectedCouponId}
               getTotalSessionsForPackage={getTotalSessionsForPackage}
               appliedCoupon={appliedCoupon}
             />
@@ -966,6 +1076,8 @@ export default function AppointmentBookingSystemNew() {
         SESSION_TIME_OPTIONS={SESSION_TIME_OPTIONS}
         handleEditBooking={handleEditBooking}
         handleDeleteBooking={handleDeleteBooking}
+        handleCollectPayment={handleCollectPayment}
+        paymentLoadingBookingId={paymentLoadingBookingId}
       />
       {(apiLoading || bookingsLoading) && (
         <div className="fixed inset-0 bg-black bg-opacity-15 z-50 flex items-center justify-center pointer-events-none select-none">
@@ -979,7 +1091,7 @@ export default function AppointmentBookingSystemNew() {
   );
 }
 
-// --- SUBCOMPONENTS (unchanged) ---
+// --- SUBCOMPONENTS (HeaderGuide, CalendarPanel, RepeatWeeklyPanel, SessionDatesTimesTable, PricingSummary remain unchanged) ---
 
 function HeaderGuide({ guideOpen, setGuideOpen, editBookingId }: any) {
   return (
@@ -1263,15 +1375,25 @@ function SessionDatesTimesTable({
               .slice()
               .sort((a: any, b: any) => a.date.localeCompare(b.date))
               .map((s: any, idx: number, arr: any[]) => {
-                const rowTherapistId = (s as any).therapistId || selectedTherapist?._id || therapistId;
-                const slotInfo = getAvailableSlotsForDate(
-                  s.date,
-                  arr,
-                  s.slotId,
-                  rowTherapistId,
-                  !!editBookingId
-                );
-                const bookedSlotsForRow = bookedSlotsPerRow[`${s.date}:${rowTherapistId}`] || [];
+                const rowTherapistId = (s as any).therapistId || (selectedTherapist?._id || therapistId);
+                // Defensive: prevent errors in getAvailableSlotsForDate by only calling when value is reasonable
+                let slotInfo: { [slotId: string]: { disabled: boolean; reason: string } };
+                try {
+                  slotInfo = getAvailableSlotsForDate(
+                    s.date,
+                    arr,
+                    s.slotId,
+                    rowTherapistId,
+                    !!editBookingId
+                  );
+                } catch (e) {
+                  // Fallback: disable all slots
+                  slotInfo = {};
+                  for (const slot of SESSION_TIME_OPTIONS) {
+                    slotInfo[slot.id] = { disabled: true, reason: "Error available slots" };
+                  }
+                }
+                const bookedSlotsForRow = (bookedSlotsPerRow && bookedSlotsPerRow[`${s.date}:${rowTherapistId}`]) ? bookedSlotsPerRow[`${s.date}:${rowTherapistId}`] : [];
                 return (
                   <tr key={s.date + ':' + rowTherapistId} className="text-sm">
                     <td className="px-2 py-1 border border-slate-200 font-mono">{s.date}</td>
@@ -1286,7 +1408,7 @@ function SessionDatesTimesTable({
                       >
                         <option value="">Select Time Slot</option>
                         {SESSION_TIME_OPTIONS.map((slot: any) => {
-                          const i = slotInfo[slot.id];
+                          const i = slotInfo[slot.id] || { disabled: true, reason: "N/A" };
                           let labelContent = slot.label;
                           if (slot.limited) labelContent += " (Limited case)";
                           if (i.disabled && i.reason === "Already booked")
@@ -1332,7 +1454,7 @@ function SessionDatesTimesTable({
                       </select>
                     </td>
                     <td className="px-2 py-1 border border-slate-200 whitespace-nowrap">
-                      {repeatConflictInfo[s.date] && (
+                      {repeatConflictInfo && repeatConflictInfo[s.date] && (
                         <span className="inline-block text-xs text-red-600">
                           {repeatConflictInfo[s.date]}
                         </span>
@@ -1393,7 +1515,7 @@ function PricingSummary({ selectedPackage, getTotalSessionsForPackage, appliedCo
   );
 }
 
-function BookingSummary({ bookings, getTherapistObject, editBookingId, getPatientDisplayName, getPackageDisplay, SESSION_TIME_OPTIONS, handleEditBooking, handleDeleteBooking }: any) {
+function BookingSummary({ bookings, getTherapistObject, editBookingId, getPatientDisplayName, getPackageDisplay, SESSION_TIME_OPTIONS, handleEditBooking, handleDeleteBooking, handleCollectPayment, paymentLoadingBookingId }: any) {
   return (
     <div className="mt-6">
       <div className="bg-white border rounded-lg p-4 text-sm">
@@ -1406,6 +1528,8 @@ function BookingSummary({ bookings, getTherapistObject, editBookingId, getPatien
           <div className="flex flex-col gap-4">
             {bookings.map((booking: Booking) => {
               const therapistObj = getTherapistObject(booking);
+              // console.log(booking);
+              const isPaid = booking.payment?.status === "paid";
               return (
                 <div
                   className={`border p-3 rounded bg-sky-50 relative ${
@@ -1443,6 +1567,29 @@ function BookingSummary({ bookings, getTherapistObject, editBookingId, getPatien
                       {getPackageDisplay(booking.package)}
                     </span>
                   </div>
+                  {/* ---- PAYMENT STATUS/Collect Button ---- */}
+                  <div className="mb-2 flex items-center gap-2">
+                    <FiCreditCard className="text-green-600" />
+                    {isPaid ? (
+                      <span className="text-green-700 font-semibold">Payment Collected</span>
+                    ) : (
+                      <span className="text-orange-600 font-semibold">Payment Pending</span>
+                    )}
+                    {!isPaid && (
+                      <button
+                        className={`ml-3 flex items-center gap-1 text-xs border px-2 py-1 rounded 
+                        border-green-400 text-green-800 bg-green-100 hover:bg-green-200 font-medium 
+                        transition disabled:opacity-60`}
+                        disabled={!!paymentLoadingBookingId}
+                        onClick={() => handleCollectPayment(booking)}
+                        title="Mark payment as collected"
+                      >
+                        <FiCreditCard />{" "}
+                        {paymentLoadingBookingId === booking._id ? "Collecting..." : "Collect Payment"}
+                      </button>
+                    )}
+                  </div>
+                  {/* --------------- */}
                   {Array.isArray(booking.sessions) && booking.sessions.length > 0 && (
                     <details className="mb-2 text-xs text-slate-700">
                       <summary className="font-medium cursor-pointer select-none flex items-center">

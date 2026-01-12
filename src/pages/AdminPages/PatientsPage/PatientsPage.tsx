@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { FiUser, FiPhone, FiAlertCircle, FiEdit, FiCalendar, FiTrash2 } from "react-icons/fi";
+import { FiUser, FiPhone, FiEdit, FiCalendar, FiTrash2 } from "react-icons/fi";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "";
 
@@ -167,10 +167,7 @@ export default function PatientsPage() {
                       <button className="inline-flex items-center gap-1 rounded-md bg-blue-600 px-3 py-1.5 text-xs text-white hover:bg-blue-700">
                         <FiCalendar /> Book Session
                       </button>
-                      {/* Example action: Collect Payment */}
-                      <button className="inline-flex items-center gap-1 rounded-md bg-orange-500 px-3 py-1.5 text-xs text-white hover:bg-orange-600">
-                        <FiAlertCircle /> Collect Payment
-                      </button>
+                     
                       <button
                         className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-100"
                         onClick={() => handleEdit(p)}

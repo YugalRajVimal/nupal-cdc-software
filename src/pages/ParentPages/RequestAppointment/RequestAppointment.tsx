@@ -11,7 +11,6 @@ import {
   FiPackage,
   FiX,
   FiHash,
-  FiCheckCircle,
   FiRepeat,
   FiEdit2,
   FiTrash2,
@@ -113,7 +112,7 @@ function getDayIndex(dayShort: string): number {
 }
 
 export default function RequestAppointment() {
-  // State, as before...
+  // State, mostly unchanged...
   const [loading, setLoading] = useState(true);
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
@@ -128,7 +127,7 @@ export default function RequestAppointment() {
   const [therapies, setTherapies] = useState<Therapy[]>([]);
   const [packages, setPackages] = useState<Package[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
-  const [therapists, setTherapists] = useState<Therapist[]>([]);
+  // const [therapists, setTherapists] = useState<Therapist[]>([]);
   const [dataLoading, setDataLoading] = useState<boolean>(true);
   const [bookingLoading, setBookingLoading] = useState<boolean>(false);
   const [bookingError, setBookingError] = useState<string | null>(null);
@@ -184,10 +183,10 @@ export default function RequestAppointment() {
         setPatients(processedPatients);
         setTherapies(json.therapyTypes || []);
         setPackages(json.packages || []);
-        setTherapists(Array.isArray(json.therapists) ? json.therapists : []);
+        // setTherapists(Array.isArray(json.therapists) ? json.therapists : []);
         setCoupons(Array.isArray(json.coupons) ? json.coupons : []);
       } catch {
-        setPatients([]); setTherapies([]); setPackages([]); setTherapists([]); setCoupons([]);
+        setPatients([]); setTherapies([]); setPackages([]);  setCoupons([]);
         toast.error("Failed to load master data");
       }
       setDataLoading(false);
@@ -264,7 +263,6 @@ export default function RequestAppointment() {
   const fetchRequestedBookings = useCallback(async () => {
     setRequestsLoading(true);
     try {
-      // API call based on @parent.routes.js (32-34) endpoint
       const res = await fetch(`${API_BASE_URL}/api/parent/booking-requests`);
       const json = await res.json();
       let reqs: Booking[] =
@@ -290,7 +288,6 @@ export default function RequestAppointment() {
     return () => clearTimeout(t);
   }, []);
 
-  // Derived values and hooks unchanged (as above)
   const selectedPackage = packages.find((p) => p._id === packageId) || null;
   const getTotalSessionsForPackage = (pkg: Package | null) => {
     if (!pkg) return undefined;
@@ -314,7 +311,6 @@ export default function RequestAppointment() {
 
   useEffect(() => {
     if (editBookingId) {
-      // Try finding in booking requests, fallback to confirmed bookings
       const booking =
         requestedBookings.find((b) => b._id === editBookingId) ||
         bookings.find((b) => b._id === editBookingId);
@@ -407,7 +403,8 @@ export default function RequestAppointment() {
     }
   };
 
-  // Remaining helpers and logic unchanged (same as previous code)
+  // Remove slot disabling/availability logic: calendar and slots are always selectable
+
   const changeMonth = (dir: "prev" | "next") => {
     if (dir === "prev") {
       if (month === 0) {
@@ -526,14 +523,12 @@ export default function RequestAppointment() {
     try {
       let res, result;
       if (!editBookingId) {
-        // Use new create-booking-request API for requests
         res = await fetch(`${API_BASE_URL}/api/parent/create-booking-request`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         });
       } else {
-        // Use new update booking request route for edit
         res = await fetch(`${API_BASE_URL}/api/parent/booking-request/${editBookingId}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
@@ -569,7 +564,6 @@ export default function RequestAppointment() {
         return;
       }
 
-      // NOTE: Updated for booking request API: check for bookingRequest not booking
       if (result && !result.bookingRequest) {
         const message = result.message || "No booking request returned from server.";
         setBookingError(message);
@@ -602,107 +596,25 @@ export default function RequestAppointment() {
 
   function handleCancelEdit() { resetForm(); }
 
-//   function getTotalAvailableTherapists(dateStr: string): number {
-//     let count = 0;
-//     for (const t of therapists) {
-//       const holidays = Array.isArray(t.holidays) ? t.holidays : [];
-//       const isOnHoliday = holidays.some(h => h && h.date === dateStr);
-//       if (!isOnHoliday) count += 1;
-//     }
-//     return count;
-//   }
-//   function getDaySlotSummary(dateStr: string): { total: number; booked: number, limitedTotal?: number, limitedBooked?: number } {
-//     const availableTherapists = getTotalAvailableTherapists(dateStr);
-//     const slotsPerTherapist = 10;
-//     const limitedSlotsPerTherapist = 5;
-//     let totalNormal = 0;
-//     let totalLimited = 0;
-//     for (const t of therapists) {
-//       if (Array.isArray(t.holidays) && t.holidays.some(h => h && h.date === dateStr)) continue;
-//       let tid = t._id;
-//       let { normal, limited } = (() => {
-//         let n = 0, l = 0;
-//         for (const booking of bookings) {
-//           let bTid = "";
-//           if (booking.therapist && typeof booking.therapist === "string") bTid = booking.therapist;
-//           else if (booking.therapist && typeof booking.therapist === "object") bTid = booking.therapist._id || "";
-//           if (bTid === tid && Array.isArray(booking.sessions)) {
-//             for (const s of booking.sessions) {
-//               if (s.date === dateStr) {
-//                 const opt = SESSION_TIME_OPTIONS.find(x => x.id === s.slotId);
-//                 if (opt) {
-//                   if (opt.limited) l += 1;
-//                   else n += 1;
-//                 }
-//               }
-//             }
-//           }
-//         }
-//         return { normal: n, limited: l };
-//       })();
-//       totalNormal += normal;
-//       totalLimited += limited;
-//     }
-//     return {
-//       total: availableTherapists * slotsPerTherapist,
-//       booked: totalNormal,
-//       limitedTotal: availableTherapists * limitedSlotsPerTherapist,
-//       limitedBooked: totalLimited,
-//     };
-//   }
-  // Main slot disabling
-  function getAvailableSlotsForDate(
-    date: string,
+  // REMOVE AVAILABILITY: always enable every slot for every date; no slot disabling, no conflicts
 
-    currSelectedSlotId: string
-  ) {
-    const slotInfo: { [slotId: string]: { disabled: boolean; reason: string } } = {};
-    const therapistsAvailable = therapists.filter(t => {
-      const holidays = Array.isArray(t.holidays) ? t.holidays : [];
-      return !holidays.some(h => h.date === date);
-    });
-    const perSlotTherapistBooked: { [slotId: string]: Set<string> } = {};
-    SESSION_TIME_OPTIONS.forEach(opt => { perSlotTherapistBooked[opt.id] = new Set<string>(); });
-    for (const t of therapistsAvailable) {
-      let tid = t._id;
-      for (const booking of bookings) {
-        let bTid = "";
-        if (booking.therapist && typeof booking.therapist === "string") bTid = booking.therapist;
-        else if (booking.therapist && typeof booking.therapist === "object") bTid = booking.therapist._id || "";
-        if (
-          bTid === tid &&
-          Array.isArray(booking.sessions)
-        ) {
-          for (const s of booking.sessions) {
-            if (s.date === date && s.slotId) {
-              perSlotTherapistBooked[s.slotId].add(tid);
-            }
-          }
-        }
-      }
-    }
-    SESSION_TIME_OPTIONS.forEach(opt => {
-      let disabled = false;
-      let reason = "";
-      const bookedCountForSlot = perSlotTherapistBooked[opt.id].size;
-      if (
-        therapistsAvailable.length > 0 &&
-        bookedCountForSlot >= therapistsAvailable.length &&
-        (!currSelectedSlotId || currSelectedSlotId !== opt.id)
-      ) {
-        disabled = true;
-        reason = "All slots are filled for this time";
-      }
-      slotInfo[opt.id] = { disabled, reason };
-    });
-    return slotInfo;
-  }
+  // function getAvailableSlotsForDate(
+  //   date: string,
+  //   currSelectedSlotId: string
+  // ) {
+  //   // Returns all enabled, never disables any slot
+  //   const slotInfo: { [slotId: string]: { disabled: boolean; reason: string } } = {};
+  //   SESSION_TIME_OPTIONS.forEach(opt => {
+  //     slotInfo[opt.id] = { disabled: false, reason: "" };
+  //   });
+  //   return slotInfo;
+  // }
+
   // Repeat weekly
   function getNextNDatesWeekly(
     startDate: Date,
     sessionCount: number,
     dayOfWeek: number,
-    // therapist: Therapist | undefined // unused, ignore
   ): string[] {
     let dates: string[] = [];
     let date = new Date(startDate);
@@ -732,37 +644,13 @@ export default function RequestAppointment() {
       start,
       maxSelectableDates,
       wantedDayNum,
-    //   undefined
     );
-    const slotConflicts: string[] = [];
-    const conflictReasons: { [date: string]: string } = {};
-    let plannedBookingNormalPerDay: { [date: string]: number } = {};
-    let plannedBookingLimitedPerDay: { [date: string]: number } = {};
     const newSessions = sessionsOnTargetDay.map((dateStr) => {
-      const repeatOpt = SESSION_TIME_OPTIONS.find(opt => opt.id === repeatSlotId);
-      let isLimited = repeatOpt?.limited === true;
-      const slotInfo = getAvailableSlotsForDate(dateStr,  repeatSlotId);
-      if (slotInfo[repeatSlotId]?.disabled) {
-        slotConflicts.push(dateStr);
-        if (slotInfo[repeatSlotId]?.reason) {
-          conflictReasons[dateStr] = `Select different time for ${dateStr}${repeatOpt ? ` (${repeatOpt.label})` : ""} — ${slotInfo[repeatSlotId].reason}`;
-        } else if (!conflictReasons[dateStr]) {
-          conflictReasons[dateStr] = `Slot not available on ${dateStr}.`;
-        }
-      }
-      if (isLimited) plannedBookingLimitedPerDay[dateStr] = (plannedBookingLimitedPerDay[dateStr] ?? 0) + 1;
-      else plannedBookingNormalPerDay[dateStr] = (plannedBookingNormalPerDay[dateStr] ?? 0) + 1;
       return { date: dateStr, slotId: repeatSlotId };
     });
-    if (slotConflicts.length > 0) {
-      setRepeatError(`Some dates have conflicts. See below for details.`);
-      setRepeatConflictInfo(conflictReasons);
-      setSessions(newSessions.filter((s) => !slotConflicts.includes(s.date)));
-    } else {
-      setRepeatError(null);
-      setRepeatConflictInfo({});
-      setSessions(newSessions);
-    }
+    setRepeatError(null);
+    setRepeatConflictInfo({});
+    setSessions(newSessions);
   }
   function handleRepeatClear() {
     setRepeatDay("");
@@ -772,9 +660,6 @@ export default function RequestAppointment() {
     setRepeatConflictInfo({});
     setSessions([]);
   }
-  // Remaining helper logic/slot-handling is unchanged from the previous code...
-
-  // ... omitted duplicate helpers for brevity; keep as in original
 
   // ----------- RENDER --------------
   return (
@@ -784,22 +669,8 @@ export default function RequestAppointment() {
       className="p-8"
     >
       <div className="flex md:flex-row flex-col-reverse gap-6">
-
-        {/* Calendar and form as before ... */}
-
-      
-        {/* END: Booking requests table */}
-
-        {/* Calendar and booking form unchanged from previous code: Paste from previous, or keep as is */}
-        {/* ... */}
         {/* Calendar */}
         <div className="flex-2 lg:col-span-2 bg-white border rounded-lg">
-          {/* ... Calendar code unchanged ... */}
-          {/* Paste calendar code from the previous implementation here for brevity ... */}
-          {/* ... */}
-          {/* Keep calendar code as is */}
-          {/* ... */}
-          {/* Start calendar form: (begin paste from previous implementation here) */}
           <div className="flex items-center justify-between p-4 border-b">
             <div className="flex items-center gap-2 font-semibold">
               <FiCalendar />
@@ -833,41 +704,6 @@ export default function RequestAppointment() {
                 typeof maxSelectableDates === "number" &&
                 sessions.length >= maxSelectableDates &&
                 !selected;
-
-              const { total, booked, limitedTotal, limitedBooked } = (() => {
-                // Use local copy of getDaySlotSummary helper;
-                // For brevity, assume the helper returns correctly
-                const availableTherapists =
-                  therapists.filter(t => !(t.holidays || []).some(h => h.date === dateKey)).length;
-                let totalNormal = 0, totalLimited = 0;
-                for (const t of therapists) {
-                  if (Array.isArray(t.holidays) && t.holidays.some(h => h && h.date === dateKey)) continue;
-                  let tid = t._id;
-                  let n = 0, l = 0;
-                  for (const booking of bookings) {
-                    let bTid = "";
-                    if (booking.therapist && typeof booking.therapist === "string") bTid = booking.therapist;
-                    else if (booking.therapist && typeof booking.therapist === "object") bTid = booking.therapist._id || "";
-                    if (bTid === tid && Array.isArray(booking.sessions)) {
-                      for (const s of booking.sessions) {
-                        if (s.date === dateKey) {
-                          const opt = SESSION_TIME_OPTIONS.find(x => x.id === s.slotId);
-                          if (opt) { if (opt.limited) l += 1; else n += 1; }
-                        }
-                      }
-                    }
-                  }
-                  totalNormal += n;
-                  totalLimited += l;
-                }
-                return {
-                  total: availableTherapists * 10,
-                  booked: totalNormal,
-                  limitedTotal: availableTherapists * 5,
-                  limitedBooked: totalLimited,
-                };
-              })();
-
               return (
                 <div
                   key={day}
@@ -893,28 +729,6 @@ export default function RequestAppointment() {
                       </div>
                     )}
                   </div>
-                  {typeof total !== "number" ? (
-                    <span className="text-gray-300">Loading…</span>
-                  ) : total > 0 || (limitedTotal && limitedTotal > 0) ? (
-                    <>
-                      <span className="flex items-center w-fit gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-green-200 text-green-700 border border-green-300 shadow">
-                        <FiCheckCircle className="inline mr-0.5 text-green-500" size={13} />
-                        <span data-testid='booked-total' className="tabular-nums font-semibold">
-                          {booked}/{total}
-                          {typeof limitedTotal === "number" && typeof limitedBooked === "number" && limitedBooked > 0 && (
-                            <>
-                              <br />
-                              <span className="tabular-nums font-semibold text-blue-800">
-                                {limitedBooked}/{limitedTotal} ltd.
-                              </span>
-                            </>
-                          )}
-                        </span>
-                      </span>
-                    </>
-                  ) : (
-                    <span className="text-gray-400">No slots</span>
-                  )}
                 </div>
               );
             })}
@@ -928,25 +742,13 @@ export default function RequestAppointment() {
                 <span className="text-blue-700">Limit reached.</span>
               )}
               <br />
-              <span className="text-blue-700">Each therapist: <b>10 normal</b> and <b>5 limited</b> case slots available per day.</span>
+              {/* Availability text removed as per instruction */}
             </div>
           )}
         </div>
 
-        {/* Booking form (mostly unchanged) */}
+        {/* Booking form */}
         <div className="flex-1 bg-white border rounded-lg p-6">
-
-          {/* ... form details as before ... */}
-          {/* Paste the form part from previous, or keep as is for brevity ... */}
-          {/* ... (not repeating here for brevity) ... */}
-
-          {/* Everything from previous code for the booking form, paste unchanged here */}
-          {/* In particular, make sure the edit mode continues to work using the updated editBookingId logic */}
-          {/* ... */}
-          {/* Booking form code unchanged - copy/paste previous content below here */}
-          {/* ... */}
-          {/* use all form from previous code, unchanged */}
-          {/* ... */}
           <h3 className="font-semibold mb-4">
             {editBookingId ? "Edit Booking" : "Quick Book"}
             {editBookingId && (
@@ -955,8 +757,6 @@ export default function RequestAppointment() {
               </span>
             )}
           </h3>
-
-          {/* Appointment ID (non-editable, only visible when editing a booking) */}
           {editBookingId && (() => {
             const currentBooking =
               requestedBookings.find(b => b._id === editBookingId) ||
@@ -998,13 +798,6 @@ export default function RequestAppointment() {
           </select>
 
 
-          {/* ... rest of form as before: paste unchanged ... */}
-          {/* ... for brevity in this rewrite answer ... */}
-          {/* ... All session time, repeat, package, and coupon logic unchanged ... */}
-          {/* ... All form field rendering from previous code should remain, with logic unchanged ... */}
-          {/* ... The canBook, onClick, error/success rendering and so on continue as designed ... */}
-          {/* ... */}
-       
           <label className="block text-sm mb-1 flex items-center gap-1">
             <FiTag /> Therapy Type
           </label>
@@ -1104,9 +897,8 @@ export default function RequestAppointment() {
               </div>
               {maxSelectableDates && packageId && (
                 <div className="text-xs text-slate-500 mt-1">
-                  Will set up to {maxSelectableDates} sessions {repeatDay && `on ${repeatDay}`} at selected time, skipping days where all therapists are on holiday or that slot is fully booked.
-                  <br />
-                  <span className="text-blue-700">Each therapist: <b>10 normal</b> and <b>5 limited</b> case slots available per day.</span>
+                  Will set up to {maxSelectableDates} sessions {repeatDay && `on ${repeatDay}`} at selected time.
+                  {/* Availability text removed */}
                 </div>
               )}
               {repeatError && (
@@ -1138,7 +930,7 @@ export default function RequestAppointment() {
                 .slice()
                 .sort((a, b) => a.date.localeCompare(b.date))
                 .map((s, idx) => {
-                  const slotInfo = getAvailableSlotsForDate(s.date, s.slotId);
+                  // const slotInfo = getAvailableSlotsForDate(s.date, s.slotId);
                   return (
                     <div key={s.date} className="flex items-center gap-2 text-sm">
                       <span className="flex-1 font-mono">{s.date}</span>
@@ -1155,27 +947,21 @@ export default function RequestAppointment() {
                       >
                         <option value="">Select Time Slot</option>
                         {SESSION_TIME_OPTIONS.map((slot) => {
-                          const i = slotInfo[slot.id];
+                          // Always enabled, never disabled
                           return (
                             <option
                               key={slot.id}
                               value={slot.id}
-                              disabled={i.disabled}
+                              disabled={false}
                             >
                               {slot.label}
                               {slot.limited ? " (Limited case)" : ""}
-                              {i.disabled ? `  - ${i.reason}` : ""}
                             </option>
                           );
                         })}
                       </select>
                       {idx === 0 && !s.slotId && (
                         <span className="text-xs text-red-500 ml-2">Time required</span>
-                      )}
-                      {repeatConflictInfo[s.date] && (
-                        <span className="inline-block ml-2 text-xs text-red-600">
-                          {repeatConflictInfo[s.date]}
-                        </span>
                       )}
                     </div>
                   );
@@ -1289,8 +1075,6 @@ export default function RequestAppointment() {
           {typeof maxSelectableDates === "number" && (
             <div className="text-xs text-blue-700 mt-3">
               {`You can select up to ${maxSelectableDates} date${maxSelectableDates > 1 ? "s" : ""} for this package. Selecting all is not mandatory.`}
-              <br />
-              Each therapist: <b>10 normal</b> and <b>5 limited</b> case slots available per day.
             </div>
           )}
           {sessions.length === 0 && (
@@ -1301,174 +1085,171 @@ export default function RequestAppointment() {
           )}
         </div>
       </div>
-        {/* NEW: Booking Request List */}
-        <div className="mt-8">
-          <div className="bg-white border rounded-lg p-4 text-sm">
-            <p className="font-medium mb-2 flex items-center gap-2">
-              <span>Requested Booking List</span>
-              {requestsLoading && (
-                <span className="ml-2 px-2 py-0.5 rounded text-xs bg-blue-100 text-blue-800 font-normal">Loading…</span>
-              )}
-            </p>
-            {requestedBookings && requestedBookings.length === 0 ? (
-              <div>
-                <p className="text-slate-500 mb-3">No requested bookings found.</p>
-              </div>
-            ) : (
-              <div className="flex flex-col gap-4">
-                {requestedBookings.map((br) => (
-                  <div
-                    className={`border p-3 rounded bg-sky-50 relative`}
-                    key={br._id}
-                  >
-                    {/* Request ID (non-editable, always available) */}
-                    {br.requestId && (
-                      <div className="mb-1 flex items-center gap-2 text-xs font-mono text-gray-700">
-                        <FiHash className="text-blue-500" /> <span>Request ID: {br.requestId}</span>
-                      </div>
-                    )}
-                    {/* Show therapist if available (optional in request stage) */}
-                    {(() => {
-                      let tObj: any = undefined;
-                      if (typeof br.therapist === "object" && br.therapist !== null) {
-                        tObj = br.therapist;
-                      } else if (typeof br.therapist === "string" && br.therapist) {
-                        // Find therapist if you have the therapists[] loaded
-                      }
-                      if (tObj && tObj.userId) {
-                        return (
-                          <div className="mb-2 flex items-center gap-2">
-                            <FiUser className="text-slate-500" />
-                            <span className="text-slate-700">Therapist: {tObj.userId?.name}{tObj.therapistId ? ` (${tObj.therapistId})` : ""}</span>
-                          </div>
-                        );
-                      }
-                      return null;
-                    })()}
-                    <div className="mb-1 font-semibold text-blue-900 flex items-center gap-2">
-                      <FiUser className="text-blue-600" />
-                      {getPatientDisplayName(br.patient)}
-                    </div>
-                    <div className="mb-2 flex items-center gap-2">
-                      <FiTag className="text-slate-500" />
-                      <span className="text-slate-700">{br.therapy?.name}</span>
-                    </div>
-                    <div className="mb-2 flex items-center gap-2">
-                      <FiPackage className="text-purple-500" />
-                      <span className="text-purple-700">
-                        {getPackageDisplay(br.package)}
-                      </span>
-                    </div>
-                    {Array.isArray(br.sessions) && br.sessions.length > 0 && (
-                      <details className="mb-2 text-xs text-slate-700">
-                        <summary className="font-medium cursor-pointer select-none flex items-center">
-                          <span>Sessions ({br.sessions.length})</span>
-                          <span className="ml-1"><FiChevronDown className="inline ml-1 text-slate-500" /></span>
-                        </summary>
-                        <div className="overflow-x-auto mt-2">
-                          <table className="min-w-[340px] w-fit border-collapse text-xs">
-                            <thead>
-                              <tr>
-                                <th className="px-2 py-1 border border-slate-200 bg-slate-100 font-semibold text-left">#</th>
-                                <th className="px-2 py-1 border border-slate-200 bg-slate-100 font-semibold text-left">Date</th>
-                                <th className="px-2 py-1 border border-slate-200 bg-slate-100 font-semibold text-left">Time Slot</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {br.sessions.map((s, idx) => {
-                                const slot = SESSION_TIME_OPTIONS.find(opt => opt.id === s.slotId);
-                                return (
-                                  <tr key={s._id || (s.date + s.slotId)}>
-                                    <td className="px-2 py-1 border border-slate-200 text-slate-400">{idx + 1}</td>
-                                    <td className="px-2 py-1 border border-slate-200">
-                                      {s.date}
-                                    </td>
-                                    <td className="px-2 py-1 border border-slate-200 whitespace-nowrap">
-                                      {slot
-                                        ? (
-                                            <>
-                                              {slot.label}
-                                              {slot.limited && <span className="text-amber-700 ml-1">(Limited case)</span>}
-                                            </>
-                                          )
-                                        : s.slotId}
-                                    </td>
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
-                        </div>
-                      </details>
-                    )}
-                    {/* Discount info, if available */}
-                    {br.discountInfo && br.discountInfo.coupon && br.discountInfo.coupon.discountEnabled && (
-                      <div className="mb-1 text-xs text-blue-700">
-                        Discount: <span className="font-semibold">
-                          {br.discountInfo.coupon.discount}%
-                        </span>
-                        {" "}
-                        (Coupon: <span className="font-mono">
-                          {br.discountInfo.coupon.couponCode}
-                        </span>
-                          {br.discountInfo.coupon.validityDays && (
-                            <> {` - valid ${br.discountInfo.coupon.validityDays}d`}</>
-                          )}
-                        )
-                      </div>
-                    )}
-                    {/* Status & Actions row */}
-                    <div className="flex items-center gap-4 mt-2">
-                      <span className={`inline-block px-2 py-1 rounded text-xs font-semibold uppercase
-                        ${
-                          br.requestStatus === "pending"
-                            ? "bg-yellow-200 text-yellow-900"
-                            : br.requestStatus === "approved"
-                              ? "bg-green-200 text-green-900"
-                              : br.requestStatus === "rejected"
-                                ? "bg-red-200 text-red-800"
-                                : "bg-gray-100 text-gray-700"
-                        }
-                      `}>
-                        {br.requestStatus || "Pending"}
-                      </span>
-                      <div className="flex gap-2">
-                        <button
-                          className="text-xs rounded px-2 py-1 border border-blue-400 text-blue-700 hover:bg-blue-50 flex items-center gap-1"
-                          title="Edit booking request"
-                          onClick={() => {
-                            setEditBookingId(br._id);
-                            setBookingError(null);
-                            setBookingSuccess(null);
-                          }}
-                        >
-                          <FiEdit2 />
-                          Edit
-                        </button>
-                        <button
-                          className="text-xs rounded px-2 py-1 border border-red-400 text-red-600 hover:bg-red-50 flex items-center gap-1"
-                          title="Delete booking request"
-                          onClick={() => handleDeleteRequest(br._id)}
-                        >
-                          <FiTrash2 />
-                          Delete
-                        </button>
-                      </div>
-                    </div>
-                    {/* Optional "Editing" banner if in edit mode */}
-                    {editBookingId === br._id && (
-                      <div className="absolute -top-2 right-2">
-                        <span className="text-blue-800 text-xs bg-blue-200 px-2 py-0.5 rounded font-bold shadow">
-                          Editing
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
+      {/* NEW: Booking Request List */}
+      <div className="mt-8">
+        <div className="bg-white border rounded-lg p-4 text-sm">
+          <p className="font-medium mb-2 flex items-center gap-2">
+            <span>Requested Booking List</span>
+            {requestsLoading && (
+              <span className="ml-2 px-2 py-0.5 rounded text-xs bg-blue-100 text-blue-800 font-normal">Loading…</span>
             )}
-          </div>
+          </p>
+          {requestedBookings && requestedBookings.length === 0 ? (
+            <div>
+              <p className="text-slate-500 mb-3">No requested bookings found.</p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-4">
+              {requestedBookings.map((br) => (
+                <div
+                  className={`border p-3 rounded bg-sky-50 relative`}
+                  key={br._id}
+                >
+                  {/* Request ID (non-editable, always available) */}
+                  {br.requestId && (
+                    <div className="mb-1 flex items-center gap-2 text-xs font-mono text-gray-700">
+                      <FiHash className="text-blue-500" /> <span>Request ID: {br.requestId}</span>
+                    </div>
+                  )}
+                  {/* Show therapist if available (optional in request stage) */}
+                  {(() => {
+                    let tObj: any = undefined;
+                    if (typeof br.therapist === "object" && br.therapist !== null) {
+                      tObj = br.therapist;
+                    } else if (typeof br.therapist === "string" && br.therapist) {
+                      // Find therapist if you have the therapists[] loaded
+                    }
+                    if (tObj && tObj.userId) {
+                      return (
+                        <div className="mb-2 flex items-center gap-2">
+                          <FiUser className="text-slate-500" />
+                          <span className="text-slate-700">Therapist: {tObj.userId?.name}{tObj.therapistId ? ` (${tObj.therapistId})` : ""}</span>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
+                  <div className="mb-1 font-semibold text-blue-900 flex items-center gap-2">
+                    <FiUser className="text-blue-600" />
+                    {getPatientDisplayName(br.patient)}
+                  </div>
+                  <div className="mb-2 flex items-center gap-2">
+                    <FiTag className="text-slate-500" />
+                    <span className="text-slate-700">{br.therapy?.name}</span>
+                  </div>
+                  <div className="mb-2 flex items-center gap-2">
+                    <FiPackage className="text-purple-500" />
+                    <span className="text-purple-700">
+                      {getPackageDisplay(br.package)}
+                    </span>
+                  </div>
+                  {Array.isArray(br.sessions) && br.sessions.length > 0 && (
+                    <details className="mb-2 text-xs text-slate-700">
+                      <summary className="font-medium cursor-pointer select-none flex items-center">
+                        <span>Sessions ({br.sessions.length})</span>
+                        <span className="ml-1"><FiChevronDown className="inline ml-1 text-slate-500" /></span>
+                      </summary>
+                      <div className="overflow-x-auto mt-2">
+                        <table className="min-w-[340px] w-fit border-collapse text-xs">
+                          <thead>
+                            <tr>
+                              <th className="px-2 py-1 border border-slate-200 bg-slate-100 font-semibold text-left">#</th>
+                              <th className="px-2 py-1 border border-slate-200 bg-slate-100 font-semibold text-left">Date</th>
+                              <th className="px-2 py-1 border border-slate-200 bg-slate-100 font-semibold text-left">Time Slot</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {br.sessions.map((s, idx) => {
+                              const slot = SESSION_TIME_OPTIONS.find(opt => opt.id === s.slotId);
+                              return (
+                                <tr key={s._id || (s.date + s.slotId)}>
+                                  <td className="px-2 py-1 border border-slate-200 text-slate-400">{idx + 1}</td>
+                                  <td className="px-2 py-1 border border-slate-200">
+                                    {s.date}
+                                  </td>
+                                  <td className="px-2 py-1 border border-slate-200 whitespace-nowrap">
+                                    {slot
+                                      ? (
+                                          <>
+                                            {slot.label}
+                                            {slot.limited && <span className="text-amber-700 ml-1">(Limited case)</span>}
+                                          </>
+                                        )
+                                      : s.slotId}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </details>
+                  )}
+                  {br.discountInfo && br.discountInfo.coupon && br.discountInfo.coupon.discountEnabled && (
+                    <div className="mb-1 text-xs text-blue-700">
+                      Discount: <span className="font-semibold">
+                        {br.discountInfo.coupon.discount}%
+                      </span>
+                      {" "}
+                      (Coupon: <span className="font-mono">
+                        {br.discountInfo.coupon.couponCode}
+                      </span>
+                        {br.discountInfo.coupon.validityDays && (
+                          <> {` - valid ${br.discountInfo.coupon.validityDays}d`}</>
+                        )}
+                      )
+                    </div>
+                  )}
+                  <div className="flex items-center gap-4 mt-2">
+                    <span className={`inline-block px-2 py-1 rounded text-xs font-semibold uppercase
+                      ${
+                        br.requestStatus === "pending"
+                          ? "bg-yellow-200 text-yellow-900"
+                          : br.requestStatus === "approved"
+                            ? "bg-green-200 text-green-900"
+                            : br.requestStatus === "rejected"
+                              ? "bg-red-200 text-red-800"
+                              : "bg-gray-100 text-gray-700"
+                      }
+                    `}>
+                      {br.requestStatus || "Pending"}
+                    </span>
+                    <div className="flex gap-2">
+                      <button
+                        className="text-xs rounded px-2 py-1 border border-blue-400 text-blue-700 hover:bg-blue-50 flex items-center gap-1"
+                        title="Edit booking request"
+                        onClick={() => {
+                          setEditBookingId(br._id);
+                          setBookingError(null);
+                          setBookingSuccess(null);
+                        }}
+                      >
+                        <FiEdit2 />
+                        Edit
+                      </button>
+                      <button
+                        className="text-xs rounded px-2 py-1 border border-red-400 text-red-600 hover:bg-red-50 flex items-center gap-1"
+                        title="Delete booking request"
+                        onClick={() => handleDeleteRequest(br._id)}
+                      >
+                        <FiTrash2 />
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                  {editBookingId === br._id && (
+                    <div className="absolute -top-2 right-2">
+                      <span className="text-blue-800 text-xs bg-blue-200 px-2 py-0.5 rounded font-bold shadow">
+                        Editing
+                      </span>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
+      </div>
     </motion.div>
   );
 }

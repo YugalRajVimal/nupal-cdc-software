@@ -3,7 +3,6 @@ import { Outlet } from "react-router";
 import SubAdminAppSidebar from "./AppSidebar";
 import SubAdminBackdrop from "./Backdrop";
 import SubAdminAppHeader from "./AppHeader";
-
 import { useEffect, useState } from "react";
 
 const LayoutContent: React.FC = () => {
@@ -29,60 +28,53 @@ const LayoutContent: React.FC = () => {
   );
 };
 
-const SupervisorAppLayout: React.FC = () => {
-  const [isTherapistAuthenticated, setIsTherapistAuthenticated] = useState<
-    boolean | null
-  >(true);
+const TherapistAppLayout: React.FC = () => {
+  const [isTherapistAuthenticated, setIsTherapistAuthenticated] = useState<boolean | null>(null);
 
-  useEffect(()=>{
-    setIsTherapistAuthenticated(true);
-  })
+  useEffect(() => {
+    const checkTherapistAuth = async () => {
+      try {
+        // Get token from localStorage (therapist-token)
+        const token = localStorage.getItem("therapist-token");
+        if (!token) {
+          setIsTherapistAuthenticated(false);
+          if (window.location.pathname.startsWith("/therapist")) {
+            window.location.href = "/signin";
+          }
+          return;
+        }
 
-  // useEffect(() => {
-  //   const checkAuth = async () => {
-  //     try {
-  //       const token = localStorage.getItem("supervisor-token");
+        // Call the check-auth endpoint (as per auth.routes.js /auth/)
+        const res = await fetch(
+          `${import.meta.env.VITE_API_URL}/api/auth/`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: token,
+            },
+            body: JSON.stringify({ role: "therapist" }),
+          }
+        );
 
-  //       if (!token) {
-  //         setIsTherapistAuthenticated(false);
-  //         if (window.location.pathname.startsWith("/supervisor")) {
-  //           window.location.href = "/supervisor/signin";
-  //         }
-  //         return;
-  //       }
+        if (res.ok) {
+          setIsTherapistAuthenticated(true);
+          // Redirect to /therapist if already logged in but on /signin
+          if (window.location.pathname === "/signin") {
+            window.location.href = "/therapist";
+          }
+        } else {
+          setIsTherapistAuthenticated(false);
+          window.location.href = "/signin";
+        }
+      } catch (err) {
+        setIsTherapistAuthenticated(false);
+        window.location.href = "/signin";
+      }
+    };
 
-  //       const res = await axios.post(
-  //         `${import.meta.env.VITE_API_URL}/api/auth`,
-  //         {},
-  //         {
-  //           headers: { Authorization: `${token}` },
-  //         }
-  //       );
-
-  //       // console.log(
-  //       //   res,
-  //       //   "------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------"
-  //       // );
-
-  //       if (res.status === 200) {
-  //         setIsTherapistAuthenticated(true);
-  //         // redirect only if logged in but not already on an admin page
-  //         if (window.location.pathname === "/supervisor/signin") {
-  //           window.location.href = "/supervisor";
-  //         }
-  //       } else {
-  //         setIsTherapistAuthenticated(false);
-  //         window.location.href = "/supervisor/signin";
-  //       }
-  //     } catch (err) {
-  //       console.error("Auth check failed:", err);
-  //       setIsTherapistAuthenticated(false);
-  //       window.location.href = "/supervisor/signin";
-  //     }
-  //   };
-
-  //   checkAuth();
-  // }, []);
+    checkTherapistAuth();
+  }, []);
 
   if (isTherapistAuthenticated === null || !isTherapistAuthenticated) {
     return (
@@ -99,4 +91,4 @@ const SupervisorAppLayout: React.FC = () => {
   );
 };
 
-export default SupervisorAppLayout;
+export default TherapistAppLayout;
