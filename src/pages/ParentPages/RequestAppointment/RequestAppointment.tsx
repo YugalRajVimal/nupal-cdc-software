@@ -143,13 +143,23 @@ export default function RequestAppointment() {
   const [requestedBookings, setRequestedBookings] = useState<Booking[]>([]);
   const [requestsLoading, setRequestsLoading] = useState(false);
 
+  useEffect(()=>{
+    setBookings([]);
+  },[]);
+
   // Fetch master data (same as before)
   useEffect(() => {
     async function fetchMasterDataAndCoupons() {
       setDataLoading(true);
       setBookingError(null);
       try {
-        const res = await fetch(`${API_BASE_URL}/api/parent/request-appointment-homepage`);
+        // Retrieve token from localStorage (assumes patient-token is stored there)
+        const token = localStorage.getItem("patient-token");
+        const res = await fetch(`${API_BASE_URL}/api/parent/request-appointment-homepage`, {
+          headers: {
+            ...(token ? { Authorization: token } : {})
+          }
+        });
         const json = await res.json();
         let processedPatients: Patient[] = [];
         if (Array.isArray(json.patients)) {
@@ -246,24 +256,29 @@ export default function RequestAppointment() {
   }
 
   // Normal bookings list (NOT requests)
-  const fetchBookings = useCallback(async () => {
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/parent/all-bookings`);
-      const json = await res.json();
-      let bookingsList: Booking[] =
-        Array.isArray(json.bookings) ? normalizeBookings(json.bookings) : [];
-      setBookings(bookingsList);
-    } catch {
-      setBookings([]);
-      toast.error("Failed to fetch bookings list.");
-    }
-  }, []);
+  // const fetchBookings = useCallback(async () => {
+  //   try {
+  //     const res = await fetch(`${API_BASE_URL}/api/parent/all-bookings`);
+  //     const json = await res.json();
+  //     let bookingsList: Booking[] =
+  //       Array.isArray(json.bookings) ? normalizeBookings(json.bookings) : [];
+  //     setBookings(bookingsList);
+  //   } catch {
+  //     setBookings([]);
+  //     toast.error("Failed to fetch bookings list.");
+  //   }
+  // }, []);
 
   // Fetch ONLY booking requests (pending requests)
   const fetchRequestedBookings = useCallback(async () => {
     setRequestsLoading(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/parent/booking-requests`);
+      const patientToken = localStorage.getItem('patient-token');
+      const res = await fetch(`${API_BASE_URL}/api/parent/booking-requests`, {
+        headers: {
+          ...(patientToken ? { 'Authorization': `${patientToken}` } : {}),
+        },
+      });
       const json = await res.json();
       let reqs: Booking[] =
         Array.isArray(json.bookingRequests) ? normalizeBookings(json.bookingRequests) : [];
@@ -278,10 +293,10 @@ export default function RequestAppointment() {
   // Prefetch normal bookings and appointment requests
   useEffect(() => {
     if (!dataLoading && !loading) {
-      fetchBookings();
+      // fetchBookings();
       fetchRequestedBookings();
     }
-  }, [dataLoading, loading, fetchBookings, fetchRequestedBookings]);
+  }, [dataLoading, loading, fetchRequestedBookings]);
 
   useEffect(() => {
     const t = setTimeout(() => setLoading(false), 700);
@@ -395,7 +410,7 @@ export default function RequestAppointment() {
       toast.success("Booking request deleted.");
       if (editBookingId === id) resetForm();
       fetchRequestedBookings();
-      fetchBookings();
+      // fetchBookings();
     } catch (e: any) {
       toast.error(
         (typeof e === "object" && e && "message" in e ? e.message : "Failed to delete booking request")
@@ -578,7 +593,7 @@ export default function RequestAppointment() {
       setBookingSuccess(successMsg);
       toast.success(successMsg);
 
-      await fetchBookings();
+      // await fetchBookings();
       await fetchRequestedBookings();
       resetForm();
     } catch (e: any) {

@@ -9,7 +9,11 @@ const LayoutContent: React.FC = () => {
   const { isExpanded, isHovered, isMobileOpen } = useSidebar();
 
   return (
-    <div className="min-h-screen xl:flex">
+    <div className="min-h-screen xl:flex"
+    style={{
+      background: "linear-gradient(135deg, #fdf4cc 0%, #ffe3ef 45%, #ced3f3 100%)",
+    }}
+    >
       <div>
         <SubAdminAppSidebar />
         <SubAdminBackdrop />

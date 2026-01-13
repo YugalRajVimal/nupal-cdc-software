@@ -110,7 +110,10 @@ const LayoutContent: React.FC = () => {
   const { isExpanded, isHovered, isMobileOpen } = useSidebar();
 
   return (
-    <div className="min-h-screen max-w-screen xl:flex overflow-hidden">
+    <div className="min-h-screen max-w-screen xl:flex overflow-hidden"
+    style={{
+      background: "linear-gradient(135deg, #fdf4cc 0%, #ffe3ef 45%, #ced3f3 100%)",
+    }}>
       <div>
         <AppSidebar />
         <Backdrop />

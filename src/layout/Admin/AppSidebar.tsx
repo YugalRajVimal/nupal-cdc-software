@@ -37,11 +37,11 @@ const navItems: NavItem[] = [
     name: "Leads & Consults",
     path: "/admin/leads-consults",
   },
-  {
-    icon: <FileIcon />,
-    name: "Reports & Analytics",
-    path: "/admin/reports-analytics",
-  },
+  // {
+  //   icon: <FileIcon />,
+  //   name: "Reports & Analytics",
+  //   path: "/admin/reports-analytics",
+  // },
   {
     icon: <FileIcon />,
     name: "Bookings",
@@ -51,6 +51,11 @@ const navItems: NavItem[] = [
     icon: <FileIcon />,
     name: "Booking Requests",
     path: "/admin/booking-requests",
+  },
+  {
+    icon: <FileIcon />,
+    name: "Session Edit Requests",
+    path: "/admin/session-edit-requests",
   },
   {
     icon: <UserCircleIcon />,
@@ -83,11 +88,11 @@ const navItems: NavItem[] = [
   //   path: "/admin/discounts",
   // },
 
-  {
-    icon: <FileIcon />,
-    name: "Manage Therapist Availability",
-    path: "/admin/manage-availability",
-  },
+  // {
+  //   icon: <FileIcon />,
+  //   name: "Manage Therapist Availability",
+  //   path: "/admin/manage-availability",
+  // },
 ];
 
 

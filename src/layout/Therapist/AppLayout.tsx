@@ -9,7 +9,10 @@ const LayoutContent: React.FC = () => {
   const { isExpanded, isHovered, isMobileOpen } = useSidebar();
 
   return (
-    <div className="min-h-screen xl:flex">
+    <div className="min-h-screen xl:flex"
+    style={{
+      background: "linear-gradient(135deg, #fdf4cc 0%, #ffe3ef 45%, #ced3f3 100%)",
+    }}>
       <div>
         <SubAdminAppSidebar />
         <SubAdminBackdrop />
@@ -36,8 +39,10 @@ const TherapistAppLayout: React.FC = () => {
       try {
         // Get token from localStorage (therapist-token)
         const token = localStorage.getItem("therapist-token");
+        console.log("[TherapistAppLayout] Found therapist-token in localStorage?", !!token, token);
         if (!token) {
           setIsTherapistAuthenticated(false);
+          console.log("[TherapistAppLayout] No token found! Redirecting to /signin if on /therapist...");
           if (window.location.pathname.startsWith("/therapist")) {
             window.location.href = "/signin";
           }
@@ -45,8 +50,9 @@ const TherapistAppLayout: React.FC = () => {
         }
 
         // Call the check-auth endpoint (as per auth.routes.js /auth/)
+        console.log("[TherapistAppLayout] Calling /api/auth endpoint to check token validity...");
         const res = await fetch(
-          `${import.meta.env.VITE_API_URL}/api/auth/`,
+          `${import.meta.env.VITE_API_URL}/api/auth`,
           {
             method: "POST",
             headers: {
@@ -56,19 +62,24 @@ const TherapistAppLayout: React.FC = () => {
             body: JSON.stringify({ role: "therapist" }),
           }
         );
+        console.log("[TherapistAppLayout] /api/auth status:", res.status);
 
         if (res.ok) {
           setIsTherapistAuthenticated(true);
+          console.log("[TherapistAppLayout] Therapist authenticated successfully!");
           // Redirect to /therapist if already logged in but on /signin
           if (window.location.pathname === "/signin") {
+            console.log("[TherapistAppLayout] On /signin, redirecting to /therapist...");
             window.location.href = "/therapist";
           }
         } else {
           setIsTherapistAuthenticated(false);
+          console.log("[TherapistAppLayout] Therapist auth failed. Redirecting to /signin...");
           window.location.href = "/signin";
         }
       } catch (err) {
         setIsTherapistAuthenticated(false);
+        console.error("[TherapistAppLayout] Error during therapist auth check:", err);
         window.location.href = "/signin";
       }
     };

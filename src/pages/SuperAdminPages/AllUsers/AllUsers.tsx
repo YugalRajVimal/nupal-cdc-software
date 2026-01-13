@@ -88,31 +88,35 @@ const AllUsers: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [activeRole, setActiveRole] = useState<'patients' | 'therapists' | 'subAdmins'>('patients');
 
+  // New: always refresh list on activeRole change
   useEffect(() => {
+    let didCancel = false;
+
     const fetchAllUsers = async () => {
       setLoading(true);
       setError(null);
-
       try {
         const res = await axios.get(`${API_BASE}/api/super-admin/users`);
         const { data } = res;
+        let extractedUsers: FlattenedUser[] = [];
         if (
           typeof data === 'object' &&
           (Array.isArray(data.therapists) ||
             Array.isArray(data.patients) ||
             Array.isArray(data.subAdmins))
         ) {
-          setUsers(extractUsersFromResponse(data));
+          extractedUsers = extractUsersFromResponse(data);
         } else if (Array.isArray(data)) {
-          setUsers(
-            data.map(u => ({
-              ...u,
-              fromCollection: 'unknown',
-              shortId: u._id,
-            }))
-          );
+          extractedUsers = data.map(u => ({
+            ...u,
+            fromCollection: 'unknown',
+            shortId: u._id,
+          }));
         } else {
-          setUsers([]);
+          extractedUsers = [];
+        }
+        if (!didCancel) {
+          setUsers(extractedUsers);
         }
       } catch (err: unknown) {
         let errMessage = 'Failed to fetch users';
@@ -131,15 +135,21 @@ const AllUsers: React.FC = () => {
         } else if (err instanceof Error) {
           errMessage = err.message;
         }
-        setError(errMessage);
-        setUsers([]);
+        if (!didCancel) {
+          setError(errMessage);
+          setUsers([]);
+        }
       } finally {
-        setLoading(false);
+        if (!didCancel) {
+          setLoading(false);
+        }
       }
     };
 
     fetchAllUsers();
-  }, []);
+
+    return () => { didCancel = true; };
+  }, [activeRole]); // refetch when activeRole changes
 
   // Filter users according to the selected role
   const filteredUsers = users.filter(user => user.fromCollection === activeRole);

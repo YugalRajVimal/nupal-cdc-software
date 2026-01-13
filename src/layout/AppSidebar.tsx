@@ -280,19 +280,24 @@ const AppSidebar: React.FC = () => {
           !isExpanded && !isHovered ? "lg:justify-center" : "justify-start"
         }`}
       >
-        <Link to="/">
+         <Link to="/">
           {isExpanded || isHovered || isMobileOpen ? (
             <>
-              <span className="text-3xl font-bold">SUPER ADMIN</span>
+             <img
+              src="/logo.webp"
+              alt="Logo"
+            className="w-full"
+            />
+              {/* <span className="text-3xl font-bold">ADMIN</span> */}
             </>
           ) : (
-            // <img
-            //   src="/images/logo/logo-icon.svg"
-            //   alt="Logo"
-            //   width={32}
-            //   height={32}
-            // />
-            <span className="text-xl font-bold">SUPER ADMIN</span>
+            <img
+              src="/logo.webp"
+              alt="Logo"
+              className="w-full"
+
+            />
+            // <span className="text-xl font-bold">ADMIN</span>
           )}
         </Link>
       </div>

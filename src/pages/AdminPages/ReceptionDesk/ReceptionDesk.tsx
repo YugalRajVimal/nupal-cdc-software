@@ -10,75 +10,236 @@ import {
 } from "react-icons/fi";
 import { motion, AnimatePresence } from "framer-motion";
 
-// Sample data for appointments
-const sampleAppointments = [
-  {
-    id: 1,
-    time: "10:00 AM",
-    patient: "Artharv Sharma",
-    therapist: "Dr. Shalini G.",
-    status: "scheduled",
-  },
-  {
-    id: 2,
-    time: "11:30 AM",
-    patient: "Megha Kapoor",
-    therapist: "Dr. Sonali M.",
-    status: "checked-in",
-  },
-  {
-    id: 3,
-    time: "02:00 PM",
-    patient: "Raghav S.",
-    therapist: "Dr. Unnati M.",
-    status: "scheduled",
-  },
+const SESSION_TIME_OPTIONS = [
+  { id: '1000-1045', label: '10:00 to 10:45', limited: false },
+  { id: '1045-1130', label: '10:45 to 11:30', limited: false },
+  { id: '1130-1215', label: '11:30 to 12:15', limited: false },
+  { id: '1215-1300', label: '12:15 to 13:00', limited: false },
+  { id: '1300-1345', label: '13:00 to 13:45', limited: false },
+  { id: '1415-1500', label: '14:15 to 15:00', limited: false },
+  { id: '1500-1545', label: '15:00 to 15:45', limited: false },
+  { id: '1545-1630', label: '15:45 to 16:30', limited: false },
+  { id: '1630-1715', label: '16:30 to 17:15', limited: false },
+  { id: '1715-1800', label: '17:15 to 18:00', limited: false },
+  { id: '0830-0915', label: '08:30 to 09:15', limited: true },
+  { id: '0915-1000', label: '09:15 to 10:00', limited: true },
+  { id: '1800-1845', label: '18:00 to 18:45', limited: true },
+  { id: '1845-1930', label: '18:45 to 19:30', limited: true },
+  { id: '1930-2015', label: '19:30 to 20:15', limited: true }
 ];
 
-// Sample data for pending payments
-const samplePayments = [
-  {
-    id: 1,
-    patient: "Artharv Sharma",
-    invoice: "INV-101519",
-    amount: 700,
-  },
-  {
-    id: 2,
-    patient: "Megha Kapoor",
-    invoice: "INV-101520",
-    amount: 850,
-  },
-];
+// Types for reception bookings and payments
+type Appointment = {
+  _id: string;
+  appointmentId: string;
+  patient: { name: string; _id: string; patientId?: string; gender?: string; mobile?: string } | null;
+  therapistName: string;
+  therapistId: string;
+  sessionId:string,
+  time?: string;
+  status?: "scheduled" | "checked-in";
+  isCheckedIn?: boolean;
+  [key: string]: any;
+};
+
+type PaymentInfo = {
+  _id: string;
+  appointmentId: string;
+  patientName: string;
+  patientId: string;
+  paymentId?: string;
+  paymentStatus?: string;
+  paymentAmount?: number | string;
+  paymentMethod?: string;
+  paymentRecordId?: string;
+  [key: string]: any;
+};
+
+const API_URL = import.meta.env.VITE_API_URL;
+
+// Utility: Get today's session for a booking and extract therapist/user name and slot time
+function getTodaySession(sessions?: any[], today?: string) {
+  if (!sessions || !today) return undefined;
+  return sessions.find((sess) => sess.date === today);
+}
 
 export default function ReceptionDesk() {
   const [loading, setLoading] = useState(true);
   const [guideOpen, setGuideOpen] = useState(false);
-  const [appointments, setAppointments] = useState<any[]>([]);
-  const [payments, setPayments] = useState<any[]>([]);
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [payments, setPayments] = useState<PaymentInfo[]>([]);
+  const [today, setToday] = useState<string>("");
 
+  // Fetch reception desk data
   useEffect(() => {
-    const t = setTimeout(() => {
-      // Populate with sample data after loading (imitating fetch).
-      setAppointments(sampleAppointments);
-      setPayments(samplePayments);
-      setLoading(false);
-    }, 800);
-    return () => clearTimeout(t);
+    let ignore = false;
+    async function fetchData() {
+      setLoading(true);
+      try {
+        const token = localStorage.getItem("admin-token");
+        const res = await fetch(`${API_URL}/api/admin/bookings/reception-desk`, {
+          headers: {
+            Authorization: token || "",
+            "Content-Type": "application/json",
+          },
+        });
+        if (!res.ok) throw new Error("Failed to load reception desk");
+        const data = await res.json();
+
+        if (!data.success) throw new Error(data.message || "API error");
+        if (ignore) return;
+
+        setToday(data.today);
+
+        // --- Today's Appointments ---
+        const todays: Appointment[] = (data.todaysBookings || []).map((booking: any) => {
+          // Get today's session
+          const session = getTodaySession(booking.sessions, data.today);
+
+          // Therapist info: Try to get therapistName from session's therapist.userId.name, fall back to main therapist
+          let therapistName = "";
+          let therapistId = "";
+          if (session && session.therapist && session.therapist.userId && session.therapist.userId.name) {
+            therapistName = session.therapist.userId.name;
+            therapistId = session.therapist.therapistId;
+          } else if (
+            booking.therapist &&
+            (typeof booking.therapist === "object") &&
+            booking.therapist._id
+          ) {
+            therapistName =
+              (booking.therapist.userId && booking.therapist.userId.name)
+                ? booking.therapist.userId.name
+                : (booking.therapist.name || "");
+            therapistId = booking.therapist._id;
+          }
+
+          // Patient info
+          // const patientName =
+          //   booking.patient && booking.patient.name ? booking.patient.name : "";
+
+          let status: "scheduled" | "checked-in" = "scheduled";
+          if (booking.isCheckedIn) status = "checked-in";
+          else if (session && session.isCheckedIn) status = "checked-in";
+
+          return {
+            _id: booking._id,
+            appointmentId: booking.appointmentId,
+            patient: booking.patient || null,
+            therapistName: therapistName,
+            therapistId: therapistId,
+            sessionId:session?._id,
+            time: session?.slotId ?? session?.time ?? "",
+            status,
+            isCheckedIn: booking.sessions.isCheckedIn,
+          };
+        });
+
+        // --- Pending Payments ---
+        // Use all pendingPaymentBookings directly
+        const pendings: PaymentInfo[] = (data.pendingPaymentBookings || []).map((booking: any) => {
+          // Get payment details
+          let paymentRecord = booking.payment || {};
+          // Patient fields
+          let patientName = booking.patient?.name || "";
+          let patientId = booking.patient?.patientId || "";
+          let paymentId = paymentRecord.paymentId || undefined;
+          let paymentStatus = paymentRecord.status || undefined;
+          let paymentAmount = (typeof paymentRecord.amount !== "undefined" ? paymentRecord.amount : undefined);
+          let paymentMethod = paymentRecord.paymentMethod || "";
+          let paymentRecordId = paymentRecord._id || undefined;
+
+          return {
+            _id: booking._id,
+            appointmentId: booking.appointmentId,
+            patientName,
+            patientId,
+            paymentId,
+            paymentStatus,
+            paymentAmount,
+            paymentMethod,
+            paymentRecordId,
+          };
+        });
+
+        setAppointments(todays);
+        setPayments(pendings);
+      } catch (err) {
+        setAppointments([]);
+        setPayments([]);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchData();
+    return () => {
+      ignore = true;
+    };
   }, []);
 
-  // Handler to "check in" an appointment (for sample effect)
-  const handleCheckIn = (id: number) => {
-    setAppointments((apps) =>
-      apps.map((a) =>
-        a.id === id ? { ...a, status: "checked-in" } : a
-      )
-    );
+  // Handler to "check in" an appointment (actual POST to API)
+  const handleCheckIn = async (_id: string, sessionId:string) => {
+    const token = localStorage.getItem("admin-token");
+    try {
+      const res = await fetch(`${API_URL}/api/admin/bookings/check-in`, {
+        method: "POST",
+        headers: {
+          Authorization: token || "",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ bookingId: _id, sessionId }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.message || "Failed check-in");
+
+      // Optimistic update
+      setAppointments((apps) =>
+        apps.map((a) =>
+          a._id === _id
+            ? { ...a, status: "checked-in", isCheckedIn: true }
+            : a
+        )
+      );
+    } catch (err) {
+      alert(
+        typeof err === "string"
+          ? err
+          : err instanceof Error
+          ? err.message
+          : "Error checking in"
+      );
+    }
   };
 
-  // Handler to "collect" a payment (for sample effect)
-  const handleCollect = (id: number) => {
-    setPayments((pays) => pays.filter((p) => p.id !== id));
+  // Handler to "collect" a payment (actual POST to API)
+  const handleCollect = async (_id: string, paymentRecordId?: string) => {
+    const token = localStorage.getItem("admin-token");
+    console.log(paymentRecordId);
+    try {
+      const res = await fetch(
+        `${API_URL}/api/admin/bookings/${_id}/collect-payment`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: token || "",
+            "Content-Type": "application/json",
+          },
+        }
+      );
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.message || "Failed to record payment");
+      // Remove from pending payments
+      setPayments((pays) => pays.filter((p) => p._id !== _id));
+    } catch (err) {
+      alert(
+        typeof err === "string"
+          ? err
+          : err instanceof Error
+          ? err.message
+          : "Error collecting payment"
+      );
+    }
   };
 
   if (loading) {
@@ -105,7 +266,10 @@ export default function ReceptionDesk() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-slate-800">
-          Reception Desk <span className="text-slate-400">– 2025-12-18</span>
+          Reception Desk{" "}
+          <span className="text-slate-400">
+            – {today || new Date().toISOString().slice(0, 10)}
+          </span>
         </h1>
         <div className="relative w-72">
           <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -210,27 +374,50 @@ export default function ReceptionDesk() {
             <div className="space-y-4">
               {appointments.map((a) => (
                 <div
-                  key={a.id}
+                  key={a._id}
                   className="flex items-center justify-between border-b border-slate-100 pb-3 last:pb-0 last:border-0"
                 >
                   <div>
-                    <div className="font-medium text-slate-800">
-                      {a.patient}
-                      <span className="ml-2 text-xs text-slate-400 font-normal">{a.time}</span>
-                      {a.status === "checked-in" && (
+                    <div className="font-medium text-slate-800 flex flex-col items-start gap-1 flex-wrap">
+                      <span>
+                        {a.patient?.name ?? "Anonymous"}
+                        <span className="text-xs text-blue-400 font-semibold ml-1">
+                          ({a.patient?.patientId || "--"})
+                        </span>
+                      </span>
+
+                      <span className=" text-sm font-semibold text-slate-600">
+                        | Appt#:{" "}
+                        <span className="text-blue-700">{a.appointmentId}</span>
+                        <span className="ml-3 text-xs text-slate-400 font-normal">
+                        {
+                          SESSION_TIME_OPTIONS.find(opt => opt.id === a.time)?.label 
+                          ?? a.time 
+                          ?? ""
+                        }
+                      </span>
+                      </span>
+                     
+                      {(a.status === "checked-in" || a.isCheckedIn) && (
                         <span className="ml-2 text-green-600 text-xs bg-green-50 rounded px-2 py-0.5 font-semibold">
                           Checked In
                         </span>
                       )}
                     </div>
-                    <div className="text-xs text-slate-500">
-                      Therapist: {a.therapist}
+                    <div className="text-xs text-slate-500 mt-0.5">
+                      Therapist:{" "}
+                      <span className="font-semibold">
+                        {a.therapistName || "—"}
+                      </span>{" "}
+                      <span className="text-blue-400 font-mono">
+                        {a.therapistId ? `(${a.therapistId})` : ""}
+                      </span>
                     </div>
                   </div>
                   <div>
-                    {a.status === "scheduled" ? (
+                    {a.status === "scheduled" && !a.isCheckedIn ? (
                       <button
-                        onClick={() => handleCheckIn(a.id)}
+                        onClick={() => handleCheckIn(a._id,a.sessionId)}
                         className="rounded-md border border-blue-500 px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 transition"
                       >
                         Check In
@@ -262,18 +449,60 @@ export default function ReceptionDesk() {
             <div className="space-y-4">
               {payments.map((payment) => (
                 <div
-                  key={payment.id}
+                  key={payment._id}
                   className="flex items-center justify-between border-b border-slate-100 pb-3 last:pb-0 last:border-0"
                 >
                   <div>
-                    <p className="font-medium text-slate-800">{payment.patient}</p>
-                    <p className="text-sm text-slate-500">
-                      Inv: {payment.invoice} • ₹{payment.amount}
-                    </p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-semibold text-blue-700">
+                        Appt#: {payment.appointmentId}
+                      </span>
+                      <span className="font-medium text-slate-800">
+                        {payment.patientName}
+                        <span className="ml-1 text-xs text-blue-400 font-mono">
+                          ({payment.patientId})
+                        </span>
+                      </span>
+                    </div>
+                    <div className="text-xs text-slate-500 flex flex-wrap gap-1 mt-0.5">
+                      <span>
+                        Payment ID:{" "}
+                        <span className="font-mono text-blue-600">
+                          {payment.paymentId || payment.paymentRecordId || "—"}
+                        </span>
+                      </span>
+                      <span>
+                        Status:{" "}
+                        <span
+                          className={
+                            payment.paymentStatus === "paid"
+                              ? "text-green-600"
+                              : "text-red-600"
+                          }
+                        >
+                          {payment.paymentStatus || "pending"}
+                        </span>
+                      </span>
+                      <span>Amount : 
+                        ₹
+                        {typeof payment.paymentAmount === "number" ||
+                        /^\d+$/.test(String(payment.paymentAmount))
+                          ? payment.paymentAmount
+                          : "—"}
+                      </span>
+                      {/* {payment.paymentMethod && (
+                        <span>
+                          Method:{" "}
+                          <span className="text-slate-700">
+                            {payment.paymentMethod}
+                          </span>
+                        </span>
+                      )} */}
+                    </div>
                   </div>
                   <button
                     className="rounded-md border border-green-500 px-4 py-1.5 text-sm font-medium text-green-600 hover:bg-green-50 transition"
-                    onClick={() => handleCollect(payment.id)}
+                    onClick={() => handleCollect(payment._id, payment.paymentRecordId)}
                   >
                     Collect
                   </button>

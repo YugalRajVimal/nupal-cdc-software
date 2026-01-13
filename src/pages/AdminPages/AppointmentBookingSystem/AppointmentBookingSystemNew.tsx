@@ -141,6 +141,9 @@ export default function AppointmentBookingSystemNew() {
   const [isBookingRequest, setIsBookingRequest] = useState<boolean>(false);
   const [bookingRequestId, setBookingRequestId] = useState<string>("");
 
+  const [isSessionEditRequest, setIsSessionEditRequest] = useState<boolean>(false);
+  const [sessionEditRequestId, setSessionEditRequestId] = useState<string>("");
+
 
   useEffect(() => { /* as before */ 
     if (location.state && (location.state as any).bookingRequest) {
@@ -160,6 +163,22 @@ export default function AppointmentBookingSystemNew() {
       }
     }
   }, [location.state]);
+
+  
+    // Handle sessionEditRequest navigation
+    useEffect(() => {
+      if (location.state && (location.state as any).sessionEditRequest) {
+        const req = (location.state as any).sessionEditRequest;
+        console.log(req);
+        setIsSessionEditRequest(true);
+        setSessionEditRequestId(req._id || "");
+        handleEditBooking(req.appointmentId._id)
+        // Optionally populate other state from the request as relevant
+        // setPatientId, setTherapyId, etc., if needed
+      }
+    }, [location.state]);
+
+
 
 
   type DaySlotSummary = {
@@ -463,7 +482,9 @@ export default function AppointmentBookingSystemNew() {
         })),
         coupon: appliedCoupon?._id ?? null,
         bookingRequestId,
-        isBookingRequest
+        isBookingRequest,
+        isSessionEditRequest,
+        sessionEditRequestId
       };
 
       if (!editBookingId) {
@@ -502,6 +523,7 @@ export default function AppointmentBookingSystemNew() {
   };
 
   function handleEditBooking(bookingId: string) {
+    console.log(bookingId);
     setEditBookingId(bookingId);
     setBookingError(null);
     setBookingSuccess(null);
@@ -557,6 +579,8 @@ export default function AppointmentBookingSystemNew() {
   function handleCancelEdit() {
     resetForm();
   }
+
+
 
   async function handleDeleteBooking(id: string) {
     if (!window.confirm("Delete this booking?")) return;

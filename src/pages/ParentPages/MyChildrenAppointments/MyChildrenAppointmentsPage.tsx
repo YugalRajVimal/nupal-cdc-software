@@ -5,39 +5,130 @@ import dayjs from "dayjs";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "";
 
+// Updated types for all appointment details present in sample data
+type TherapistType = {
+  _id: string;
+  userId: {
+    _id: string;
+    name: string;
+  } | string;
+  therapistId: string;
+};
+
 type SessionType = {
+  _id?: string;
   date: string;
   time?: string;
   status?: string;
   notes?: string;
+  slotId?: string;
+  therapist?: TherapistType;
+  [key: string]: any;
+};
+
+type PackageType = {
+  _id: string;
+  name: string;
+  sessionCount: number;
+  costPerSession: number;
+  totalCost: number;
+  createdAt?: string;
+  updatedAt?: string;
+  [key: string]: any;
+};
+
+type PatientType = {
+  _id: string;
+  userId: string;
+  patientId: string;
+  gender: string;
+  childDOB: string;
+  name: string;
+  fatherFullName?: string;
+  plannedSessionsPerMonth?: string;
+  package?: string;
+  motherFullName?: string;
+  parentEmail?: string;
+  mobile1?: string;
+  mobile1Verified?: boolean;
+  mobile2?: string;
+  address?: string;
+  areaName?: string;
+  diagnosisInfo?: string;
+  childReference?: string;
+  parentOccupation?: string;
+  remarks?: string;
+  otherDocument?: string;
+  [key: string]: any;
+};
+
+type TherapyType = {
+  _id: string;
+  name: string;
+  description?: string;
+  isActive?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+  [key: string]: any;
+};
+
+type PaymentType = {
+  _id: string;
+  paymentId: string;
+  totalAmount: number;
+  discountInfo: {
+    code: string | null;
+    percent: number;
+    amount: number;
+  };
+  amount: number;
+  status: string;
+  paymentMethod: string;
+  createdAt: string;
+  updatedAt: string;
+  __v?: number;
+  paymentTime?: string;
+  [key: string]: any;
+};
+
+type DiscountInfoType = {
+  coupon?: string;
+  time?: string;
+  [key: string]: any;
 };
 
 type AppointmentType = {
   _id: string;
   appointmentId?: string;
-  discountInfo?: any;
-  package?: {
-    _id: string;
-    name: string;
-    sessionCount: number;
-    costPerSession: number;
-    totalCost: number;
-  };
-  patient?: {
-    _id: string;
-    userId: string;
-    patientId: string;
-    gender: string;
-    childDOB: string;
-    name: string;
-    [key: string]: any;
-  };
+  discountInfo?: DiscountInfoType;
+  package?: PackageType;
+  patient?: PatientType;
+  therapist?: TherapistType;
   sessions: SessionType[];
-  therapy?: string;
+  therapy?: TherapyType | string;
+  payment?: PaymentType;
   createdAt: string;
   updatedAt: string;
   [key: string]: any;
 };
+
+const SESSION_TIME_OPTIONS = [
+  { id: '1000-1045', label: '10:00 to 10:45', limited: false },
+  { id: '1045-1130', label: '10:45 to 11:30', limited: false },
+  { id: '1130-1215', label: '11:30 to 12:15', limited: false },
+  { id: '1215-1300', label: '12:15 to 13:00', limited: false },
+  { id: '1300-1345', label: '13:00 to 13:45', limited: false },
+  { id: '1415-1500', label: '14:15 to 15:00', limited: false },
+  { id: '1500-1545', label: '15:00 to 15:45', limited: false },
+  { id: '1545-1630', label: '15:45 to 16:30', limited: false },
+  { id: '1630-1715', label: '16:30 to 17:15', limited: false },
+  { id: '1715-1800', label: '17:15 to 18:00', limited: false },
+  { id: '0830-0915', label: '08:30 to 09:15', limited: true },
+  { id: '0915-1000', label: '09:15 to 10:00', limited: true },
+  { id: '1800-1845', label: '18:00 to 18:45', limited: true },
+  { id: '1845-1930', label: '18:45 to 19:30', limited: true },
+  { id: '1930-2015', label: '19:30 to 20:15', limited: true }
+];
 
 // Helper to format date
 function formatDate(date?: string) {
@@ -45,6 +136,17 @@ function formatDate(date?: string) {
   const d = new Date(date);
   if (isNaN(d.getTime())) return "-";
   return dayjs(d).format("DD MMM YYYY");
+}
+
+function formatDateTime(dateString?: string) {
+  if (!dateString) return "-";
+  return dayjs(dateString).format("DD MMM YYYY HH:mm");
+}
+
+function displayTherapistName(therapist: TherapistType | undefined) {
+  if (!therapist) return "-";
+  if (typeof therapist.userId === "string") return therapist.userId;
+  return therapist.userId.name;
 }
 
 export default function MyChildrenAppointmentsPage() {
@@ -56,12 +158,18 @@ export default function MyChildrenAppointmentsPage() {
 
   useEffect(() => {
     setLoading(true);
-    fetch(`${API_BASE_URL}/api/parent/appointments`)
+    const patientToken = localStorage.getItem('patient-token');
+    fetch(`${API_BASE_URL}/api/parent/appointments`, {
+      headers: {
+        ...(patientToken ? { Authorization: `${patientToken}` } : {}),
+      },
+    })
       .then(async (res) => {
         if (!res.ok) throw new Error(await res.text());
         const raw = await res.json();
         if (raw && raw.success && Array.isArray(raw.data)) {
           setAppointments(raw.data);
+          console.log(raw?.data);
         } else {
           setAppointments([]);
           window.alert("Failed to fetch appointments.");
@@ -72,6 +180,7 @@ export default function MyChildrenAppointmentsPage() {
       })
       .finally(() => setLoading(false));
   }, []);
+
 
   return (
     <motion.div
@@ -140,7 +249,9 @@ export default function MyChildrenAppointmentsPage() {
                     )}
                   </td>
                   <td className="px-4 py-4">
-                    {a.therapy ?? <span className="italic text-slate-400">N/A</span>}
+                    {typeof a.therapy === "object"
+                      ? (a.therapy as TherapyType)?.name
+                      : a.therapy || <span className="italic text-slate-400">N/A</span>}
                   </td>
                   <td className="px-4 py-4">
                     {a.package?.name ?? <span className="italic text-slate-400">N/A</span>}
@@ -149,7 +260,7 @@ export default function MyChildrenAppointmentsPage() {
                     {formatDate(a.createdAt)}
                   </td>
                   <td className="px-4 py-4 text-center font-semibold">
-                    {a.sessions?.length ?? 0}
+                    {Array.isArray(a.sessions) ? a.sessions.length : 0}
                   </td>
                   <td className="px-4 py-4">
                     <button
@@ -167,9 +278,9 @@ export default function MyChildrenAppointmentsPage() {
         </div>
       )}
 
-      {/* Detail Modal - design matched to patient edit modal */}
+      {/* Detail Modal - show every detail of each appointment */}
       {viewAppointment && (
-        <div className="fixed z-50 inset-0  bg-black/40 z-30 flex items-center justify-center">
+        <div className="fixed z-50 inset-0 bg-black/40 flex items-center justify-center">
           <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto relative animate-[fadeIn_0.15s]">
             <button
               className="absolute top-3 right-4 text-xl text-slate-500 hover:text-red-500"
@@ -180,6 +291,7 @@ export default function MyChildrenAppointmentsPage() {
             <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
               <FiCalendar className="inline text-blue-500" /> Appointment Details
             </h2>
+
             <div className="mb-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block mb-1 text-sm font-medium text-slate-700">Appointment ID</label>
@@ -194,31 +306,11 @@ export default function MyChildrenAppointmentsPage() {
                 />
               </div>
               <div>
-                <label className="block mb-1 text-sm font-medium text-slate-700">Package</label>
-                <input
-                  type="text"
-                  className="w-full border rounded px-3 py-2 bg-gray-100"
-                  value={viewAppointment.package?.name ?? ""}
-                  readOnly
-                  disabled
-                />
-              </div>
-              <div>
-                <label className="block mb-1 text-sm font-medium text-slate-700">Therapy</label>
-                <input
-                  type="text"
-                  className="w-full border rounded px-3 py-2 bg-gray-100"
-                  value={viewAppointment.therapy ?? ""}
-                  readOnly
-                  disabled
-                />
-              </div>
-              <div>
                 <label className="block mb-1 text-sm font-medium text-slate-700">Created At</label>
                 <input
                   type="text"
                   className="w-full border rounded px-3 py-2 bg-gray-100"
-                  value={formatDate(viewAppointment.createdAt)}
+                  value={formatDateTime(viewAppointment.createdAt)}
                   readOnly
                   disabled
                 />
@@ -228,13 +320,34 @@ export default function MyChildrenAppointmentsPage() {
                 <input
                   type="text"
                   className="w-full border rounded px-3 py-2 bg-gray-100"
-                  value={formatDate(viewAppointment.updatedAt)}
+                  value={formatDateTime(viewAppointment.updatedAt)}
+                  readOnly
+                  disabled
+                />
+              </div>
+              {/* Discount Info */}
+              <div>
+                <label className="block mb-1 text-sm font-medium text-slate-700">Discount Coupon</label>
+                <input
+                  type="text"
+                  className="w-full border rounded px-3 py-2 bg-gray-100"
+                  value={viewAppointment.discountInfo?.coupon ?? ""}
+                  readOnly
+                  disabled
+                />
+              </div>
+              <div>
+                <label className="block mb-1 text-sm font-medium text-slate-700">Discount Time</label>
+                <input
+                  type="text"
+                  className="w-full border rounded px-3 py-2 bg-gray-100"
+                  value={formatDateTime(viewAppointment.discountInfo?.time)}
                   readOnly
                   disabled
                 />
               </div>
             </div>
-            {/* Child Info */}
+            
             <h3 className="font-semibold mb-2 mt-6 text-blue-900">Child Info</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
@@ -277,77 +390,408 @@ export default function MyChildrenAppointmentsPage() {
                   disabled
                 />
               </div>
+              <div>
+                <label className="block mb-1 text-sm font-medium">Father Name</label>
+                <input
+                  type="text"
+                  className="w-full border rounded px-3 py-2 bg-gray-100"
+                  value={viewAppointment.patient?.fatherFullName ?? ""}
+                  readOnly
+                  disabled
+                />
+              </div>
+              <div>
+                <label className="block mb-1 text-sm font-medium">Mother Name</label>
+                <input
+                  type="text"
+                  className="w-full border rounded px-3 py-2 bg-gray-100"
+                  value={viewAppointment.patient?.motherFullName ?? ""}
+                  readOnly
+                  disabled
+                />
+              </div>
+              <div>
+                <label className="block mb-1 text-sm font-medium">Parent Email</label>
+                <input
+                  type="text"
+                  className="w-full border rounded px-3 py-2 bg-gray-100"
+                  value={viewAppointment.patient?.parentEmail ?? ""}
+                  readOnly
+                  disabled
+                />
+              </div>
+              <div>
+                <label className="block mb-1 text-sm font-medium">Mobile 1</label>
+                <input
+                  type="text"
+                  className="w-full border rounded px-3 py-2 bg-gray-100"
+                  value={viewAppointment.patient?.mobile1 ?? ""}
+                  readOnly
+                  disabled
+                />
+              </div>
+              <div>
+                <label className="block mb-1 text-sm font-medium">Mobile 2</label>
+                <input
+                  type="text"
+                  className="w-full border rounded px-3 py-2 bg-gray-100"
+                  value={viewAppointment.patient?.mobile2 ?? ""}
+                  readOnly
+                  disabled
+                />
+              </div>
+              <div>
+                <label className="block mb-1 text-sm font-medium">Address</label>
+                <input
+                  type="text"
+                  className="w-full border rounded px-3 py-2 bg-gray-100"
+                  value={viewAppointment.patient?.address ?? ""}
+                  readOnly
+                  disabled
+                />
+              </div>
+              <div>
+                <label className="block mb-1 text-sm font-medium">Area Name</label>
+                <input
+                  type="text"
+                  className="w-full border rounded px-3 py-2 bg-gray-100"
+                  value={viewAppointment.patient?.areaName ?? ""}
+                  readOnly
+                  disabled
+                />
+              </div>
+              <div>
+                <label className="block mb-1 text-sm font-medium">Diagnosis Info</label>
+                <input
+                  type="text"
+                  className="w-full border rounded px-3 py-2 bg-gray-100"
+                  value={viewAppointment.patient?.diagnosisInfo ?? ""}
+                  readOnly
+                  disabled
+                />
+              </div>
+              <div>
+                <label className="block mb-1 text-sm font-medium">Reference</label>
+                <input
+                  type="text"
+                  className="w-full border rounded px-3 py-2 bg-gray-100"
+                  value={viewAppointment.patient?.childReference ?? ""}
+                  readOnly
+                  disabled
+                />
+              </div>
+              <div>
+                <label className="block mb-1 text-sm font-medium">Parent Occupation</label>
+                <input
+                  type="text"
+                  className="w-full border rounded px-3 py-2 bg-gray-100"
+                  value={viewAppointment.patient?.parentOccupation ?? ""}
+                  readOnly
+                  disabled
+                />
+              </div>
             </div>
-            {viewAppointment.package && (
-              <>
-                <h3 className="font-semibold mb-2 mt-6 text-blue-900">Package Info</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-2">
+
+            {/* Therapy Info */}
+            <h3 className="font-semibold mb-2 mt-6 text-blue-900">Therapy Info</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-2">
+              <div>
+                <label className="block mb-1 text-sm font-medium">Therapy</label>
+                <input
+                  type="text"
+                  className="w-full border rounded px-3 py-2 bg-gray-100"
+                  value={typeof viewAppointment.therapy === "object"
+                    ? (viewAppointment.therapy as TherapyType)?.name
+                    : viewAppointment.therapy ?? ""}
+                  readOnly
+                  disabled
+                />
+              </div>
+              {typeof viewAppointment.therapy === "object" && (
+                <>
                   <div>
-                    <label className="block mb-1 text-sm font-medium">Sessions</label>
+                    <label className="block mb-1 text-sm font-medium">Description</label>
                     <input
                       type="text"
                       className="w-full border rounded px-3 py-2 bg-gray-100"
-                      value={viewAppointment.package?.sessionCount}
+                      value={
+                        (viewAppointment.therapy as TherapyType)?.description ?? ""
+                      }
                       readOnly
                       disabled
                     />
                   </div>
                   <div>
-                    <label className="block mb-1 text-sm font-medium">Cost/Session</label>
+                    <label className="block mb-1 text-sm font-medium">Is Active</label>
                     <input
                       type="text"
                       className="w-full border rounded px-3 py-2 bg-gray-100"
-                      value={viewAppointment.package?.costPerSession}
+                      value={(viewAppointment.therapy as TherapyType)?.isActive ? "Yes" : "No"}
                       readOnly
                       disabled
                     />
                   </div>
-                  <div>
-                    <label className="block mb-1 text-sm font-medium">Total Cost</label>
-                    <input
-                      type="text"
-                      className="w-full border rounded px-3 py-2 bg-gray-100"
-                      value={viewAppointment.package?.totalCost}
-                      readOnly
-                      disabled
-                    />
-                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Therapist Info (if present) */}
+            <h3 className="font-semibold mb-2 mt-6 text-blue-900">Therapist Info</h3>
+            {(viewAppointment.therapist || (viewAppointment.sessions || []).some(s => s.therapist)) ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-2">
+                <div>
+                  <label className="block mb-1 text-sm font-medium">Therapist Name</label>
+                  <input
+                    type="text"
+                    className="w-full border rounded px-3 py-2 bg-gray-100"
+                    value={displayTherapistName(
+                      // Prefer main therapist, otherwise pick therapist of first session that has therapist
+                      viewAppointment.therapist ||
+                        ((viewAppointment.sessions || []).find(s => s.therapist)?.therapist)
+                    )}
+                    readOnly
+                    disabled
+                  />
                 </div>
-              </>
+                <div>
+                  <label className="block mb-1 text-sm font-medium">Therapist ID</label>
+                  <input
+                    type="text"
+                    className="w-full border rounded px-3 py-2 bg-gray-100"
+                    value={
+                      viewAppointment.therapist?.therapistId ||
+                      ((viewAppointment.sessions || []).find(s => s.therapist)?.therapist?.therapistId) ||
+                      ""
+                    }
+                    readOnly
+                    disabled
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="mb-2 text-slate-400 text-sm">No therapist data available</div>
             )}
 
+            {/* Package Info */}
+            <h3 className="font-semibold mb-2 mt-6 text-blue-900">Package Info</h3>
+            {viewAppointment.package ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-2">
+                <div>
+                  <label className="block mb-1 text-sm font-medium">Package Name</label>
+                  <input
+                    type="text"
+                    className="w-full border rounded px-3 py-2 bg-gray-100"
+                    value={viewAppointment.package?.name}
+                    readOnly
+                    disabled
+                  />
+                </div>
+                <div>
+                  <label className="block mb-1 text-sm font-medium">Sessions</label>
+                  <input
+                    type="text"
+                    className="w-full border rounded px-3 py-2 bg-gray-100"
+                    value={viewAppointment.package?.sessionCount}
+                    readOnly
+                    disabled
+                  />
+                </div>
+                <div>
+                  <label className="block mb-1 text-sm font-medium">Cost/Session</label>
+                  <input
+                    type="text"
+                    className="w-full border rounded px-3 py-2 bg-gray-100"
+                    value={viewAppointment.package?.costPerSession}
+                    readOnly
+                    disabled
+                  />
+                </div>
+                <div>
+                  <label className="block mb-1 text-sm font-medium">Total Cost</label>
+                  <input
+                    type="text"
+                    className="w-full border rounded px-3 py-2 bg-gray-100"
+                    value={viewAppointment.package?.totalCost}
+                    readOnly
+                    disabled
+                  />
+                </div>
+                <div>
+                  <label className="block mb-1 text-sm font-medium">Package Created</label>
+                  <input
+                    type="text"
+                    className="w-full border rounded px-3 py-2 bg-gray-100"
+                    value={formatDateTime(viewAppointment.package?.createdAt)}
+                    readOnly
+                    disabled
+                  />
+                </div>
+                <div>
+                  <label className="block mb-1 text-sm font-medium">Package Updated</label>
+                  <input
+                    type="text"
+                    className="w-full border rounded px-3 py-2 bg-gray-100"
+                    value={formatDateTime(viewAppointment.package?.updatedAt)}
+                    readOnly
+                    disabled
+                  />
+                </div>
+              </div>
+            ) : <div className="mb-2 text-slate-400 text-sm">No package data</div>}
+
+            {/* Payment Info */}
+            <h3 className="font-semibold mb-2 mt-6 text-blue-900">Payment Info</h3>
+            {viewAppointment.payment ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-2">
+                <div>
+                  <label className="block mb-1 text-sm font-medium">Payment ID</label>
+                  <input
+                    type="text"
+                    className="w-full border rounded px-3 py-2 bg-gray-100"
+                    value={viewAppointment.payment.paymentId}
+                    readOnly
+                    disabled
+                  />
+                </div>
+                <div>
+                  <label className="block mb-1 text-sm font-medium">Status</label>
+                  <input
+                    type="text"
+                    className="w-full border rounded px-3 py-2 bg-gray-100"
+                    value={viewAppointment.payment.status}
+                    readOnly
+                    disabled
+                  />
+                </div>
+                <div>
+                  <label className="block mb-1 text-sm font-medium">Amount</label>
+                  <input
+                    type="text"
+                    className="w-full border rounded px-3 py-2 bg-gray-100"
+                    value={viewAppointment.payment.amount}
+                    readOnly
+                    disabled
+                  />
+                </div>
+                <div>
+                  <label className="block mb-1 text-sm font-medium">Total Amount</label>
+                  <input
+                    type="text"
+                    className="w-full border rounded px-3 py-2 bg-gray-100"
+                    value={viewAppointment.payment.totalAmount}
+                    readOnly
+                    disabled
+                  />
+                </div>
+                <div>
+                  <label className="block mb-1 text-sm font-medium">Payment Method</label>
+                  <input
+                    type="text"
+                    className="w-full border rounded px-3 py-2 bg-gray-100"
+                    value={viewAppointment.payment.paymentMethod}
+                    readOnly
+                    disabled
+                  />
+                </div>
+                <div>
+                  <label className="block mb-1 text-sm font-medium">Payment Time</label>
+                  <input
+                    type="text"
+                    className="w-full border rounded px-3 py-2 bg-gray-100"
+                    value={formatDateTime(viewAppointment.payment.paymentTime)}
+                    readOnly
+                    disabled
+                  />
+                </div>
+                {/* Discount info inside payment */}
+                <div>
+                  <label className="block mb-1 text-sm font-medium">Discount Code</label>
+                  <input
+                    type="text"
+                    className="w-full border rounded px-3 py-2 bg-gray-100"
+                    value={viewAppointment.payment.discountInfo?.code ?? ""}
+                    readOnly
+                    disabled
+                  />
+                </div>
+                <div>
+                  <label className="block mb-1 text-sm font-medium">Discount %</label>
+                  <input
+                    type="text"
+                    className="w-full border rounded px-3 py-2 bg-gray-100"
+                    value={viewAppointment.payment.discountInfo?.percent ?? ""}
+                    readOnly
+                    disabled
+                  />
+                </div>
+                <div>
+                  <label className="block mb-1 text-sm font-medium">Discount Amount</label>
+                  <input
+                    type="text"
+                    className="w-full border rounded px-3 py-2 bg-gray-100"
+                    value={viewAppointment.payment.discountInfo?.amount ?? ""}
+                    readOnly
+                    disabled
+                  />
+                </div>
+                <div>
+                  <label className="block mb-1 text-sm font-medium">Payment Created</label>
+                  <input
+                    type="text"
+                    className="w-full border rounded px-3 py-2 bg-gray-100"
+                    value={formatDateTime(viewAppointment.payment.createdAt)}
+                    readOnly
+                    disabled
+                  />
+                </div>
+                <div>
+                  <label className="block mb-1 text-sm font-medium">Payment Updated</label>
+                  <input
+                    type="text"
+                    className="w-full border rounded px-3 py-2 bg-gray-100"
+                    value={formatDateTime(viewAppointment.payment.updatedAt)}
+                    readOnly
+                    disabled
+                  />
+                </div>
+              </div>
+            ) : <div className="mb-2 text-slate-400 text-sm">No payment data</div>}
+
+            {/* SESSIONS */}
             <h3 className="font-semibold mb-2 mt-6 text-blue-900">Sessions</h3>
             <div className="overflow-x-auto">
               <table className="w-full text-xs border mb-2">
                 <thead className="bg-slate-50 border-b">
                   <tr>
                     <th className="px-3 py-2 text-left">Date</th>
-                    <th className="px-3 py-2 text-left">Time</th>
-                    <th className="px-3 py-2 text-left">Status</th>
-                    <th className="px-3 py-2 text-left">Notes</th>
+                    <th className="px-3 py-2 text-left">Slot</th>
+                    <th className="px-3 py-2 text-left">Therapist</th>
                   </tr>
                 </thead>
                 <tbody>
                   {(Array.isArray(viewAppointment.sessions) && viewAppointment.sessions.length > 0) ? (
                     viewAppointment.sessions.map((s, idx) => (
-                      <tr key={idx} className="border-t">
+                      <tr key={s._id || idx} className="border-t">
                         <td className="px-3 py-2">{s.date ? dayjs(s.date).format("YYYY-MM-DD") : "-"}</td>
-                        <td className="px-3 py-2">{s.time || (s.date ? dayjs(s.date).format("HH:mm") : "--")}</td>
                         <td className="px-3 py-2">
-                          {s.status === "Completed" ? (
-                            <span className="inline-block px-2 py-1 rounded bg-green-50 text-green-700 font-semibold">{s.status}</span>
-                          ) : s.status === "Cancelled" ? (
-                            <span className="inline-block px-2 py-1 rounded bg-red-50 text-red-700 font-semibold">{s.status}</span>
-                          ) : (
-                            <span className="inline-block px-2 py-1 rounded bg-blue-50 text-blue-700 font-semibold">{s.status || "Scheduled"}</span>
-                          )}
+                          {SESSION_TIME_OPTIONS.find(opt => opt.id === s.slotId)?.label || s.slotId || "--"}
                         </td>
-                        <td className="px-3 py-2">{s.notes || "-"}</td>
+                     
+                        <td className="px-3 py-2">
+                          {s.therapist ? (
+                            <>
+                              {displayTherapistName(s.therapist)}
+                              {s.therapist.therapistId ? (
+                                <span className="ml-1 text-xs text-blue-800 font-mono">[{s.therapist.therapistId}]</span>
+                              ) : null}
+                            </>
+                          ) : "-"}
+                        </td>
                       </tr>
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={4} className="px-3 py-5 text-center text-slate-400">No session data</td>
+                      <td colSpan={5} className="px-3 py-5 text-center text-slate-400">No session data</td>
                     </tr>
                   )}
                 </tbody>

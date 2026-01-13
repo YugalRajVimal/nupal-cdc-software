@@ -20,7 +20,7 @@ import FormElements from "./pages/SuperAdminPages/Forms/FormElements";
 import Blank from "./pages/SuperAdminPages/Blank";
 import AppLayout from "./layout/AppLayout";
 import { ScrollToTop } from "./components/common/ScrollToTop";
-import Home from "./pages/SuperAdminPages/Dashboard/Home";
+// import Home from "./pages/SuperAdminPages/Dashboard/Home";
 // import SubAdminSignIn from "./pages/SuperAdminPages/AuthPages/SubAdmin/SignIn";
 
 import SubAdminAppLayout from "./layout/Admin/AppLayout";
@@ -67,6 +67,9 @@ import AllAppointments from "./pages/SuperAdminPages/AllAppointments/AllAppointm
 import RequestAppointment from "./pages/ParentPages/RequestAppointment/RequestAppointment";
 import BookingRequests from "./pages/AdminPages/BookingRequest/BookingRequests";
 import AppointmentBookingSystemNew from "./pages/AdminPages/AppointmentBookingSystem/AppointmentBookingSystemNew";
+import RequestEditAppointments from "./pages/ParentPages/RequestEditInAppointments/RequestEditInAppointments";
+import SessionEditRequestsAdmin from "./pages/AdminPages/SessionEditRequests/SessionEditRequests";
+import InvoiveAndPaymentsPage from "./pages/ParentPages/InvoiveAndPaymentsPage/InvoiceAndPaymentsPage";
 
 
 export default function App() {
@@ -102,10 +105,10 @@ export default function App() {
               8. Audit Logs -> /super-admin/audit-logs
               (Admin custom routes below these, as before...)
             */}
-            <Route index path="/super-admin" element={<Home />} />
+            <Route index path="/super-admin" element={<SubAdminHome />} />
             <Route path="/super-admin/all-users" element={<AllUsers />} />
             <Route path="/super-admin/all-appointments" element={<AllAppointments />} />
-            <Route path="/super-admin/finances" element={<div>Finances</div>} />
+            <Route path="/super-admin/finances" element={<FinancesPage/>} />
             <Route path="/super-admin/onboard-sub-admin" element={<OnboardSubAdmin />} />
             <Route path="/super-admin/therapy-types" element={<TherapyTypesPage />} />
             <Route path="/super-admin/packages" element={<PackagesPage />} />
@@ -145,6 +148,8 @@ export default function App() {
 
             <Route path="/admin/bookings" element={<AppointmentBookingSystemNew/>} />
             <Route path="/admin/booking-requests" element={<BookingRequests/>} />
+            <Route path="/admin/session-edit-requests" element={<SessionEditRequestsAdmin/>} />
+
 
             <Route path="/admin/therapists" element={<TherapistsPage/>} />
             <Route path="/admin/children" element={<PatientsPage/>} />
@@ -171,9 +176,11 @@ export default function App() {
             <Route index path="/parent" element={<ParentDashboard />} />
             <Route path="/parent/children" element={<MyChildrens />} />
             <Route path="/parent/appointments" element={<MyChildrenAppointmentsPage  />} />
-            <Route path="/parent/invoices-payments" element={<div>Invoices & Payments Page</div>} />
+            <Route path="/parent/invoices-payments" element={<InvoiveAndPaymentsPage/>} />
             <Route path="/parent/profile" element={<ParentProfile />} />
             <Route path="/parent/request-appointment" element={<RequestAppointment />} />
+            <Route path="/parent/request-edit-appointment" element={<RequestEditAppointments />} />
+
 
           </Route>       
 

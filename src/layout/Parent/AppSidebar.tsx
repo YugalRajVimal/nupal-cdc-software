@@ -39,6 +39,11 @@ const navItems: NavItem[] = [
   },
   {
     icon: <FileIcon />,
+    name: "Request Edit in Appointment",
+    path: "/parent/request-edit-appointment",
+  },
+  {
+    icon: <FileIcon />,
     name: "My Appointments",
     path: "/parent/appointments",
   },
@@ -301,16 +306,21 @@ const ParentAppSidebar: React.FC = () => {
         <Link to="/">
           {isExpanded || isHovered || isMobileOpen ? (
             <>
-              <span className="text-3xl font-bold">Parent Dashboard</span>
+             <img
+              src="/logo.webp"
+              alt="Logo"
+            className="w-full"
+            />
+              {/* <span className="text-3xl font-bold">ADMIN</span> */}
             </>
           ) : (
-            // <img
-            //   src="/images/logo/logo-icon.svg"
-            //   alt="Logo"
-            //   width={32}
-            //   height={32}
-            // />
-            <span className="text-xl font-bold">Parent Dashboard</span>
+            <img
+              src="/logo.webp"
+              alt="Logo"
+              className="w-full"
+
+            />
+            // <span className="text-xl font-bold">ADMIN</span>
           )}
         </Link>
       </div>

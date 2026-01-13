@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { FiUser, FiPhone, FiUsers, FiGift, FiMail, FiMapPin, FiInfo, FiHash } from "react-icons/fi";
+import { FiUser, FiPhone, FiUsers, FiMail, FiMapPin, FiInfo, FiHash } from "react-icons/fi";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "";
 
@@ -18,7 +18,6 @@ type ChildType = {
   address?: string;
   areaName?: string;
   diagnosisInfo?: string;
-  package?: string;
   plannedSessionsPerMonth?: string;
   remarks?: string;
   // Add more fields if any based on backend
@@ -37,7 +36,10 @@ const MyChildrens: React.FC = () => {
 
   useEffect(() => {
     setLoading(true);
-    fetch(`${API_BASE_URL}/api/parent/childrens`)
+    const token = localStorage.getItem('patient-token');
+    fetch(`${API_BASE_URL}/api/parent/childrens`, {
+      headers: token ? { Authorization: token } : {},
+    })
       .then(async (res) => {
         if (!res.ok) throw new Error(await res.text());
         return res.json();
@@ -48,6 +50,7 @@ const MyChildrens: React.FC = () => {
       .catch(() => setChildren([]))
       .finally(() => setLoading(false));
   }, []);
+
 
   return (
     <motion.div
@@ -76,7 +79,6 @@ const MyChildrens: React.FC = () => {
                 <th className="px-4 py-3 text-left">DOB</th>
                 <th className="px-4 py-3 text-left"><div className="flex items-center gap-1"><FiUsers /> Parents</div></th>
                 <th className="px-4 py-3 text-left"><div className="flex items-center gap-1"><FiPhone /> Mobile</div></th>
-                <th className="px-4 py-3 text-left"><div className="flex items-center gap-1"><FiGift /> Package</div></th>
                 <th className="px-4 py-3 text-left"><div className="flex items-center gap-1"><FiMail /> Email</div></th>
                 <th className="px-4 py-3 text-left"><div className="flex items-center gap-1"><FiMapPin /> Address</div></th>
                 <th className="px-4 py-3 text-left">Diagnosis/Concern</th>
@@ -130,10 +132,7 @@ const MyChildrens: React.FC = () => {
                     <FiPhone />
                     {child.mobile1 || child.mobile2 || <span className="italic text-slate-400">N/A</span>}
                   </td>
-                  {/* Package */}
-                  <td className="px-4 py-4 text-slate-600">
-                    {child.package || <span className="italic text-slate-400">N/A</span>}
-                  </td>
+              
                   {/* Email */}
                   <td className="px-4 py-4 text-slate-600">
                     {child.parentEmail ? (
