@@ -88,7 +88,7 @@ export default function InvoiveAndPaymentsPage() {
             }
             className="flex items-center gap-2 px-3 py-2 border rounded text-sm text-slate-700 hover:bg-slate-100 transition"
           >
-            <FiDownload /> Download CSV
+            <FiDownload /> Download Excel
           </button>
         ) : null}
       </div>

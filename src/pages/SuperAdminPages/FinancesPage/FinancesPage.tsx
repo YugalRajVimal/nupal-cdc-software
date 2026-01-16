@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import {  FiArrowUpCircle, FiDownload } from "react-icons/fi";
+import { FiDollarSign, FiArrowDownCircle, FiArrowUpCircle, FiDownload } from "react-icons/fi";
 import axios from "axios";
 // @ts-ignore
 import * as XLSX from "xlsx";
@@ -43,7 +43,7 @@ function downloadExcel(filename: string, rows: FinanceLog[]) {
   XLSX.writeFile(workbook, filename);
 }
 
-export default function FinancesPage() {
+export default function FinancesSuperAdminPage() {
   const [financeData, setFinanceData] = useState<FinanceDetailsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -52,7 +52,7 @@ export default function FinancesPage() {
     setLoading(true);
     const baseUrl = import.meta.env.VITE_API_URL || "";
     axios
-      .get(`${baseUrl}/api/admin/finance/details`)
+      .get(`${baseUrl}/api/super-admin/finance/details`)
       .then((response) => {
         setFinanceData(response.data);
         setLoading(false);
@@ -95,7 +95,7 @@ export default function FinancesPage() {
 
       {!loading && !error && financeData && (
         <>
-          <div className="grid grid-cols-1  gap-6 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
             <div className="bg-white border rounded-lg p-6">
               <div className="flex items-center justify-between text-sm text-slate-500">
                 <span>Total Income</span>
@@ -105,7 +105,7 @@ export default function FinancesPage() {
                 ₹{Number(financeData.totalIncome ?? 0).toLocaleString("en-IN")}
               </p>
             </div>
-            {/* <div className="bg-white border rounded-lg p-6">
+            <div className="bg-white border rounded-lg p-6">
               <div className="flex items-center justify-between text-sm text-slate-500">
                 <span>Total Expenses</span>
                 <FiArrowDownCircle className="text-red-500" />
@@ -113,8 +113,8 @@ export default function FinancesPage() {
               <p className="text-2xl font-bold text-red-500">
                 ₹{Number(financeData.totalExpenses ?? 0).toLocaleString("en-IN")}
               </p>
-            </div> */}
-            {/* <div className="bg-white border rounded-lg p-6">
+            </div>
+            <div className="bg-white border rounded-lg p-6">
               <div className="flex items-center justify-between text-sm text-slate-500">
                 <span>Net Balance</span>
                 <FiDollarSign className="text-blue-600" />
@@ -122,7 +122,7 @@ export default function FinancesPage() {
               <p className="text-2xl font-bold text-slate-800">
                 ₹{Number(financeData.netBalance ?? 0).toLocaleString("en-IN")}
               </p>
-            </div> */}
+            </div>
           </div>
 
           <div className="bg-white border rounded-lg overflow-hidden">

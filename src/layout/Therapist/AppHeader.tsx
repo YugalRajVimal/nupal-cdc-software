@@ -2,10 +2,6 @@ import { useEffect, useRef, useState } from "react";
 
 import { Link } from "react-router";
 import { useSidebar } from "../../context/SidebarContext";
-import { ThemeToggleButton } from "../../components/common/ThemeToggleButton";
-
-import SupervisorUserDropdown from "../../components/header/TherapistComponents/header/UserDropdown";
-import SupervisorNotificationDropdown from "../../components/header/TherapistComponents/header/NotificationDropdown";
 
 const SupervisorAppHeader: React.FC = () => {
   const [isApplicationMenuOpen, setApplicationMenuOpen] = useState(false);
@@ -108,7 +104,7 @@ const SupervisorAppHeader: React.FC = () => {
             </svg>
           </button>
 
-          <div className="hidden lg:block">
+          {/* <div className="hidden lg:block">
             <form>
               <div className="relative">
                 <span className="absolute -translate-y-1/2 pointer-events-none left-4 top-1/2">
@@ -141,7 +137,7 @@ const SupervisorAppHeader: React.FC = () => {
                 </button>
               </div>
             </form>
-          </div>
+          </div> */}
         </div>
         <div
           className={`${
@@ -150,13 +146,13 @@ const SupervisorAppHeader: React.FC = () => {
         >
           <div className="flex items-center gap-2 2xsm:gap-3">
             {/* <!-- Dark Mode Toggler --> */}
-            <ThemeToggleButton />
+            {/* <ThemeToggleButton /> */}
             {/* <!-- Dark Mode Toggler --> */}
-            <SupervisorNotificationDropdown />
+            {/* <SupervisorNotificationDropdown /> */}
             {/* <!-- Notification Menu Area --> */}
           </div>
           {/* <!-- User Area --> */}
-          <SupervisorUserDropdown />
+          {/* <SupervisorUserDropdown /> */}
         </div>
       </div>
     </header>

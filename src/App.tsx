@@ -24,7 +24,6 @@ import { ScrollToTop } from "./components/common/ScrollToTop";
 // import SubAdminSignIn from "./pages/SuperAdminPages/AuthPages/SubAdmin/SignIn";
 
 import SubAdminAppLayout from "./layout/Admin/AppLayout";
-import SubAdminProfiles from "./pages/AdminPages/UserProfiles";
 
 // import UploadedExcelSheets from "./pages/SubAdminPages/UploadedExcelSheets/UploadedExcelSheets";
 
@@ -70,6 +69,14 @@ import AppointmentBookingSystemNew from "./pages/AdminPages/AppointmentBookingSy
 import RequestEditAppointments from "./pages/ParentPages/RequestEditInAppointments/RequestEditInAppointments";
 import SessionEditRequestsAdmin from "./pages/AdminPages/SessionEditRequests/SessionEditRequests";
 import InvoiveAndPaymentsPage from "./pages/ParentPages/InvoiveAndPaymentsPage/InvoiceAndPaymentsPage";
+import FinancesSuperAdminPage from "./pages/SuperAdminPages/FinancesPage/FinancesPage";
+import ManageHolidays from "./pages/AdminPages/ManageHolidays/ManageHolidays";
+import AdminProfile from "./pages/AdminPages/ProfilePage/AdminProfile";
+import LogOutAdmin from "./pages/AdminPages/LogOutAdmin";
+import LogOutParent from "./pages/ParentPages/LogOutParent";
+import LogOutTherapist from "./pages/TherapistPages/LogOutTherapist";
+import MyEarningsTherapist from "./pages/TherapistPages/MyEarnings/MyEarnings";
+import FullCalendar from "./pages/AdminPages/FullCalendar/FullCalendar";
 
 
 export default function App() {
@@ -108,12 +115,18 @@ export default function App() {
             <Route index path="/super-admin" element={<SubAdminHome />} />
             <Route path="/super-admin/all-users" element={<AllUsers />} />
             <Route path="/super-admin/all-appointments" element={<AllAppointments />} />
-            <Route path="/super-admin/finances" element={<FinancesPage/>} />
+            {/* <Route path="/super-admin/finances" element={<FinancesPage/>} /> */}
             <Route path="/super-admin/onboard-sub-admin" element={<OnboardSubAdmin />} />
             <Route path="/super-admin/therapy-types" element={<TherapyTypesPage />} />
             <Route path="/super-admin/packages" element={<PackagesPage />} />
             <Route path="/super-admin/discount-coupons" element={<ManageDiscounts />} />
             <Route path="/super-admin/audit-logs" element={<h1>Audit Logs</h1>} />
+            <Route path="/super-admin/finances" element={<FinancesSuperAdminPage/>} />
+            <Route path="/super-admin/full-calendar" element={<FullCalendar/>} />
+            <Route path="/super-admin/therapists" element={<TherapistsPage/>} />
+            <Route path="/super-admin/children" element={<PatientsPage/>} />
+
+
             {/* Others Page */}
             <Route path="/super-admin/profile" element={<UserProfiles />} />
             <Route path="/calendar" element={<Calendar />} />
@@ -154,22 +167,31 @@ export default function App() {
             <Route path="/admin/therapists" element={<TherapistsPage/>} />
             <Route path="/admin/children" element={<PatientsPage/>} />
             <Route path="/admin/finances" element={<FinancesPage/>} />
+
             {/* <Route path="/admin/therapy-types" element={<TherapyTypesPage />} />
             <Route path="/admin/packages" element={<PackagesPage />} />
             <Route path="/admin/discounts" element={<ManageDiscounts />} /> */}
 
             <Route path="/admin/manage-availability" element={<ManageAvailabilityPage />} />
+            <Route path="/admin/manage-holidays" element={<ManageHolidays />} />
+            <Route path="/admin/full-calendar" element={<FullCalendar/>} />
+
+
 
             {/* Others Page */}
-            <Route path="/admin/profile" element={<SubAdminProfiles />} />
+            <Route path="/admin/profile" element={<AdminProfile />} />
+            <Route path="/admin/logout" element={<LogOutAdmin />} />
           </Route>
 
           <Route element={<SupervisorAppLayout />}>
             <Route index path="/therapist" element={<SupervisorHome />} />
             <Route path="/therapist/appointments" element={<TherapistMyAppointments />} />
             <Route path="/therapist/calendar" element={<CalendarAndSchedule />} />
-            <Route path="/therapist/earnings" element={<div>My Earnings Page</div>} />
+            <Route path="/therapist/earnings" element={<MyEarningsTherapist/>} />
             <Route path="/therapist/profile" element={<TherpaistProfile />} />
+            <Route path="/therapist/earnings" element={<MyEarningsTherapist/>} />
+          <Route path="/therapist/logout" element={<LogOutTherapist/>} />
+
           </Route>
 
           <Route element={<ParentAppLayout />}>
@@ -180,6 +202,7 @@ export default function App() {
             <Route path="/parent/profile" element={<ParentProfile />} />
             <Route path="/parent/request-appointment" element={<RequestAppointment />} />
             <Route path="/parent/request-edit-appointment" element={<RequestEditAppointments />} />
+          <Route path="/parent/logout" element={<LogOutParent />} />
 
 
           </Route>       

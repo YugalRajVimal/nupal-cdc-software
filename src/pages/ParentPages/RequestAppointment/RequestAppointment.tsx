@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { motion } from "framer-motion";
 import {
   FiCalendar,
@@ -40,15 +40,15 @@ const SESSION_TIME_OPTIONS = [
 
 type Patient = {
   id: string;
-  patientId: string,
+  patientId: string;
   name: string;
   phoneNo?: string;
-  userId?: { name?: string; };
+  userId?: { name?: string };
   mobile1?: string;
   email?: string;
   [key: string]: any;
 };
-type Therapy = { _id: string; name: string; };
+type Therapy = { _id: string; name: string };
 type Package = {
   _id: string;
   name: string;
@@ -61,15 +61,15 @@ type Therapist = {
   _id: string;
   therapistId: string;
   name: string;
-  holidays?: Array<{ date: string; reason?: string; }>;
-  userId?: { name?: string; },
+  holidays?: Array<{ date: string; reason?: string }>;
+  userId?: { name?: string };
   mobile1?: string;
   [key: string]: any;
 };
 type BookingSession = { date: string; slotId: string; _id?: string };
 type Booking = {
   _id: string;
-  requestId?:string,
+  requestId?: string;
   appointmentId?: string;
   patient: Patient;
   therapy: Therapy;
@@ -88,8 +88,8 @@ type Booking = {
     };
     time?: string;
   };
-  // Additional: requestStatus for fetching booking requests, optional
   requestStatus?: string;
+  status?: string;
 };
 type Coupon = {
   _id: string;
@@ -99,24 +99,29 @@ type Coupon = {
   enabled?: boolean;
 };
 
-function pad2(n: number) { return n < 10 ? `0${n}` : `${n}`; }
+function pad2(n: number) {
+  return n < 10 ? `0${n}` : `${n}`;
+}
 function getDateKey(year: number, month: number, day: number): string {
   return `${year}-${pad2(month)}-${pad2(day)}`;
 }
-function getDaysInMonth(year: number, month: number) { return new Date(year, month + 1, 0).getDate(); }
-function getStartDay(year: number, month: number) { return new Date(year, month, 1).getDay(); }
+function getDaysInMonth(year: number, month: number) {
+  return new Date(year, month + 1, 0).getDate();
+}
+function getStartDay(year: number, month: number) {
+  return new Date(year, month, 1).getDay();
+}
 const API_BASE_URL = import.meta.env.VITE_API_URL as string;
 function getDayIndex(dayShort: string): number {
-  const idx = DAYS.findIndex(d => d === dayShort.toUpperCase());
+  const idx = DAYS.findIndex((d) => d === dayShort.toUpperCase());
   return idx >= 0 ? idx : 0;
 }
 
 export default function RequestAppointment() {
-  // State, mostly unchanged...
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState<boolean>(true);
   const today = new Date();
-  const [year, setYear] = useState(today.getFullYear());
-  const [month, setMonth] = useState(today.getMonth());
+  const [year, setYear] = useState<number>(today.getFullYear());
+  const [month, setMonth] = useState<number>(today.getMonth());
   const [patientId, setPatientId] = useState<string>("");
   const [therapyId, setTherapyId] = useState<string>("");
   const [packageId, setPackageId] = useState<string>("");
@@ -141,19 +146,36 @@ export default function RequestAppointment() {
 
   // New: Requested bookings (pending requests)
   const [requestedBookings, setRequestedBookings] = useState<Booking[]>([]);
-  const [requestsLoading, setRequestsLoading] = useState(false);
+  const [requestsLoading, setRequestsLoading] = useState<boolean>(false);
 
-  useEffect(()=>{
+  // Change month utility
+  const changeMonth = (direction: "prev" | "next") => {
+    if (direction === "prev") {
+      if (month === 0) {
+        setMonth(11);
+        setYear((y) => y - 1);
+      } else {
+        setMonth((m) => m - 1);
+      }
+    } else {
+      if (month === 11) {
+        setMonth(0);
+        setYear((y) => y + 1);
+      } else {
+        setMonth((m) => m + 1);
+      }
+    }
+  };
+
+  useEffect(() => {
     setBookings([]);
-  },[]);
+  }, []);
 
-  // Fetch master data (same as before)
   useEffect(() => {
     async function fetchMasterDataAndCoupons() {
       setDataLoading(true);
       setBookingError(null);
       try {
-        // Retrieve token from localStorage (assumes patient-token is stored there)
         const token = localStorage.getItem("patient-token");
         const res = await fetch(`${API_BASE_URL}/api/parent/request-appointment-homepage`, {
           headers: {
@@ -193,10 +215,12 @@ export default function RequestAppointment() {
         setPatients(processedPatients);
         setTherapies(json.therapyTypes || []);
         setPackages(json.packages || []);
-        // setTherapists(Array.isArray(json.therapists) ? json.therapists : []);
         setCoupons(Array.isArray(json.coupons) ? json.coupons : []);
       } catch {
-        setPatients([]); setTherapies([]); setPackages([]);  setCoupons([]);
+        setPatients([]);
+        setTherapies([]);
+        setPackages([]);
+        setCoupons([]);
         toast.error("Failed to load master data");
       }
       setDataLoading(false);
@@ -218,7 +242,7 @@ export default function RequestAppointment() {
           userId: {
             ...patient.userId,
             name: patient.name,
-          }
+          },
         };
       } else if (
         patient &&
@@ -229,14 +253,14 @@ export default function RequestAppointment() {
           ...patient,
           userId: {
             name: patient.name,
-          }
+          },
         };
       }
       let normalizedSessions = Array.isArray(b.sessions)
         ? b.sessions.map((s: any) => ({
-          ...s,
-          slotId: s.slotId ?? s.time ?? "",
-        }))
+            ...s,
+            slotId: s.slotId ?? s.time ?? "",
+          }))
         : [];
       if (b.discountInfo && typeof b.discountInfo === "object") {
         return {
@@ -251,37 +275,29 @@ export default function RequestAppointment() {
           requestStatus: b.requestStatus,
         };
       }
-      return { ...b, patient, sessions: normalizedSessions, appointmentId: b.appointmentId, requestStatus: b.requestStatus };
+      return {
+        ...b,
+        patient,
+        sessions: normalizedSessions,
+        appointmentId: b.appointmentId,
+        requestStatus: b.requestStatus,
+      };
     });
   }
 
-  // Normal bookings list (NOT requests)
-  // const fetchBookings = useCallback(async () => {
-  //   try {
-  //     const res = await fetch(`${API_BASE_URL}/api/parent/all-bookings`);
-  //     const json = await res.json();
-  //     let bookingsList: Booking[] =
-  //       Array.isArray(json.bookings) ? normalizeBookings(json.bookings) : [];
-  //     setBookings(bookingsList);
-  //   } catch {
-  //     setBookings([]);
-  //     toast.error("Failed to fetch bookings list.");
-  //   }
-  // }, []);
-
-  // Fetch ONLY booking requests (pending requests)
   const fetchRequestedBookings = useCallback(async () => {
     setRequestsLoading(true);
     try {
-      const patientToken = localStorage.getItem('patient-token');
+      const patientToken = localStorage.getItem("patient-token");
       const res = await fetch(`${API_BASE_URL}/api/parent/booking-requests`, {
         headers: {
-          ...(patientToken ? { 'Authorization': `${patientToken}` } : {}),
+          ...(patientToken ? { Authorization: `${patientToken}` } : {}),
         },
       });
       const json = await res.json();
-      let reqs: Booking[] =
-        Array.isArray(json.bookingRequests) ? normalizeBookings(json.bookingRequests) : [];
+      let reqs: Booking[] = Array.isArray(json.bookingRequests)
+        ? normalizeBookings(json.bookingRequests)
+        : [];
       setRequestedBookings(reqs);
     } catch {
       setRequestedBookings([]);
@@ -290,10 +306,8 @@ export default function RequestAppointment() {
     setRequestsLoading(false);
   }, []);
 
-  // Prefetch normal bookings and appointment requests
   useEffect(() => {
     if (!dataLoading && !loading) {
-      // fetchBookings();
       fetchRequestedBookings();
     }
   }, [dataLoading, loading, fetchRequestedBookings]);
@@ -304,7 +318,7 @@ export default function RequestAppointment() {
   }, []);
 
   const selectedPackage = packages.find((p) => p._id === packageId) || null;
-  const getTotalSessionsForPackage = (pkg: Package | null) => {
+  const getTotalSessionsForPackage = (pkg: Package | null): number | undefined => {
     if (!pkg) return undefined;
     return (
       pkg.totalSessions ||
@@ -319,10 +333,10 @@ export default function RequestAppointment() {
 
   useEffect(() => {
     if (maxSelectableDates === undefined) return;
-    if (sessions.length > maxSelectableDates) {
+    if (sessions.length > (maxSelectableDates ?? 0)) {
       setSessions((prev) => prev.slice(0, maxSelectableDates));
     }
-  }, [packageId, maxSelectableDates]);
+  }, [packageId, maxSelectableDates, sessions.length]);
 
   useEffect(() => {
     if (editBookingId) {
@@ -331,16 +345,16 @@ export default function RequestAppointment() {
         bookings.find((b) => b._id === editBookingId);
       if (booking) {
         setPatientId(
-          booking.patient?.id || booking.patient?._id || booking.patient?.id || ""
+          booking.patient?.id || (booking.patient as any)?._id || booking.patient?.id || ""
         );
         setTherapyId(booking.therapy?._id || "");
         setPackageId(booking.package?._id || "");
         setSessions(
           Array.isArray(booking.sessions)
             ? booking.sessions.map((s) => ({
-              date: s.date,
-              slotId: s.slotId ?? "",
-            }))
+                date: s.date,
+                slotId: s.slotId ?? "",
+              }))
             : []
         );
         let couponObj: Coupon | undefined = undefined;
@@ -350,20 +364,19 @@ export default function RequestAppointment() {
         ) {
           const couponCandidate = booking.discountInfo.coupon;
           couponObj =
-            coupons.find(c => c._id === couponCandidate._id) ||
-            coupons.find(c => c.code === couponCandidate.couponCode) ||
-            coupons.find(c => c.code === (couponCandidate as any).code) ||
-            coupons.find(c => (c as any).couponCode === couponCandidate.couponCode) ||
-            coupons.find(c => (c as any).couponCode === (couponCandidate as any).code) ||
-            (booking.discountInfo as any).couponCode && coupons.find(c => c.code === (booking.discountInfo as any).couponCode);
-
+            coupons.find((c) => c._id === couponCandidate._id) ||
+            coupons.find((c) => c.code === couponCandidate.couponCode) ||
+            coupons.find((c) => c.code === (couponCandidate as any).code) ||
+            coupons.find((c) => (c as any).couponCode === couponCandidate.couponCode) ||
+            coupons.find((c) => (c as any).couponCode === (couponCandidate as any).code) ||
+            (booking.discountInfo as any).couponCode && coupons.find((c) => c.code === (booking.discountInfo as any).couponCode);
         } else if (
           booking.discountInfo &&
           (booking.discountInfo as any).couponCode
         ) {
           couponObj =
-            coupons.find(c => c.code === (booking.discountInfo as any).couponCode) ||
-            coupons.find(c => c._id === (booking.discountInfo as any).couponCode);
+            coupons.find((c) => c.code === (booking.discountInfo as any).couponCode) ||
+            coupons.find((c) => c._id === (booking.discountInfo as any).couponCode);
         }
         setSelectedCouponId(couponObj ? couponObj._id : "");
       }
@@ -409,8 +422,7 @@ export default function RequestAppointment() {
       }
       toast.success("Booking request deleted.");
       if (editBookingId === id) resetForm();
-      fetchRequestedBookings();
-      // fetchBookings();
+      await fetchRequestedBookings();
     } catch (e: any) {
       toast.error(
         (typeof e === "object" && e && "message" in e ? e.message : "Failed to delete booking request")
@@ -418,29 +430,14 @@ export default function RequestAppointment() {
     }
   };
 
-  // Remove slot disabling/availability logic: calendar and slots are always selectable
+  // --- BEGIN: Multi-slot sessions for same date ---
 
-  const changeMonth = (dir: "prev" | "next") => {
-    if (dir === "prev") {
-      if (month === 0) {
-        setMonth(11);
-        setYear((y) => y - 1);
-      } else setMonth((m) => m - 1);
-    } else {
-      if (month === 11) {
-        setMonth(0);
-        setYear((y) => y + 1);
-      } else setMonth((m) => m + 1);
-    }
-  };
+  // function getUsedSlotsForDate(dateKey: string): string[] {
+  //   return sessions.filter((s) => s.date === dateKey).map((s) => s.slotId).filter(Boolean);
+  // }
 
-  const toggleDate = (day: number) => {
+  const addSessionForDate = (day: number) => {
     const dateKey = getDateKey(year, month + 1, day);
-    const exists = sessions.find((s) => s.date === dateKey);
-    if (exists) {
-      setSessions((prev) => prev.filter((s) => s.date !== dateKey));
-      return;
-    }
     if (
       typeof maxSelectableDates === "number" &&
       sessions.length >= maxSelectableDates
@@ -450,17 +447,30 @@ export default function RequestAppointment() {
     setSessions((prev) => [...prev, { date: dateKey, slotId: "" }]);
   };
 
-  const updateSlotId = (date: string, slotId: string) => {
+  const removeSessionByIdx = (idx: number) => {
+    setSessions((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const updateSlotId = (idx: number, slotId: string) => {
+    const session = sessions[idx];
+    if (!session) return;
+    const chosenForDate = sessions
+      .map((s, i) => (i !== idx && s.date === session.date ? s.slotId : null))
+      .filter(Boolean) as string[];
+    if (chosenForDate.includes(slotId)) {
+      toast.error("This slot is already selected for this date.");
+      return;
+    }
     setSessions((prev) =>
-      prev.map((s) => (s.date === date ? { ...s, slotId } : s))
+      prev.map((s, i) => (i === idx ? { ...s, slotId } : s))
     );
   };
 
   const selectedPatient = patients.find((p) => p.id === patientId) || null;
   const selectedTherapy = therapies.find((t) => t._id === therapyId) || null;
-  const selectedCoupon = coupons.find(c => c._id === selectedCouponId) || null;
+  const selectedCoupon = coupons.find((c) => c._id === selectedCouponId) || null;
 
-  function getFirstSessionEarliest(sessions: { date: string; slotId: string }[]) {
+  function getFirstSessionEarliest(sessions: { date: string; slotId: string }[]): { date: string; slotId: string } | null {
     if (!sessions || sessions.length === 0) return null;
     const sorted = [...sessions].sort((a, b) => a.date.localeCompare(b.date));
     return sorted[0];
@@ -472,17 +482,18 @@ export default function RequestAppointment() {
     !!selectedTherapy &&
     !!selectedPackage &&
     sessions.length > 0 &&
-    !!(earliestSession && earliestSession.slotId);
+    !!(earliestSession && earliestSession.slotId) &&
+    sessions.every((s) => !!s.slotId);
 
-  function getPatientDisplayName(patient: Patient | undefined | null) {
+  function getPatientDisplayName(patient: Patient | undefined | null): string {
     if (!patient) return "";
     const name = patient.name;
     const pid = patient.patientId ? patient.patientId : "";
     return pid ? `${name} (${pid})` : name;
   }
-  function getPackageDisplay(pkg: Package | null) {
+  function getPackageDisplay(pkg: Package | null): string {
     if (!pkg) return "—";
-    const sessions =
+    const sessionCount =
       pkg.totalSessions ||
       pkg.sessionCount ||
       (() => {
@@ -492,11 +503,11 @@ export default function RequestAppointment() {
     const totalCost = pkg.totalCost;
     const costPerSession =
       pkg.costPerSession ||
-      (totalCost && sessions ? Math.round(totalCost / sessions) : undefined);
-    let parts = [];
+      (totalCost && sessionCount ? Math.round(totalCost / sessionCount) : undefined);
+    let parts: string[] = [];
     if (pkg.name) parts.push(pkg.name);
-    if (sessions || totalCost) {
-      const subparts = [];
+    if (sessionCount || totalCost) {
+      const subparts: string[] = [];
       if (totalCost) subparts.push("Total Cost " + totalCost);
       if (costPerSession) subparts.push(`[${costPerSession}]`);
       if (subparts.length > 0) parts.push(subparts.join(" "));
@@ -504,8 +515,9 @@ export default function RequestAppointment() {
     return parts.join("; ");
   }
 
-  // Booking API (unchanged)
-  const handleBookOrUpdate = async (e: React.MouseEvent<HTMLButtonElement>) => {
+  const handleBookOrUpdate = async (
+    e: React.MouseEvent<HTMLButtonElement, MouseEvent>
+  ) => {
     e.preventDefault();
     setBookingSuccess(null);
     setBookingError(null);
@@ -523,10 +535,7 @@ export default function RequestAppointment() {
       patient: patientId,
       therapy: therapyId,
       package: packageId,
-      sessions: sessions
-        .slice()
-        .sort((a, b) => a.date.localeCompare(b.date))
-        .map(({ date, slotId }) => ({ date, slotId })),
+      sessions: sessions.map(({ date, slotId }) => ({ date, slotId })),
     };
     if (selectedCoupon) {
       payload.coupon = { id: selectedCoupon._id };
@@ -536,7 +545,7 @@ export default function RequestAppointment() {
     }
 
     try {
-      let res, result;
+      let res: Response, result: any;
       if (!editBookingId) {
         res = await fetch(`${API_BASE_URL}/api/parent/create-booking-request`, {
           method: "POST",
@@ -593,43 +602,29 @@ export default function RequestAppointment() {
       setBookingSuccess(successMsg);
       toast.success(successMsg);
 
-      // await fetchBookings();
       await fetchRequestedBookings();
       resetForm();
     } catch (e: any) {
       const msg =
-        (typeof e === "object" && e !== null && ("message" in e) && e.message)
+        typeof e === "object" && e !== null && "message" in e && e.message
           ? e.message
           : editBookingId
-            ? "Failed to update."
-            : "Booking failed.";
+          ? "Failed to update."
+          : "Booking failed.";
       setBookingError(msg);
       toast.error(msg);
     }
     setBookingLoading(false);
   };
 
-  function handleCancelEdit() { resetForm(); }
+  function handleCancelEdit() {
+    resetForm();
+  }
 
-  // REMOVE AVAILABILITY: always enable every slot for every date; no slot disabling, no conflicts
-
-  // function getAvailableSlotsForDate(
-  //   date: string,
-  //   currSelectedSlotId: string
-  // ) {
-  //   // Returns all enabled, never disables any slot
-  //   const slotInfo: { [slotId: string]: { disabled: boolean; reason: string } } = {};
-  //   SESSION_TIME_OPTIONS.forEach(opt => {
-  //     slotInfo[opt.id] = { disabled: false, reason: "" };
-  //   });
-  //   return slotInfo;
-  // }
-
-  // Repeat weekly
   function getNextNDatesWeekly(
     startDate: Date,
     sessionCount: number,
-    dayOfWeek: number,
+    dayOfWeek: number
   ): string[] {
     let dates: string[] = [];
     let date = new Date(startDate);
@@ -647,25 +642,33 @@ export default function RequestAppointment() {
     setRepeatError(null);
     setRepeatConflictInfo({});
     if (!repeatDay || !repeatStartDate || !repeatSlotId) {
-      setRepeatError("Please select start date, weekday, and time slot."); return;
+      setRepeatError("Please select start date, weekday, and time slot.");
+      return;
     }
     if (!maxSelectableDates || !selectedPackage) {
-      setRepeatError("Please select a package."); return;
+      setRepeatError("Please select a package.");
+      return;
     }
     const start = new Date(repeatStartDate);
     const wantedDayNum = getDayIndex(repeatDay);
-    while (start.getDay() !== wantedDayNum) { start.setDate(start.getDate() + 1); }
-    const sessionsOnTargetDay = getNextNDatesWeekly(
-      start,
-      maxSelectableDates,
-      wantedDayNum,
-    );
-    const newSessions = sessionsOnTargetDay.map((dateStr) => {
+    while (start.getDay() !== wantedDayNum) {
+      start.setDate(start.getDate() + 1);
+    }
+    const sessionsOnTargetDay = getNextNDatesWeekly(start, maxSelectableDates, wantedDayNum);
+
+    const repeatNewSessions = sessionsOnTargetDay.map((dateStr) => {
       return { date: dateStr, slotId: repeatSlotId };
     });
+    const willConflict = repeatNewSessions.some((ns) =>
+      sessions.some((s) => s.date === ns.date && s.slotId === ns.slotId)
+    );
+    if (willConflict) {
+      setRepeatError("One or more sessions already use this slot for these dates.");
+      return;
+    }
     setRepeatError(null);
     setRepeatConflictInfo({});
-    setSessions(newSessions);
+    setSessions(repeatNewSessions);
   }
   function handleRepeatClear() {
     setRepeatDay("");
@@ -676,7 +679,6 @@ export default function RequestAppointment() {
     setSessions([]);
   }
 
-  // ----------- RENDER --------------
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -691,20 +693,23 @@ export default function RequestAppointment() {
               <FiCalendar />
               {new Date(year, month).toLocaleString("default", {
                 month: "long",
-              })} {year}
+              })}{" "}
+              {year}
             </div>
             <div className="flex gap-2">
-              <button onClick={() => changeMonth("prev")} className="p-2 border rounded">
+              <button onClick={() => changeMonth("prev")} className="p-2 border rounded" type="button">
                 <FiChevronLeft />
               </button>
-              <button onClick={() => changeMonth("next")} className="p-2 border rounded">
+              <button onClick={() => changeMonth("next")} className="p-2 border rounded" type="button">
                 <FiChevronRight />
               </button>
             </div>
           </div>
           <div className="grid grid-cols-7 text-xs text-slate-500 border-b">
             {DAYS.map((d) => (
-              <div key={d} className="p-2 text-center font-medium">{d}</div>
+              <div key={d} className="p-2 text-center font-medium">
+                {d}
+              </div>
             ))}
           </div>
           <div className="grid grid-cols-7">
@@ -714,33 +719,36 @@ export default function RequestAppointment() {
             {Array.from({ length: getDaysInMonth(year, month) }).map((_, i) => {
               const day = i + 1;
               const dateKey = getDateKey(year, month + 1, day);
-              const selected = sessions.find((s) => s.date === dateKey);
+              const countOfThisDate = sessions.filter((s) => s.date === dateKey).length;
               const isAtMax =
                 typeof maxSelectableDates === "number" &&
-                sessions.length >= maxSelectableDates &&
-                !selected;
+                sessions.length >= maxSelectableDates;
               return (
                 <div
                   key={day}
                   onClick={() => {
-                    if (!isAtMax) toggleDate(day);
+                    if (!isAtMax) addSessionForDate(day);
                   }}
                   className={`h-24 border cursor-pointer flex flex-col justify-between p-2 transition ${
-                    selected
+                    countOfThisDate > 0
                       ? "bg-blue-50 border-blue-400"
                       : isAtMax
-                        ? "bg-gray-100 cursor-not-allowed opacity-60"
-                        : "hover:bg-slate-50"
+                      ? "bg-gray-100 cursor-not-allowed opacity-60"
+                      : "hover:bg-slate-50"
                   }`}
                   style={isAtMax ? { pointerEvents: "none" } : {}}
                 >
                   <div className="flex flex-col justify-start">
-                    <div className={`w-7 h-7 flex items-center justify-center rounded-full text-sm ${selected ? "bg-blue-600 text-white" : ""}`}>
+                    <div
+                      className={`w-7 h-7 flex items-center justify-center rounded-full text-sm ${
+                        countOfThisDate > 0 ? "bg-blue-600 text-white" : ""
+                      }`}
+                    >
                       {day}
                     </div>
-                    {selected && (
+                    {countOfThisDate > 0 && (
                       <div className="mt-1 text-xs text-blue-700 font-medium">
-                        Selected
+                        {countOfThisDate === 1 ? "1 Session" : `${countOfThisDate} Sessions`}
                       </div>
                     )}
                   </div>
@@ -750,14 +758,15 @@ export default function RequestAppointment() {
           </div>
           {typeof maxSelectableDates === "number" && (
             <div className="px-4 pt-2 pb-1 text-xs text-slate-600">
-              {`You can select up to ${maxSelectableDates} date${maxSelectableDates > 1 ? "s" : ""} for this package. `}
-              <span className="text-blue-700">Selecting all is not mandatory; at least one is required.</span>
+              {`You can select up to ${maxSelectableDates} session${maxSelectableDates > 1 ? "s" : ""} for this package. `}
+              <span className="text-blue-700">
+                Selecting all is not mandatory; at least one is required.
+              </span>
               <br />
-              {sessions.length >= maxSelectableDates && (
+              {sessions.length >= (maxSelectableDates ?? 0) && (
                 <span className="text-blue-700">Limit reached.</span>
               )}
               <br />
-              {/* Availability text removed as per instruction */}
             </div>
           )}
         </div>
@@ -772,35 +781,36 @@ export default function RequestAppointment() {
               </span>
             )}
           </h3>
-          {editBookingId && (() => {
-            const currentBooking =
-              requestedBookings.find(b => b._id === editBookingId) ||
-              bookings.find(b => b._id === editBookingId);
-            if (currentBooking && currentBooking.appointmentId) {
-              return (
-                <div className="mb-3">
-                  <label className="block text-sm mb-1 flex items-center gap-1 text-gray-700 font-semibold">
-                    <FiHash /> Appointment ID
-                  </label>
-                  <input
-                    type="text"
-                    value={currentBooking.appointmentId}
-                    className="w-full border rounded px-3 py-2 bg-slate-100 font-mono text-gray-500"
-                    readOnly
-                    disabled
-                  />
-                </div>
-              );
-            }
-            return null;
-          })()}
+          {editBookingId &&
+            (() => {
+              const currentBooking =
+                requestedBookings.find((b) => b._id === editBookingId) ||
+                bookings.find((b) => b._id === editBookingId);
+              if (currentBooking && currentBooking.appointmentId) {
+                return (
+                  <div className="mb-3">
+                    <label className="block text-sm mb-1 flex items-center gap-1 text-gray-700 font-semibold">
+                      <FiHash /> Appointment ID
+                    </label>
+                    <input
+                      type="text"
+                      value={currentBooking.appointmentId}
+                      className="w-full border rounded px-3 py-2 bg-slate-100 font-mono text-gray-500"
+                      readOnly
+                      disabled
+                    />
+                  </div>
+                );
+              }
+              return null;
+            })()}
 
           <label className="block text-sm mb-1 flex items-center gap-1">
             <FiUser /> Patient Name
           </label>
           <select
             value={patientId}
-            onChange={e => setPatientId(e.target.value)}
+            onChange={(e) => setPatientId(e.target.value)}
             className="w-full border rounded px-3 py-2 mb-3"
             disabled={!!editBookingId}
           >
@@ -812,18 +822,19 @@ export default function RequestAppointment() {
             ))}
           </select>
 
-
           <label className="block text-sm mb-1 flex items-center gap-1">
             <FiTag /> Therapy Type
           </label>
           <select
             value={therapyId}
-            onChange={e => setTherapyId(e.target.value)}
+            onChange={(e) => setTherapyId(e.target.value)}
             className="w-full border rounded px-3 py-2 mb-3"
           >
             <option value="">Select Therapy</option>
             {therapies.map((therapy) => (
-              <option key={therapy._id} value={therapy._id}>{therapy.name}</option>
+              <option key={therapy._id} value={therapy._id}>
+                {therapy.name}
+              </option>
             ))}
           </select>
 
@@ -832,7 +843,7 @@ export default function RequestAppointment() {
           </label>
           <select
             value={packageId}
-            onChange={e => setPackageId(e.target.value)}
+            onChange={(e) => setPackageId(e.target.value)}
             className="w-full border rounded px-3 py-2 mb-5"
           >
             <option value="">Select Package</option>
@@ -851,40 +862,50 @@ export default function RequestAppointment() {
               </div>
               <div className="flex flex-wrap gap-3 items-end">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Start Date</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Start Date
+                  </label>
                   <input
                     type="date"
                     value={repeatStartDate}
-                    onChange={e => setRepeatStartDate(e.target.value)}
+                    onChange={(e) => setRepeatStartDate(e.target.value)}
                     className="border rounded px-2 py-1 text-sm cursor-pointer"
                     min={today.toISOString().slice(0, 10)}
-                    onFocus={e => e.target.showPicker && e.target.showPicker()}
+                    onFocus={(e) =>
+                      (e.target as HTMLInputElement).showPicker &&
+                      (e.target as any).showPicker()
+                    }
                   />
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">Day</label>
                   <select
                     value={repeatDay}
-                    onChange={e => setRepeatDay(e.target.value)}
+                    onChange={(e) => setRepeatDay(e.target.value)}
                     className="border rounded px-2 py-1 text-sm"
                   >
                     <option value="">Select Day</option>
                     {DAYS.map((d) => (
-                      <option value={d} key={d}>{d}</option>
+                      <option value={d} key={d}>
+                        {d}
+                      </option>
                     ))}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Time Slot</label>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Time Slot
+                  </label>
                   <select
                     value={repeatSlotId}
-                    onChange={e => setRepeatSlotId(e.target.value)}
+                    onChange={(e) => setRepeatSlotId(e.target.value)}
                     className="border rounded px-2 py-1 text-sm"
                   >
                     <option value="">Select Time Slot</option>
-                    {SESSION_TIME_OPTIONS.map(opt => (
+                    {SESSION_TIME_OPTIONS.map((opt) => (
                       <option key={opt.id} value={opt.id}>
-                        {opt.label} {opt.limited ? " (Limited case)" : ""}
+                        {opt.label}
+                        {opt.limited ? " (Limited case)" : ""}
                       </option>
                     ))}
                   </select>
@@ -912,8 +933,8 @@ export default function RequestAppointment() {
               </div>
               {maxSelectableDates && packageId && (
                 <div className="text-xs text-slate-500 mt-1">
-                  Will set up to {maxSelectableDates} sessions {repeatDay && `on ${repeatDay}`} at selected time.
-                  {/* Availability text removed */}
+                  Will set up to {maxSelectableDates} sessions{" "}
+                  {repeatDay && `on ${repeatDay}`} at selected time.
                 </div>
               )}
               {repeatError && (
@@ -941,46 +962,56 @@ export default function RequestAppointment() {
                 <FiClock />
                 Session Dates &#38; Times
               </div>
-              {sessions
-                .slice()
-                .sort((a, b) => a.date.localeCompare(b.date))
-                .map((s, idx) => {
-                  // const slotInfo = getAvailableSlotsForDate(s.date, s.slotId);
-                  return (
-                    <div key={s.date} className="flex items-center gap-2 text-sm">
-                      <span className="flex-1 font-mono">{s.date}</span>
-                      <FiClock className="text-slate-400" />
-                      <select
-                        value={s.slotId}
-                        onChange={e => updateSlotId(s.date, e.target.value)}
-                        className={`border rounded px-2 py-1 ${
-                          idx === 0 && !s.slotId ? "border-red-400" : ""
-                        }`}
-                        required={idx === 0}
-                        aria-required={idx === 0}
-                        style={{ minWidth: 180 }}
-                      >
-                        <option value="">Select Time Slot</option>
-                        {SESSION_TIME_OPTIONS.map((slot) => {
-                          // Always enabled, never disabled
-                          return (
-                            <option
-                              key={slot.id}
-                              value={slot.id}
-                              disabled={false}
-                            >
-                              {slot.label}
-                              {slot.limited ? " (Limited case)" : ""}
-                            </option>
-                          );
-                        })}
-                      </select>
-                      {idx === 0 && !s.slotId && (
-                        <span className="text-xs text-red-500 ml-2">Time required</span>
-                      )}
-                    </div>
-                  );
-                })}
+              {sessions.map((s, idx) => {
+                const usedSlots = sessions
+                  .map((sess, i) =>
+                    i !== idx && sess.date === s.date ? sess.slotId : null
+                  )
+                  .filter(Boolean) as string[];
+                return (
+                  <div
+                    key={idx + s.date + s.slotId}
+                    className="flex items-center gap-2 text-sm"
+                  >
+                    <span className="flex-1 font-mono">{s.date}</span>
+                    <FiClock className="text-slate-400" />
+                    <select
+                      value={s.slotId}
+                      onChange={(e) => updateSlotId(idx, e.target.value)}
+                      className={`border rounded px-2 py-1 ${
+                        idx === 0 && !s.slotId ? "border-red-400" : ""
+                      }`}
+                      required={idx === 0}
+                      aria-required={idx === 0}
+                      style={{ minWidth: 180 }}
+                    >
+                      <option value="">Select Time Slot</option>
+                      {SESSION_TIME_OPTIONS.map((slot) => (
+                        <option
+                          key={slot.id}
+                          value={slot.id}
+                          disabled={usedSlots.includes(slot.id)}
+                        >
+                          {slot.label}
+                          {slot.limited ? " (Limited case)" : ""}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      title="Remove this session"
+                      className="ml-1 px-2 py-1 rounded border border-red-300 text-red-600 bg-white hover:bg-red-50 transition"
+                      onClick={() => removeSessionByIdx(idx)}
+                      style={{ display: "inline-flex", alignItems: "center" }}
+                    >
+                      <FiX />
+                    </button>
+                    {idx === 0 && !s.slotId && (
+                      <span className="text-xs text-red-500 ml-2">Time required</span>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
 
@@ -988,32 +1019,39 @@ export default function RequestAppointment() {
             <div className="w-full flex flex-col items-stretch mt-3 mb-3">
               <div className="flex flex-col gap-0.5 w-full rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 shadow-sm">
                 <div className="flex justify-between items-center py-0.5">
-                  <span className="text-sm text-slate-700 font-medium">Package Price</span>
+                  <span className="text-sm text-slate-700 font-medium">
+                    Package Price
+                  </span>
                   <span className="font-mono text-base text-slate-900">
                     ₹
                     {selectedPackage.totalCost ??
-                      (selectedPackage.costPerSession && getTotalSessionsForPackage(selectedPackage)
-                        ? Number(selectedPackage.costPerSession) * Number(getTotalSessionsForPackage(selectedPackage))
-                        : selectedPackage.costPerSession ??
-                          "—"
-                      )}
+                      (selectedPackage.costPerSession &&
+                      getTotalSessionsForPackage(selectedPackage)
+                        ? Number(selectedPackage.costPerSession) *
+                          Number(getTotalSessionsForPackage(selectedPackage))
+                        : selectedPackage.costPerSession ?? "—")}
                   </span>
                 </div>
                 {(() => {
                   let discountValue = 0;
-                  let coupon = null;
+                  let coupon: Coupon | null = null;
                   if (selectedCouponId) {
-                    coupon = coupons.find(c => c._id === selectedCouponId);
+                    coupon = coupons.find((c) => c._id === selectedCouponId) || null;
                     if (coupon && coupon.discount) {
                       discountValue = Number(coupon.discount);
                     }
                   }
-                  let pkgTotal = selectedPackage.totalCost ??
-                    (selectedPackage.costPerSession && getTotalSessionsForPackage(selectedPackage)
-                      ? Number(selectedPackage.costPerSession) * Number(getTotalSessionsForPackage(selectedPackage))
+                  let pkgTotal =
+                    selectedPackage.totalCost ??
+                    (selectedPackage.costPerSession &&
+                    getTotalSessionsForPackage(selectedPackage)
+                      ? Number(selectedPackage.costPerSession) *
+                        Number(getTotalSessionsForPackage(selectedPackage))
                       : 0);
                   if (discountValue > 0 && pkgTotal > 0) {
-                    const discountedAmount = Math.round((pkgTotal * discountValue) / 100);
+                    const discountedAmount = Math.round(
+                      (pkgTotal * discountValue) / 100
+                    );
                     const afterDiscount = Math.max(pkgTotal - discountedAmount, 0);
                     return (
                       <>
@@ -1023,12 +1061,16 @@ export default function RequestAppointment() {
                             {coupon ? ` (${coupon.code})` : ""}
                           </span>
                           <span className="text-base text-emerald-900 font-mono">
-                            -{discountValue}% <span className="opacity-60 text-xs ml-1">(-₹{discountedAmount})</span>
+                            -{discountValue}%{" "}
+                            <span className="opacity-60 text-xs ml-1">
+                              (-₹{discountedAmount})
+                            </span>
                           </span>
                         </div>
                         <div className="flex justify-between items-center border-t border-blue-200 mt-2 pt-2">
                           <span className="text-base font-semibold text-blue-900">
-                            <FiTag className="inline mr-1 text-blue-400" />Total After Discount
+                            <FiTag className="inline mr-1 text-blue-400" />
+                            Total After Discount
                           </span>
                           <span className="font-mono text-lg font-bold text-blue-900">
                             ₹{afterDiscount}
@@ -1040,15 +1082,20 @@ export default function RequestAppointment() {
                   if (discountValue === 0 && selectedCouponId && coupon) {
                     return (
                       <div className="flex justify-between items-center py-0.5">
-                        <span className="text-sm text-orange-700 font-medium">Discount</span>
-                        <span className="text-xs text-orange-700">Coupon "{coupon.code}" has no discount</span>
+                        <span className="text-sm text-orange-700 font-medium">
+                          Discount
+                        </span>
+                        <span className="text-xs text-orange-700">
+                          Coupon "{coupon.code}" has no discount
+                        </span>
                       </div>
                     );
                   }
                   return (
                     <div className="flex justify-between items-center border-t border-blue-200 mt-2 pt-2">
                       <span className="text-base font-semibold text-blue-900">
-                        <FiTag className="inline mr-1 text-blue-400" />Total
+                        <FiTag className="inline mr-1 text-blue-400" />
+                        Total
                       </span>
                       <span className="font-mono text-lg font-bold text-blue-900">
                         ₹{pkgTotal}
@@ -1059,22 +1106,27 @@ export default function RequestAppointment() {
               </div>
             </div>
           )}
-          {bookingError && <div className="text-xs text-red-600 mt-1">{bookingError}</div>}
-          {bookingSuccess && <div className="text-xs text-green-600 mt-1">{bookingSuccess}</div>}
+          {bookingError && (
+            <div className="text-xs text-red-600 mt-1">{bookingError}</div>
+          )}
+          {bookingSuccess && (
+            <div className="text-xs text-green-600 mt-1">{bookingSuccess}</div>
+          )}
 
           <div className="flex gap-2">
             <button
               disabled={!canBook || bookingLoading}
               className="w-full bg-blue-600 text-white py-2 rounded disabled:opacity-50"
               onClick={handleBookOrUpdate}
+              type="button"
             >
               {bookingLoading
                 ? editBookingId
                   ? "Updating..."
                   : "Booking Request..."
                 : editBookingId
-                  ? "Update Booking"
-                  : "Request Booking Now"}
+                ? "Update Booking"
+                : "Request Booking Now"}
             </button>
             {editBookingId && (
               <button
@@ -1089,15 +1141,20 @@ export default function RequestAppointment() {
           </div>
           {typeof maxSelectableDates === "number" && (
             <div className="text-xs text-blue-700 mt-3">
-              {`You can select up to ${maxSelectableDates} date${maxSelectableDates > 1 ? "s" : ""} for this package. Selecting all is not mandatory.`}
+              {`You can select up to ${maxSelectableDates} session${maxSelectableDates > 1 ? "s" : ""} for this package. Selecting all is not mandatory.`}
             </div>
           )}
           {sessions.length === 0 && (
-            <div className="text-xs text-red-600 mt-2">At least one session date must be selected.</div>
+            <div className="text-xs text-red-600 mt-2">
+              At least one session must be added.
+            </div>
           )}
-          {sessions.length > 0 && (!earliestSession || !earliestSession.slotId) && (
-            <div className="text-xs text-red-600 mt-2">Please set a time for the first session date.</div>
-          )}
+          {sessions.length > 0 &&
+            (!earliestSession || !earliestSession.slotId) && (
+              <div className="text-xs text-red-600 mt-2">
+                Please set a time for the first session.
+              </div>
+            )}
         </div>
       </div>
       {/* NEW: Booking Request List */}
@@ -1106,7 +1163,9 @@ export default function RequestAppointment() {
           <p className="font-medium mb-2 flex items-center gap-2">
             <span>Requested Booking List</span>
             {requestsLoading && (
-              <span className="ml-2 px-2 py-0.5 rounded text-xs bg-blue-100 text-blue-800 font-normal">Loading…</span>
+              <span className="ml-2 px-2 py-0.5 rounded text-xs bg-blue-100 text-blue-800 font-normal">
+                Loading…
+              </span>
             )}
           </p>
           {requestedBookings && requestedBookings.length === 0 ? (
@@ -1123,22 +1182,34 @@ export default function RequestAppointment() {
                   {/* Request ID (non-editable, always available) */}
                   {br.requestId && (
                     <div className="mb-1 flex items-center gap-2 text-xs font-mono text-gray-700">
-                      <FiHash className="text-blue-500" /> <span>Request ID: {br.requestId}</span>
+                      <FiHash className="text-blue-500" />{" "}
+                      <span>Request ID: {br.requestId}</span>
                     </div>
                   )}
                   {/* Show therapist if available (optional in request stage) */}
                   {(() => {
                     let tObj: any = undefined;
-                    if (typeof br.therapist === "object" && br.therapist !== null) {
+                    if (
+                      typeof br.therapist === "object" &&
+                      br.therapist !== null
+                    ) {
                       tObj = br.therapist;
-                    } else if (typeof br.therapist === "string" && br.therapist) {
+                    } else if (
+                      typeof br.therapist === "string" &&
+                      br.therapist
+                    ) {
                       // Find therapist if you have the therapists[] loaded
                     }
                     if (tObj && tObj.userId) {
                       return (
                         <div className="mb-2 flex items-center gap-2">
                           <FiUser className="text-slate-500" />
-                          <span className="text-slate-700">Therapist: {tObj.userId?.name}{tObj.therapistId ? ` (${tObj.therapistId})` : ""}</span>
+                          <span className="text-slate-700">
+                            Therapist: {tObj.userId?.name}
+                            {tObj.therapistId
+                              ? ` (${tObj.therapistId})`
+                              : ""}
+                          </span>
                         </div>
                       );
                     }
@@ -1162,35 +1233,51 @@ export default function RequestAppointment() {
                     <details className="mb-2 text-xs text-slate-700">
                       <summary className="font-medium cursor-pointer select-none flex items-center">
                         <span>Sessions ({br.sessions.length})</span>
-                        <span className="ml-1"><FiChevronDown className="inline ml-1 text-slate-500" /></span>
+                        <span className="ml-1">
+                          <FiChevronDown className="inline ml-1 text-slate-500" />
+                        </span>
                       </summary>
                       <div className="overflow-x-auto mt-2">
                         <table className="min-w-[340px] w-fit border-collapse text-xs">
                           <thead>
                             <tr>
-                              <th className="px-2 py-1 border border-slate-200 bg-slate-100 font-semibold text-left">#</th>
-                              <th className="px-2 py-1 border border-slate-200 bg-slate-100 font-semibold text-left">Date</th>
-                              <th className="px-2 py-1 border border-slate-200 bg-slate-100 font-semibold text-left">Time Slot</th>
+                              <th className="px-2 py-1 border border-slate-200 bg-slate-100 font-semibold text-left">
+                                #
+                              </th>
+                              <th className="px-2 py-1 border border-slate-200 bg-slate-100 font-semibold text-left">
+                                Date
+                              </th>
+                              <th className="px-2 py-1 border border-slate-200 bg-slate-100 font-semibold text-left">
+                                Time Slot
+                              </th>
                             </tr>
                           </thead>
                           <tbody>
                             {br.sessions.map((s, idx) => {
-                              const slot = SESSION_TIME_OPTIONS.find(opt => opt.id === s.slotId);
+                              const slot = SESSION_TIME_OPTIONS.find(
+                                (opt) => opt.id === s.slotId
+                              );
                               return (
-                                <tr key={s._id || (s.date + s.slotId)}>
-                                  <td className="px-2 py-1 border border-slate-200 text-slate-400">{idx + 1}</td>
+                                <tr key={s._id || s.date + s.slotId}>
+                                  <td className="px-2 py-1 border border-slate-200 text-slate-400">
+                                    {idx + 1}
+                                  </td>
                                   <td className="px-2 py-1 border border-slate-200">
                                     {s.date}
                                   </td>
                                   <td className="px-2 py-1 border border-slate-200 whitespace-nowrap">
-                                    {slot
-                                      ? (
-                                          <>
-                                            {slot.label}
-                                            {slot.limited && <span className="text-amber-700 ml-1">(Limited case)</span>}
-                                          </>
-                                        )
-                                      : s.slotId}
+                                    {slot ? (
+                                      <>
+                                        {slot.label}
+                                        {slot.limited && (
+                                          <span className="text-amber-700 ml-1">
+                                            (Limited case)
+                                          </span>
+                                        )}
+                                      </>
+                                    ) : (
+                                      s.slotId
+                                    )}
                                   </td>
                                 </tr>
                               );
@@ -1200,57 +1287,66 @@ export default function RequestAppointment() {
                       </div>
                     </details>
                   )}
-                  {br.discountInfo && br.discountInfo.coupon && br.discountInfo.coupon.discountEnabled && (
-                    <div className="mb-1 text-xs text-blue-700">
-                      Discount: <span className="font-semibold">
-                        {br.discountInfo.coupon.discount}%
-                      </span>
-                      {" "}
-                      (Coupon: <span className="font-mono">
-                        {br.discountInfo.coupon.couponCode}
-                      </span>
+                  {br.discountInfo &&
+                    br.discountInfo.coupon &&
+                    br.discountInfo.coupon.discountEnabled && (
+                      <div className="mb-1 text-xs text-blue-700">
+                        Discount:{" "}
+                        <span className="font-semibold">
+                          {br.discountInfo.coupon.discount}%
+                        </span>{" "}
+                        (Coupon:{" "}
+                        <span className="font-mono">
+                          {br.discountInfo.coupon.couponCode}
+                        </span>
                         {br.discountInfo.coupon.validityDays && (
                           <> {` - valid ${br.discountInfo.coupon.validityDays}d`}</>
                         )}
-                      )
-                    </div>
-                  )}
+                        )
+                      </div>
+                    )}
                   <div className="flex items-center gap-4 mt-2">
-                    <span className={`inline-block px-2 py-1 rounded text-xs font-semibold uppercase
+                    <span
+                      className={`inline-block px-2 py-1 rounded text-xs font-semibold uppercase
                       ${
-                        br.requestStatus === "pending"
+                        br.status === "pending"
                           ? "bg-yellow-200 text-yellow-900"
-                          : br.requestStatus === "approved"
-                            ? "bg-green-200 text-green-900"
-                            : br.requestStatus === "rejected"
-                              ? "bg-red-200 text-red-800"
-                              : "bg-gray-100 text-gray-700"
+                          : br.status === "approved"
+                          ? "bg-green-200 text-green-900"
+                          : br.status === "rejected"
+                          ? "bg-red-200 text-red-800"
+                          : "bg-gray-100 text-gray-700"
                       }
-                    `}>
-                      {br.requestStatus || "Pending"}
+                    `}
+                    >
+                      {br.status || "Pending"}
                     </span>
-                    <div className="flex gap-2">
-                      <button
-                        className="text-xs rounded px-2 py-1 border border-blue-400 text-blue-700 hover:bg-blue-50 flex items-center gap-1"
-                        title="Edit booking request"
-                        onClick={() => {
-                          setEditBookingId(br._id);
-                          setBookingError(null);
-                          setBookingSuccess(null);
-                        }}
-                      >
-                        <FiEdit2 />
-                        Edit
-                      </button>
-                      <button
-                        className="text-xs rounded px-2 py-1 border border-red-400 text-red-600 hover:bg-red-50 flex items-center gap-1"
-                        title="Delete booking request"
-                        onClick={() => handleDeleteRequest(br._id)}
-                      >
-                        <FiTrash2 />
-                        Delete
-                      </button>
-                    </div>
+                    {br.status !== "approved" && (
+                      <div className="flex gap-2">
+                        <button
+                          className="text-xs rounded px-2 py-1 border border-blue-400 text-blue-700 hover:bg-blue-50 flex items-center gap-1"
+                          title="Edit booking request"
+                          type="button"
+                          onClick={() => {
+                            setEditBookingId(br._id);
+                            setBookingError(null);
+                            setBookingSuccess(null);
+                          }}
+                        >
+                          <FiEdit2 />
+                          Edit
+                        </button>
+                        <button
+                          className="text-xs rounded px-2 py-1 border border-red-400 text-red-600 hover:bg-red-50 flex items-center gap-1"
+                          title="Delete booking request"
+                          type="button"
+                          onClick={() => handleDeleteRequest(br._id)}
+                        >
+                          <FiTrash2 />
+                          Delete
+                        </button>
+                      </div>
+                    )}
                   </div>
                   {editBookingId === br._id && (
                     <div className="absolute -top-2 right-2">

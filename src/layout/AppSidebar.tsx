@@ -26,13 +26,34 @@ const navItems: NavItem[] = [
   },
   {
     icon: <UserCircleIcon />,
-    name: "All Users",
-    path: "/super-admin/all-users",
+    name: "Users",
+
+    subItems: [
+      {
+        name: "All Accounts",
+        path: "/super-admin/all-users",
+        // This entry points to all types of users for easy access
+      },
+      {
+        name: "Therapists",
+        path: "/super-admin/therapists",
+      },
+      {
+        name: "Children",
+        path: "/super-admin/children",
+      },
+    ],
   },
+
   {
     icon: <ChevronDownIcon />,
     name: "All Appointments",
     path: "/super-admin/all-appointments",
+  },
+  {
+    icon: <ArrowDownIcon />,
+    name: "Full Calendar",
+    path: "/super-admin/full-calendar",
   },
   {
     icon: <ArrowDownIcon />,

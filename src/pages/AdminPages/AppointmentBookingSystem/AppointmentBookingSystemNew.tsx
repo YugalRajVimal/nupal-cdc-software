@@ -41,7 +41,29 @@ type Therapist = {
   bookedSlots?: { [date: string]: string[] };
   bookedSlotCount?: { [date: string]: number };
 };
-type BookingSession = { date: string; slotId: string; therapistId?: string; _id?: string; therapist?: { _id: string; name: string; therapistId: string } };
+// Enhanced session type: additionally allow therapyTypeId per session
+type BookingSession = {
+  date: string;
+  slotId: string;
+  therapistId?: string;
+  // Correct therapyTypeId structure according to API:
+  // API session may have 'therapyType' object instead, so include that here for typing.
+  therapyType?: string;
+  therapyTypeId?: {
+    _id: string;
+    name: string;
+    [key: string]: any;
+  };
+  _id?: string;
+  // Therapist object may be full therapist or reference
+  therapist?: {
+    _id: string;
+    therapistId: string;
+    name: string;
+    [key: string]: any;
+  };
+  [key: string]: any; // Allow other fields if needed
+};
 
 type Booking = { 
   _id: string; 
@@ -117,38 +139,15 @@ export default function AppointmentBookingSystemNew() {
   // Booked slot info per row
   const [bookedSlotsPerRow, setBookedSlotsPerRow] = useState<{ [rowKey: string]: string[] }>({});
 
-  //   useEffect(() => { /* as before */ 
-  //   if (location.state && (location.state as any).bookingRequest) {
-  //     const req = (location.state as any).bookingRequest;
-  //     setPatientId(req.patient?._id || "");
-  //     setTherapyId(req.therapy?._id || "");
-  //     setPackageId(req.package?._id || "");
-  //     setIsBookingRequest(true);
-  //     setBookingRequestId(req._id || "");
-  //     if (Array.isArray(req.sessions)) {
-  //       setSessions(req.sessions.map((s: any) => ({
-  //         date: s.date || "",
-  //         slotId: s.slotId || s.time || "",
-  //         therapistId: req.therapist?._id || req.therapist || "",
-  //       })));
-  //       setTherapistId(req.therapist?._id || req.therapist || "");
-  //     }
-  //   }
-  // }, [location.state]);
-
-  // Calendar slot summary
-
+  // Request Types
   const [isBookingRequest, setIsBookingRequest] = useState<boolean>(false);
   const [bookingRequestId, setBookingRequestId] = useState<string>("");
-
   const [isSessionEditRequest, setIsSessionEditRequest] = useState<boolean>(false);
   const [sessionEditRequestId, setSessionEditRequestId] = useState<string>("");
 
-
-  useEffect(() => { /* as before */ 
+  useEffect(() => { 
     if (location.state && (location.state as any).bookingRequest) {
       const req = (location.state as any).bookingRequest;
-
       setPatientId(req.patient?._id || "");
       setTherapyId(req.therapy?._id || "");
       setPackageId(req.package?._id || "");
@@ -158,28 +157,22 @@ export default function AppointmentBookingSystemNew() {
         setSessions(req.sessions.map((s: any) => ({
           date: s.date || "",
           slotId: s.slotId || s.time || "",
+          therapistId: req.therapist?._id || req.therapist || "",
+          therapyTypeId: req.therapy?._id || "",
         })));
-
+        setTherapistId(req.therapist?._id || req.therapist || "");
       }
     }
   }, [location.state]);
-
   
-    // Handle sessionEditRequest navigation
-    useEffect(() => {
+  useEffect(() => {
       if (location.state && (location.state as any).sessionEditRequest) {
         const req = (location.state as any).sessionEditRequest;
-        console.log(req);
         setIsSessionEditRequest(true);
         setSessionEditRequestId(req._id || "");
         handleEditBooking(req.appointmentId._id)
-        // Optionally populate other state from the request as relevant
-        // setPatientId, setTherapyId, etc., if needed
       }
-    }, [location.state]);
-
-
-
+  }, [location.state]);
 
   type DaySlotSummary = {
     bookedSlots: number;
@@ -191,7 +184,6 @@ export default function AppointmentBookingSystemNew() {
   type MonthlySlotsSummary = { [date: string]: DaySlotSummary };
   const [monthlySlotSummary, setMonthlySlotSummary] = useState<MonthlySlotsSummary>({});
 
-  // Guide panel state
   const [guideOpen, setGuideOpen] = useState(false);
 
   // --- LOAD API DATA ---
@@ -220,12 +212,10 @@ export default function AppointmentBookingSystemNew() {
         setCoupons(couponArr);
         setApiLoading(false);
       })
-      .catch(e => { 
-        console.log(e);
+      .catch(() => { 
         setApiError("Could not load booking data."); setApiLoading(false); });
   }, []);
 
-  // LOAD BOOKINGS from server
   function fetchAllBookings() {
     setBookingsLoading(true);
     setBookingsError(null);
@@ -235,11 +225,11 @@ export default function AppointmentBookingSystemNew() {
       .then(async res => {
         if (!res.ok) throw new Error("Could not fetch bookings.");
         const data = await res.json();
+        console.log(data?.bookings);
         setBookings(data?.bookings || []);
         setBookingsLoading(false);
       })
-      .catch(e => {
-        console.log(e);
+      .catch(() => {
         setBookingsError("Error loading bookings.");
         setBookingsLoading(false);
       })
@@ -248,7 +238,7 @@ export default function AppointmentBookingSystemNew() {
     fetchAllBookings();
   }, []);
 
-  // Build monthly slot summary for calendar and update on therapists/packages/month change
+  // Build monthly slot summary
   useEffect(() => {
     if (therapists.length === 0) return;
     let summary: MonthlySlotsSummary = {};
@@ -329,7 +319,6 @@ export default function AppointmentBookingSystemNew() {
     setBookedSlotsPerRow(mapping);
   }, [sessions, therapistId, therapists, monthlySlotSummary]);
 
-  // Session/package logic
   const selectedPackage = packages.find((p) => p._id === packageId) || null;
   const selectedPatient = patients.find((p) => p.id === patientId) || null;
   const selectedTherapy = therapies.find((t) => t._id === therapyId) || null;
@@ -384,32 +373,79 @@ export default function AppointmentBookingSystemNew() {
     }
   }
 
+  // --------------------------
+  // Toggle Date: allow multiple picking for the same date (as different session lines)
   const toggleDate = (day: number) => {
     const dateKey = getDateKey(year, month + 1, day);
-    const exists = sessions.find((s) => s.date === dateKey);
-    if (exists) {
-      setSessions((prev) => prev.filter((s) => s.date !== dateKey));
-      return;
-    }
+
+    // Only limit if exceeding package session count
     if (
       typeof maxSelectableDates === "number" &&
       sessions.length >= maxSelectableDates
     ) return;
-    setSessions((prev) => [...prev, { date: dateKey, slotId: "", therapistId: therapistId || (therapists[0]?._id || "") }]);
+
+    // Construct therapyTypeId following the BookingSession type, which expects an object if per-session types are allowed
+    let therapyTypeObj: { _id: string; name: string } | undefined = undefined;
+    if (therapyId) {
+      therapyTypeObj = { _id: therapyId, name: "" };
+    }
+
+    setSessions((prev) => [
+      ...prev,
+      {
+        date: dateKey,
+        slotId: "",
+        therapistId: therapistId || (therapists[0]?._id || ""),
+        ...(therapyTypeObj ? { therapyTypeId: therapyTypeObj } : {}),
+      } as BookingSession
+    ]);
   };
 
-  // Update slot id for session row
-  const updateSlotId = (date: string, slotId: string) => {
+  // Prevent duplicate time slot for a date
+  const updateSlotId = (date: string, slotId: string, idx: number) => {
+    setSessions((prev) => {
+      return prev.map((s, i) => {
+        if (i === idx) {
+          // Check: this date's slotId should not match another ACTIVE for this date
+          const isDuplicate = prev.some(
+            (other, oi) => oi !== idx && other.date === date && other.slotId === slotId
+          );
+          if (isDuplicate) {
+            toast.error("You can't select the same time slot for the same date.");
+            return s;
+          }
+          return { ...s, slotId };
+        }
+        return s;
+      });
+    });
+  };
+
+  // Per-row therapist selection
+  const updateSessionTherapist = (idx: number, newTherapistId: string) => {
     setSessions((prev) =>
-      prev.map((s) => (s.date === date ? { ...s, slotId } : s))
+      prev.map((s, i) => (i === idx ? { ...s, therapistId: newTherapistId } : s))
     );
   };
 
-  // Update therapist id for session row (edit mode or always)
-  const updateSessionTherapist = (date: string, therapistIdVal: string) => {
+  // Per-row therapytype selection
+  const updateSessionTherapyType = (idx: number, newTherapyTypeId: string) => {
     setSessions((prev) =>
-      prev.map((s) => (s.date === date ? { ...s, therapistId: therapistIdVal } : s))
+      prev.map((s, i) =>
+        i === idx
+          ? {
+              ...s,
+              // Ensure therapyTypeId is full object matching BookingSession type
+              therapyTypeId: { _id: newTherapyTypeId, name: "" } as { _id: string; name: string },
+            }
+          : s as typeof s
+      ) as typeof prev
     );
+  };
+
+  // NEW: For removing a session row from the table
+  const removeSession = (removeIdx: number) => {
+    setSessions((prev) => prev.filter((_, idx) => idx !== removeIdx));
   };
 
   function getFirstSessionEarliest(sessions: { date: string; slotId: string }[]) {
@@ -419,9 +455,13 @@ export default function AppointmentBookingSystemNew() {
   }
   const earliestSession = getFirstSessionEarliest(sessions);
 
-  const canBook = Boolean(selectedPatient) && Boolean(selectedTherapy) &&
-    Boolean(selectedPackage) && Boolean(selectedTherapist) &&
-    sessions.length > 0 && Boolean(earliestSession && earliestSession.slotId);
+  // Now, time slot must be set for first session; no "same time" check, since allowed multi for date.
+  const canBook = Boolean(selectedPatient) && Boolean(selectedPackage) &&
+    sessions.length > 0 && Boolean(earliestSession && earliestSession.slotId) &&
+    sessions.every((s, idx, arr) =>
+      !arr.some((os, oidx) => oidx !== idx && s.date === os.date && s.slotId === os.slotId)
+    ) &&
+    sessions.every((s) => s.therapyTypeId); // Must pick Therapy Type now per session
 
   function getPatientDisplayName(patient: Patient | undefined | null) {
     if (!patient) return "";
@@ -454,31 +494,29 @@ export default function AppointmentBookingSystemNew() {
     return parts.join("; ");
   }
 
-  // --- CREATE/UPDATE/DELETE Booking - SERVER ---
   const handleBookOrUpdate = async (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
     setBookingSuccess(null);
     setBookingError(null);
     if (!canBook) {
-      const message = "Please fill all required fields and select a session date and time.";
+      const message = "Please fill all required fields and select a session date, time, therapist, and therapy type.";
       setBookingError(message); toast.error(message); return;
     }
     setBookingLoading(true);
-
     let endpoint = import.meta.env.VITE_API_URL || (window as any).VITE_API_URL;
     if (endpoint) endpoint = endpoint.replace(/\/$/, "");
 
     try {
-      // Prepare booking data
       const body: any = {
         patient: selectedPatient?.id,
         therapy: selectedTherapy?._id,
         package: selectedPackage?._id,
-        therapist: selectedTherapist?._id,
+        therapist: selectedTherapist?._id, // for reference top-level
         sessions: sessions.map(sess => ({
           date: sess.date,
           slotId: sess.slotId,
           therapistId: sess.therapistId || selectedTherapist?._id,
+          therapyTypeId: sess.therapyTypeId || therapyId
         })),
         coupon: appliedCoupon?._id ?? null,
         bookingRequestId,
@@ -486,6 +524,9 @@ export default function AppointmentBookingSystemNew() {
         isSessionEditRequest,
         sessionEditRequestId
       };
+
+      console.log(body);
+
 
       if (!editBookingId) {
         // CREATE NEW BOOKING
@@ -500,7 +541,6 @@ export default function AppointmentBookingSystemNew() {
         }
         setBookingSuccess("Booking successfully created.");
       } else {
-        // UPDATE BOOKING
         const resp = await fetch(`${endpoint}/api/admin/bookings/${editBookingId}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
@@ -523,7 +563,6 @@ export default function AppointmentBookingSystemNew() {
   };
 
   function handleEditBooking(bookingId: string) {
-    console.log(bookingId);
     setEditBookingId(bookingId);
     setBookingError(null);
     setBookingSuccess(null);
@@ -533,10 +572,7 @@ export default function AppointmentBookingSystemNew() {
       const mainTherapistId =
         (typeof booking.therapist === "string" && booking.therapist) ||
         ((booking.therapist as any)?._id) || "";
-
       setTherapistId(mainTherapistId);
-
-      // Get correct patient object from patients API data
       const foundPatient = patients.find(p => {
         return (
           (p.patientId && (booking.patient as any)?.patientId && p.patientId === (booking.patient as any)?.patientId) ||
@@ -546,7 +582,6 @@ export default function AppointmentBookingSystemNew() {
       setPatientId(foundPatient ? foundPatient.id : ((booking.patient as any)?.id || ""));
       setTherapyId((booking.therapy as any)?._id || "");
       setPackageId((booking.package as any)?._id || "");
-
       setSessions(
         Array.isArray(booking.sessions)
           ? booking.sessions.map((s) => ({
@@ -556,7 +591,8 @@ export default function AppointmentBookingSystemNew() {
                 s.therapistId ||
                 (s.therapist && typeof s.therapist === "object" && s.therapist._id) ||
                 (s.therapist && typeof s.therapist === "string" ? s.therapist : "") ||
-                mainTherapistId
+                mainTherapistId,
+              therapyTypeId: s.therapyTypeId?._id || (booking.therapy as any)?._id || "" // fallback
             }))
           : []
       );
@@ -579,8 +615,6 @@ export default function AppointmentBookingSystemNew() {
   function handleCancelEdit() {
     resetForm();
   }
-
-
 
   async function handleDeleteBooking(id: string) {
     if (!window.confirm("Delete this booking?")) return;
@@ -639,9 +673,7 @@ export default function AppointmentBookingSystemNew() {
     setCouponInput(""); setAppliedCoupon(null); setCouponStatus(null);
   }
 
-  // const selectedCouponId = appliedCoupon?._id || "";
-
-  // Session slot logic
+  // Session slot logic (unchanged)
   function getAvailableSlotsForDate(
     date: string,
     selectedSessions: { date: string; slotId: string; therapistId?: string }[],
@@ -649,8 +681,8 @@ export default function AppointmentBookingSystemNew() {
     currRowTherapistId?: string,
     currRowIsEdit?: boolean
   ) {
-
-    console.log(selectedSessions,currSelectedSlotId,currRowIsEdit);
+    console.log( selectedSessions,
+      currSelectedSlotId,currRowIsEdit)
     // Defensive fix: if therapists array is empty, return all slots disabled
     if (!therapists || therapists.length === 0) {
       const disabledAll: { [slotId: string]: { disabled: boolean; reason: string } } = {};
@@ -664,7 +696,6 @@ export default function AppointmentBookingSystemNew() {
     if (currRowTherapistId) {
       therapist = therapists.find(t => t._id === currRowTherapistId);
     }
-    // Therapist fallback: if not found, fallback to therapists[0], else return all slots disabled
     if (!therapist) therapist = therapists[0];
     if (!therapist) {
       const disabledAll: { [slotId: string]: { disabled: boolean; reason: string } } = {};
@@ -673,7 +704,6 @@ export default function AppointmentBookingSystemNew() {
       });
       return disabledAll;
     }
-    // Defensive: Holidays and BookedSlots fallback to empty array/object
     const holidays: TherapistHoliday[] = Array.isArray(therapist.holidays) ? therapist.holidays! : [];
     const bookedSlotsObj: Record<string, string[]> = therapist.bookedSlots || {};
 
@@ -687,8 +717,6 @@ export default function AppointmentBookingSystemNew() {
       });
       return slotInfo;
     }
-
-    // Check if full day holiday
     let isFullDayHoliday = holidays.find(
       h => h.date === apiDate && (h.isFullDay === true || h.isFullDay === undefined)
     );
@@ -698,8 +726,6 @@ export default function AppointmentBookingSystemNew() {
       });
       return slotInfo;
     }
-
-    // Get partial slot holidays list
     let slotsOut: string[] = [];
     for (const h of holidays) {
       if (
@@ -711,7 +737,6 @@ export default function AppointmentBookingSystemNew() {
         slotsOut.push(...h.slots.map((s: any) => s.slotId));
       }
     }
-    // Defensive: Ensure booked is always array
     const booked = Array.isArray(bookedSlotsObj[apiDate]) ? bookedSlotsObj[apiDate] : [];
     let normalSlotsLeft = 10 - booked.filter(id => {
       const s = SESSION_TIME_OPTIONS.find(opt => opt.id === id);
@@ -758,7 +783,6 @@ export default function AppointmentBookingSystemNew() {
       if (date.getDay() !== 0) {
         const dApi = `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
         let isHoliday = false;
-        // Defensive: therapist and holidays array
         if (
           therapist &&
           Array.isArray(therapist.holidays) &&
@@ -841,7 +865,6 @@ export default function AppointmentBookingSystemNew() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });
-      // @bookings-admin.routes.js => POST /api/admin/bookings/:id/collect-payment
       if (!resp.ok) {
         const err = await resp.json();
         throw new Error(err?.message || "Payment collection failed.");
@@ -866,9 +889,8 @@ export default function AppointmentBookingSystemNew() {
         guideOpen={guideOpen}
         setGuideOpen={setGuideOpen}
         editBookingId={editBookingId}
-        // coupons={coupons}
       />
-      <div className={`flex gap-6 ${editBookingId ? 'flex-col' : 'md:flex-row flex-col-reverse'}`}>
+      <div className={`flex flex-col gap-6`}>
         <CalendarPanel
           year={year}
           month={month}
@@ -896,7 +918,7 @@ export default function AppointmentBookingSystemNew() {
               Reset
             </button>
           </div>
-          {/* Therapist */}
+          {/* Therapist (Initial reference only) */}
           <label className="block text-sm mb-1 flex items-center gap-1"><FiUser /> Therapist</label>
           <select
             value={therapistId}
@@ -943,7 +965,7 @@ export default function AppointmentBookingSystemNew() {
               <option key={patient.id} value={patient.id}>{getPatientDisplayName(patient)}</option>
             ))}
           </select>
-          {/* Therapy */}
+          {/* Therapy (reference) */}
           <label className="block text-sm mb-1 flex items-center gap-1"><FiTag /> Therapy Type</label>
           <select
             value={therapyId}
@@ -1019,7 +1041,6 @@ export default function AppointmentBookingSystemNew() {
               repeatError={repeatError}
               repeatConflictInfo={repeatConflictInfo}
               therapistId={therapistId}
-              // selectedTherapist={selectedTherapist}
             />
           )}
           {sessions.length > 0 && (
@@ -1027,14 +1048,18 @@ export default function AppointmentBookingSystemNew() {
               sessions={sessions}
               updateSlotId={updateSlotId}
               updateSessionTherapist={updateSessionTherapist}
+              updateSessionTherapyType={updateSessionTherapyType}
               editBookingId={editBookingId}
               therapists={therapists}
               therapistId={therapistId}
+              therapies={therapies}
+              therapyId={therapyId}
               SESSION_TIME_OPTIONS={SESSION_TIME_OPTIONS}
               getAvailableSlotsForDate={getAvailableSlotsForDate}
               bookedSlotsPerRow={bookedSlotsPerRow}
               selectedTherapist={selectedTherapist}
               repeatConflictInfo={repeatConflictInfo}
+              removeSession={removeSession} 
             />
           )}
           {selectedPackage && (
@@ -1075,7 +1100,7 @@ export default function AppointmentBookingSystemNew() {
             if (typeof totalSessions === "number") {
               return (
                 <div className="text-xs text-blue-700 mt-3">
-                  {`You can select up to ${totalSessions} date${totalSessions > 1 ? "s" : ""} for this package. Selecting all is not mandatory.`}
+                  {`You can select up to ${totalSessions} session${totalSessions > 1 ? "s" : ""} for this package (multiple sessions per day are allowed, but must differ by time).`}
                   <br />
                   Each therapist: <b>10 normal</b> and <b>5 limited</b> case slots available per day.
                 </div>
@@ -1115,7 +1140,7 @@ export default function AppointmentBookingSystemNew() {
   );
 }
 
-// --- SUBCOMPONENTS (HeaderGuide, CalendarPanel, RepeatWeeklyPanel, SessionDatesTimesTable, PricingSummary remain unchanged) ---
+// --- SUBCOMPONENTS ---
 
 function HeaderGuide({ guideOpen, setGuideOpen, editBookingId }: any) {
   return (
@@ -1162,12 +1187,12 @@ function HeaderGuide({ guideOpen, setGuideOpen, editBookingId }: any) {
               </div>
               <ol className="list-decimal list-inside text-sm text-slate-600 space-y-1">
                 <li>Use the calendar to view and check bookings. Booked/Total slots for each day are shown.</li>
-                <li>Select a therapist, patient, therapy, and package in 'Quick Book'.</li>
+                <li>Select patient, therapy, package. Each session can have its own therapist, therapy type, and time.</li>
                 <li>
-                  You can now set all sessions to the same weekday and time using "Repeat Weekly" below, or pick individual dates and times as before.
+                  You can set all sessions to same weekday and time using "Repeat Weekly" or pick sessions one-by-one (multiple slots on one day are allowed).
                 </li>
                 <li>
-                  Select <span className="font-medium text-blue-800">at least one</span> session date; enter a time for the first session. Selecting all dates is <span className="font-medium text-blue-800">not mandatory</span>.
+                  For a given date, each session must have a different time and can set a different therapist and therapy type.
                 </li>
                 <li>
                   Click '{editBookingId ? "Update Booking" : "Book Now"}' to {editBookingId ? "update" : "confirm"} a booking.
@@ -1178,7 +1203,7 @@ function HeaderGuide({ guideOpen, setGuideOpen, editBookingId }: any) {
                   </span>
                 </li>
                 <li>
-                  You can apply a coupon code in the given box. If valid, discount will show in pricing.
+                  You can apply a coupon code. If valid, discount will show in pricing.
                 </li>
               </ol>
             </div>
@@ -1193,6 +1218,10 @@ function CalendarPanel({
   year, month, changeMonth, startDay, daysInMonth,
   sessions, toggleDate, getDaySlotSummary, maxSelectableDates
 }: any) {
+  // Highlight if multiple sessions present for a date
+  const getSessionCountForDate = (dateKey: string) =>
+    sessions.filter((s: any) => s.date === dateKey).length;
+
   return (
     <div className="flex-2 lg:col-span-2 bg-white border rounded-lg">
       <div className="flex items-center justify-between p-4 border-b">
@@ -1219,26 +1248,30 @@ function CalendarPanel({
         {Array.from({ length: daysInMonth }).map((_: any, i: number) => {
           const day = i + 1;
           const dateKey = getDateKey(year, month + 1, day);
-          const selected = sessions.find((s: any) => s.date === dateKey);
+          const selectedCount = getSessionCountForDate(dateKey);
           const isAtMax =
             typeof maxSelectableDates === "number" &&
-            sessions.length >= maxSelectableDates &&
-            !selected;
+            sessions.length >= maxSelectableDates;
           const { total, booked, limitedTotal, limitedBooked } = getDaySlotSummary(dateKey);
           return (
             <div
               key={day}
               onClick={() => { if (!isAtMax) toggleDate(day); }}
-              className={`h-24 border cursor-pointer flex flex-col justify-between p-2 transition ${selected ? "bg-blue-50 border-blue-400"
-                : isAtMax ? "bg-gray-100 cursor-not-allowed opacity-60" : "hover:bg-slate-50"}`}
+              className={`h-24 border cursor-pointer flex flex-col justify-between p-2 transition ${
+                selectedCount > 0 ? "bg-blue-50 border-blue-400"
+                : isAtMax ? "bg-gray-100 cursor-not-allowed opacity-60" : "hover:bg-slate-50"
+              }`}
               style={isAtMax ? { pointerEvents: "none" } : {}}
             >
               <div className="flex flex-col justify-start">
-                <div className={`w-7 h-7 flex items-center justify-center rounded-full text-sm ${selected ? "bg-blue-600 text-white" : ""}`}>
+                <div className={`w-7 h-7 flex items-center justify-center rounded-full text-sm ${
+                  selectedCount > 0 ? "bg-blue-600 text-white" : ""}`}>
                   {day}
                 </div>
-                {selected && (
-                  <div className="mt-1 text-xs text-blue-700 font-medium">Selected</div>
+                {selectedCount > 0 && (
+                  <div className="mt-1 text-xs text-blue-700 font-medium">
+                    Selected ({selectedCount})
+                  </div>
                 )}
               </div>
               {typeof total !== "number" ? (
@@ -1269,8 +1302,8 @@ function CalendarPanel({
       </div>
       {typeof maxSelectableDates === "number" && (
         <div className="px-4 pt-2 pb-1 text-xs text-slate-600">
-          {`You can select up to ${maxSelectableDates} date${maxSelectableDates > 1 ? "s" : ""} for this package. `}
-          <span className="text-blue-700">Selecting all is not mandatory; at least one is required.</span>
+          {`You can select up to ${maxSelectableDates} sessions for this package. `}
+          <span className="text-blue-700">Multiple for the same date is allowed as long as time slots are different.</span>
           <br />
           {sessions.length >= maxSelectableDates && (
             <span className="text-blue-700">Limit reached.</span>
@@ -1374,33 +1407,35 @@ function RepeatWeeklyPanel({ repeatDay, setRepeatDay, repeatStartDate, setRepeat
   );
 }
 
+// --- The core new Session Table ---
+// ADDED: removeSession prop, X icon & logic for row removal
 function SessionDatesTimesTable({
-  sessions, updateSlotId, updateSessionTherapist, editBookingId,
-  therapists, therapistId, SESSION_TIME_OPTIONS,
+  sessions, updateSlotId, updateSessionTherapist, updateSessionTherapyType, editBookingId,
+  therapists, therapistId, therapies, therapyId, SESSION_TIME_OPTIONS,
   getAvailableSlotsForDate, bookedSlotsPerRow,
-  selectedTherapist, repeatConflictInfo
+   removeSession
 }: any) {
-
   return (
     <div className="space-y-3 mb-4">
       <div className="text-sm font-semibold text-blue-800 flex items-center gap-2 mb-0"><FiClock />Session Dates &#38; Times</div>
       <div className="overflow-x-auto">
-        <table className="min-w-[440px] w-fit border-collapse text-xs">
+        <table className="min-w-[680px] w-fit border-collapse text-xs">
           <thead>
             <tr>
+              {/* Add extra header for X (remove) column */}
+              
               <th className="px-2 py-1 border border-slate-200 bg-slate-100 font-semibold text-left">Date</th>
               <th className="px-2 py-1 border border-slate-200 bg-slate-100 font-semibold text-left"><FiClock className="inline mr-1" />Time Slot</th>
               <th className="px-2 py-1 border border-slate-200 bg-slate-100 font-semibold text-left"><FiUser className="inline mr-1" />Therapist</th>
+              <th className="px-2 py-1 border border-slate-200 bg-slate-100 font-semibold text-left"><FiTag className="inline mr-1" />Therapy Type</th>
+              {/* <th className="px-2 py-1 border border-slate-200 bg-slate-100"></th> */}
               <th className="px-2 py-1 border border-slate-200 bg-slate-100"></th>
             </tr>
           </thead>
           <tbody>
             {sessions
-              .slice()
-              .sort((a: any, b: any) => a.date.localeCompare(b.date))
               .map((s: any, idx: number, arr: any[]) => {
-                const rowTherapistId = (s as any).therapistId || (selectedTherapist?._id || therapistId);
-                // Defensive: prevent errors in getAvailableSlotsForDate by only calling when value is reasonable
+                const rowTherapistId = (s as any).therapistId || therapistId;
                 let slotInfo: { [slotId: string]: { disabled: boolean; reason: string } };
                 try {
                   slotInfo = getAvailableSlotsForDate(
@@ -1411,21 +1446,24 @@ function SessionDatesTimesTable({
                     !!editBookingId
                   );
                 } catch (e) {
-                  // Fallback: disable all slots
                   slotInfo = {};
                   for (const slot of SESSION_TIME_OPTIONS) {
                     slotInfo[slot.id] = { disabled: true, reason: "Error available slots" };
                   }
                 }
                 const bookedSlotsForRow = (bookedSlotsPerRow && bookedSlotsPerRow[`${s.date}:${rowTherapistId}`]) ? bookedSlotsPerRow[`${s.date}:${rowTherapistId}`] : [];
+                // For time slot duplicate highlight
+                const duplicateSlot = arr.some((other, otherIdx) => otherIdx !== idx && s.date === other.date && s.slotId && s.slotId === other.slotId);
                 return (
-                  <tr key={s.date + ':' + rowTherapistId} className="text-sm">
+                  <tr key={s.date + ':' + idx} className="text-sm">
+                    {/* Add remove (X) icon button column */}
+               
                     <td className="px-2 py-1 border border-slate-200 font-mono">{s.date}</td>
                     <td className="px-2 py-1 border border-slate-200 whitespace-nowrap">
                       <select
                         value={s.slotId}
-                        onChange={e => updateSlotId(s.date, e.target.value)}
-                        className={`border rounded px-2 py-1 ${idx === 0 && !s.slotId ? "border-red-400" : ""}`}
+                        onChange={e => updateSlotId(s.date, e.target.value, idx)}
+                        className={`border rounded px-2 py-1 ${duplicateSlot ? "border-red-400" : idx === 0 && !s.slotId ? "border-red-400" : ""}`}
                         required={idx === 0}
                         aria-required={idx === 0}
                         style={{ minWidth: 180 }}
@@ -1439,17 +1477,22 @@ function SessionDatesTimesTable({
                             labelContent += " - Already Booked";
                           else if (i.disabled && i.reason)
                             labelContent += `  - ${i.reason}`;
+                          // Prevent choosing a slot that would duplicate in another session for this date
+                          const slotTakenBySelf = arr.some((other, otherIdx) => otherIdx !== idx && other.date === s.date && other.slotId === slot.id);
                           return (
                             <option
                               key={slot.id}
                               value={slot.id}
-                              disabled={i.disabled}
+                              disabled={i.disabled || slotTakenBySelf}
                             >
                               {labelContent}
                             </option>
                           );
                         })}
                       </select>
+                      {duplicateSlot && (
+                        <span className="text-xs text-red-500 ml-2">Cannot choose same time for the same date.</span>
+                      )}
                       {bookedSlotsForRow && bookedSlotsForRow.length > 0 && (
                         <span className="block mt-1 text-xs text-amber-700">
                           Already booked: {bookedSlotsForRow
@@ -1465,8 +1508,8 @@ function SessionDatesTimesTable({
                     </td>
                     <td className="px-2 py-1 border border-slate-200 whitespace-nowrap">
                       <select
-                        value={(s as any).therapistId || therapistId}
-                        onChange={e => updateSessionTherapist(s.date, e.target.value)}
+                        value={s.therapistId || therapistId}
+                        onChange={e => updateSessionTherapist(idx, e.target.value)}
                         className="border rounded px-2 py-1 min-w-[120px]"
                       >
                         <option value="">Select Therapist</option>
@@ -1478,17 +1521,57 @@ function SessionDatesTimesTable({
                       </select>
                     </td>
                     <td className="px-2 py-1 border border-slate-200 whitespace-nowrap">
+                      <select
+                        value={s.therapyTypeId || therapyId}
+                        onChange={e => updateSessionTherapyType(idx, e.target.value)}
+                        className="border rounded px-2 py-1 min-w-[150px]"
+                        required
+                      >
+                        <option value="">Select Therapy Type</option>
+                        {therapies.map((therapy: Therapy) => (
+                          <option key={therapy._id} value={therapy._id}>
+                            {therapy.name}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    {/* <td className="px-2 py-1 border border-slate-200 whitespace-nowrap">
                       {repeatConflictInfo && repeatConflictInfo[s.date] && (
                         <span className="inline-block text-xs text-red-600">
                           {repeatConflictInfo[s.date]}
                         </span>
                       )}
+                    </td> */}
+                    <td className="px-2 py-1 border border-slate-200 whitespace-nowrap text-center">
+                      <button
+                        type="button"
+                        title="Remove this session"
+                        className="text-red-500 hover:text-red-700 focus:outline-none focus:ring"
+                        style={{
+                          verticalAlign: "middle",
+                          padding: 2,
+                          borderRadius: 999,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          minWidth: 24,
+                          minHeight: 24
+                        }}
+                        onClick={() => removeSession(idx)}
+                        aria-label="Remove session"
+                        tabIndex={0}
+                      >
+                        <FiX />
+                      </button>
                     </td>
                   </tr>
                 );
               })}
           </tbody>
         </table>
+      </div>
+      <div className="text-xs text-slate-600 mt-1">
+        <b>Tip:</b> You can add multiple sessions for the same date with different times, therapists, and therapy types.
       </div>
     </div>
   );
@@ -1552,7 +1635,6 @@ function BookingSummary({ bookings, getTherapistObject, editBookingId, getPatien
           <div className="flex flex-col gap-4">
             {bookings.map((booking: Booking) => {
               const therapistObj = getTherapistObject(booking);
-              // console.log(booking);
               const isPaid = booking.payment?.status === "paid";
               return (
                 <div
@@ -1623,21 +1705,29 @@ function BookingSummary({ bookings, getTherapistObject, editBookingId, getPatien
                         </span>
                       </summary>
                       <div className="overflow-x-auto mt-2">
-                        <table className="min-w-[440px] w-fit border-collapse text-xs">
+                        <table className="min-w-[680px] w-fit border-collapse text-xs">
                           <thead>
                             <tr>
                               <th className="px-2 py-1 border border-slate-200 bg-slate-100 font-semibold text-left">#</th>
                               <th className="px-2 py-1 border border-slate-200 bg-slate-100 font-semibold text-left">Date</th>
                               <th className="px-2 py-1 border border-slate-200 bg-slate-100 font-semibold text-left">Time Slot</th>
                               <th className="px-2 py-1 border border-slate-200 bg-slate-100 font-semibold text-left">Therapist</th>
+                              <th className="px-2 py-1 border border-slate-200 bg-slate-100 font-semibold text-left">Therapy Type</th>
                             </tr>
                           </thead>
                           <tbody>
                             {booking.sessions.map((s: BookingSession, idx: number) => {
                               const slot = SESSION_TIME_OPTIONS.find((opt: any) => opt.id === s.slotId);
                               const tObj = s.therapist;
+                              // Extract the therapy type (prefer s.therapyType.name, fallback to s.therapyTypeId)
+                              const therapy =
+                                (s && typeof s.therapyTypeId === "object" && s.therapyTypeId)
+                                  ? s.therapyTypeId
+                                  : (typeof s.therapyType === "string" ? s.therapyType : undefined);
+
+                                  console.log(s);
                               return (
-                                <tr key={s._id || s.date}>
+                                <tr key={s._id || s.date + "-" + idx}>
                                   <td className="px-2 py-1 border border-slate-200 text-slate-400">{idx + 1}</td>
                                   <td className="px-2 py-1 border border-slate-200">{s.date}</td>
                                   <td className="px-2 py-1 border border-slate-200 whitespace-nowrap">
@@ -1651,9 +1741,16 @@ function BookingSummary({ bookings, getTherapistObject, editBookingId, getPatien
                                   <td className="px-2 py-1 border border-slate-200 whitespace-nowrap">
                                     {tObj
                                       ? <>
-                                          {tObj && tObj.name}
+                                          {tObj && tObj.userId.name}
                                           {tObj.therapistId ? ` (${tObj.therapistId})` : ""}
                                         </>
+                                      : <span className="text-gray-400">—</span>}
+                                  </td>
+                                  <td className="px-2 py-1 border border-slate-200 whitespace-nowrap">
+                                  {typeof therapy === "object" && therapy && "name" in therapy
+                                    ? therapy.name
+                                    : typeof therapy === "string"
+                                      ? therapy
                                       : <span className="text-gray-400">—</span>}
                                   </td>
                                 </tr>

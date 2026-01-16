@@ -26,7 +26,7 @@ const navItems: NavItem[] = [
   },
   {
     icon: <FileIcon />,
-    name: "My Appointments",
+    name: "My Sessions",
     path: "/therapist/appointments",
   },
   {
@@ -44,7 +44,14 @@ const navItems: NavItem[] = [
     name: "My Profile",
     path: "/therapist/profile",
   },
+  // Logout moved out for bottom
 ];
+
+const logoutNavItem: NavItem = {
+  icon: <UserCircleIcon />, // Could use a different icon e.g. <LogoutIcon />
+  name: "Logout",
+  path: "/therapist/logout",
+};
 
 const othersItems: NavItem[] = [
   // {
@@ -268,6 +275,33 @@ const SupervisorAppSidebar: React.FC = () => {
     </ul>
   );
 
+  // Red logout button at the bottom
+  const renderLogoutButton = () => (
+    <div className="w-fit mt-auto pt-6 pb-8  flex">
+      <Link
+        to={logoutNavItem.path!}
+        className={`
+          flex items-center w-full gap-3 px-4 py-3
+          rounded-lg text-white bg-red-600 hover:bg-red-700
+          font-semibold text-base transition-all duration-150
+          justify-start
+          ${!isExpanded && !isHovered && !isMobileOpen ? "lg:justify-center px-2" : ""}
+        `}
+        style={{
+          // Place the logout at the bottom flush for thin sidebar too
+          minHeight: "48px",
+        }}
+      >
+        <span className={`menu-item-icon-size`}>
+          {logoutNavItem.icon}
+        </span>
+        {(isExpanded || isHovered || isMobileOpen) && (
+          <span className="menu-item-text">{logoutNavItem.name}</span>
+        )}
+      </Link>
+    </div>
+  );
+
   return (
     <aside
       className={`fixed mt-16 flex flex-col lg:mt-0 top-0 px-5 left-0 bg-white dark:bg-gray-900 dark:border-gray-800 text-gray-900 h-screen transition-all duration-300 ease-in-out z-50 border-r border-gray-200 
@@ -309,7 +343,7 @@ const SupervisorAppSidebar: React.FC = () => {
           )}
         </Link>
       </div>
-      <div className="flex flex-col overflow-y-auto duration-300 ease-linear no-scrollbar">
+      <div className="flex flex-col overflow-y-auto duration-300 ease-linear no-scrollbar flex-1">
         <nav className="mb-6">
           <div className="flex flex-col gap-4">
             <div>
@@ -347,6 +381,7 @@ const SupervisorAppSidebar: React.FC = () => {
           </div>
         </nav>
         {/* {isExpanded || isHovered || isMobileOpen ? <SidebarWidget /> : null} */}
+        {renderLogoutButton()}
       </div>
     </aside>
   );

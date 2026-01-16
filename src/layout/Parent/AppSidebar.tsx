@@ -57,9 +57,14 @@ const navItems: NavItem[] = [
     name: "My Profile",
     path: "/parent/profile",
   },
+  // LOGOUT REMOVED FROM HERE - WILL RENDER SEPARATELY AT THE BOTTOM
 ];
 
-
+const logoutNavItem: NavItem = {
+  icon: <UserIcon />,
+  name: "Logout",
+  path: "/parent/logout",
+};
 
 const othersItems: NavItem[] = [
   // {
@@ -283,6 +288,33 @@ const ParentAppSidebar: React.FC = () => {
     </ul>
   );
 
+  // Logout button: red, at the very bottom
+  const renderLogoutItem = () => (
+    <Link
+      to={logoutNavItem.path!}
+      className={` flex items-center gap-3 px-4 py-3
+          rounded-lg text-white bg-red-600 hover:bg-red-700
+          font-semibold text-base transition-all duration-150
+          justify-start w-fit
+        ${isActive(logoutNavItem.path!) ? "bg-red-100 dark:bg-red-800" : ""}
+        ${!isExpanded && !isHovered && !isMobileOpen ? "lg:justify-center" : ""}
+      `}
+     
+    >
+      <span
+        className={`menu-item-icon-size`}
+        style={{ color: "inherit" }}
+      >
+        {logoutNavItem.icon}
+      </span>
+      {(isExpanded || isHovered || isMobileOpen) && (
+        <span className="menu-item-text" style={{ color: "inherit" }}>
+          {logoutNavItem.name}
+        </span>
+      )}
+    </Link>
+  );
+
   return (
     <aside
       className={`fixed mt-16 flex flex-col lg:mt-0 top-0 px-5 left-0 bg-white dark:bg-gray-900 dark:border-gray-800 text-gray-900 h-screen transition-all duration-300 ease-in-out z-50 border-r border-gray-200 
@@ -324,7 +356,7 @@ const ParentAppSidebar: React.FC = () => {
           )}
         </Link>
       </div>
-      <div className="flex flex-col overflow-y-auto duration-300 ease-linear no-scrollbar">
+      <div className="flex-1 flex flex-col overflow-y-auto duration-300 ease-linear no-scrollbar">
         <nav className="mb-6">
           <div className="flex flex-col gap-4">
             <div>
@@ -362,6 +394,9 @@ const ParentAppSidebar: React.FC = () => {
           </div>
         </nav>
         {/* {isExpanded || isHovered || isMobileOpen ? <SidebarWidget /> : null} */}
+        <div className="mt-auto mb-6">
+          {renderLogoutItem()}
+        </div>
       </div>
     </aside>
   );

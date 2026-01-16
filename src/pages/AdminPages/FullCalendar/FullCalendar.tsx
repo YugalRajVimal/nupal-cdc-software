@@ -28,31 +28,52 @@ const SESSION_TIME_OPTIONS = [
   { id: "1930-2015", label: "19:30 to 20:15", limited: true },
 ];
 
+type TherapistUser = {
+  _id: string;
+  name: string;
+};
+
+type Therapist = {
+  _id: string;
+  therapistId?: string;
+  name?: string;
+  userId?: TherapistUser;
+};
+
+type TherapyType = {
+  _id: string;
+  name: string;
+};
+
+type BackendCalendarRecord = {
+  appointmentId: string;
+  patient: {
+    patientId: string;
+    name: string;
+  };
+  session: {
+    date: string;
+    slotId: string;
+    therapist?: Therapist;
+    therapyTypeId?: TherapyType;
+    isCheckedIn?: boolean;
+    _id?: string;
+  };
+  therapist?: {
+    therapistId: string;
+    name?: string;
+  };
+};
+
 type Session = {
+  _id?: string;
   date: string;
   slotId: string;
-  _id?: string;
-  patient?: {
-    id?: string;
-    _id?: string;
-    name?: string;
-    patientId?: string;
-    phoneNo?: string;
-    userId?: {
-      name?: string;
-    } | string;
-    mobile1?: string;
-    email?: string;
-    [key: string]: any;
-  };
-  therapist?: string;
-  therapyTypeId?: string;
   isCheckedIn?: boolean;
   appointmentId?: string;
-  therapyType?: {
-    _id?: string;
-    name?: string;
-  };
+  patient?: { patientId: string; name: string };
+  therapist?: Therapist;
+  therapyTypeId?: TherapyType;
 };
 
 function getDaysInMonth(year: number, month: number) {
@@ -64,104 +85,127 @@ function getStartDay(year: number, month: number) {
 
 const API_BASE_URL = import.meta.env.VITE_API_URL as string;
 
-// Modified display name to always show [patientId] after name if exists
-// function getPatientDisplayName(patient: any) {
-//   if (!patient) return "";
-//   if (typeof patient === "string") return patient;
+function getPatientDisplayName(patient: any) {
+  if (!patient) return "";
+  const name = patient.name || "";
+  const patientId = patient.patientId || "";
+  let resultName = name;
+  if (patientId) {
+    resultName += ` [${patientId}]`;
+  }
+  return resultName;
+}
 
-//   const name =
-//     (patient.userId && typeof patient.userId === "object" && patient.userId.name) ||
-//     patient.name ||
-//     "";
-//   const patientId =
-//     patient.patientId || patient.id || patient._id || ""; // best-effort fallback for patientId
-
-//   const phone = patient.phoneNo || patient.mobile1 || "";
-
-//   // show: name [patientId] (phone) <= id is always in [brackets] after name if exists
-//   let resultName = name;
-//   if (patientId) {
-//     resultName += ` [${patientId}]`;
-//   }
-//   if (phone) {
-//     resultName += ` (${phone})`;
-//   }
-//   return resultName;
-// }
-
-function CalendarSessionItem({ session }: { session: Session }) {
-  const slot = SESSION_TIME_OPTIONS.find((opt) => opt.id === session.slotId);
-
-  // For "isCheckedIn", we color patient info and show appointmentId
-  const isCheckedIn = !!session.isCheckedIn;
-
-  // Fetch safe id for patientId display below
-  const patient = session.patient;
-  // const patientId =
-  //   (patient && (patient.patientId || patient.id || patient._id)) || "";
-
-  // Display
+function PatientDetailsBox({ patient }: { patient: { name: string; patientId: string } }) {
+  if (!patient) return null;
   return (
-    <div
-      className={`rounded border flex flex-col justify-end border-sky-300 px-1 py-0.5 bg-sky-50 text-xs mb-1
-        ${slot && slot.limited ? "border-orange-400 bg-orange-50" : ""}`}
-    >
-      {/* Patient name and id */}
-      <span
-        className={`font-bold ${
-          isCheckedIn ? "text-green-700" : "text-indigo-900"
-        }`}
-      >
-        {/* Render name, patientId, phone, with color, and add appointmentId if checked in */}
-        {(() => {
-          if (!patient) return "";
-          // name
-          const name =
-            (patient.userId && typeof patient.userId === "object" && patient.userId.name) ||
-            patient.name ||
-            "";
-          // patientId in brackets if exists
-          const pid =
-            patient.patientId || patient.id || patient._id || "";
-          // phone (not required in main display)
-          const phone = patient.phoneNo || patient.mobile1 || "";
-
-          return (
-            <>
-              {name}
-              {pid && (
-                <span className={isCheckedIn ? "text-green-600" : "text-sky-700"}>
-                  {" "}
-                  [{pid}]
-                </span>
-              )}
-              {/* Show phone if you wish */}
-              {phone && (
-                <span className="text-slate-500"> ({phone})</span>
-              )}
-              {/* Show appointmentId if checked in */}
-              {isCheckedIn && session.appointmentId && (
-                <span className="ml-1 px-1 rounded text-xs font-semibold bg-green-200 text-green-800">
-                  {session.appointmentId}
-                </span>
-              )}
-            </>
-          );
-        })()}
-      </span>
-      <span>
-        <span className="text-sky-700">
-          {slot ? slot.label : session.slotId}
-        </span>
-        {slot && slot.limited && (
-          <span className="ml-1 text-amber-600 font-semibold"> (Limited)</span>
+    <div className="rounded border px-2 py-2 bg-white mb-1">
+      <div className="font-semibold text-indigo-800 text-base">
+        {patient.name}
+        {patient.patientId && (
+          <span className="text-indigo-600 text-xs ml-1">
+            [{patient.patientId}]
+          </span>
         )}
-      </span>
-      {session.therapyType && session.therapyType.name && (
-        <span className="text-xs text-gray-500">{session.therapyType.name}</span>
-      )}
+      </div>
     </div>
   );
+}
+
+function AppointmentIdBox({ appointmentId }: { appointmentId: string }) {
+  if (!appointmentId) return null;
+  return (
+    <div className="mb-1 px-1 rounded-full font-semibold text-[0.98em] bg-teal-100 text-teal-800 inline-block">
+      APT ID: {appointmentId}
+    </div>
+  );
+}
+
+function TherapyTypeBox({ therapyType }: { therapyType: TherapyType }) {
+  if (!therapyType) return null;
+  return (
+    <div className="my-1 text-xs text-slate-700 bg-slate-50 rounded px-2 py-1 border border-slate-200">
+      <div>
+        <b>Therapy Type:</b>{" "}
+        <span className="font-semibold text-indigo-700">{therapyType.name}</span>
+      </div>
+      {/* <div className="text-slate-400 mt-1">(_id: {therapyType._id})</div> */}
+    </div>
+  );
+}
+
+function TherapistBox({ therapist }: { therapist: Therapist }) {
+  if (!therapist) return null;
+  return (
+    <div className="my-1 text-xs text-slate-700 bg-slate-50 rounded px-2 py-1 border border-slate-200">
+      <div>
+        <b>Therapist:</b> {therapist.userId?.name || therapist.name || "-"}       {therapist.therapistId ? `(${therapist.therapistId})` : ""}
+      </div>
+    
+    </div>
+  );
+}
+
+function CalendarSessionItem({
+  session,
+  showAllDetails = false,
+}: {
+  session: Session;
+  showAllDetails?: boolean;
+}) {
+  const slot = SESSION_TIME_OPTIONS.find((opt) => opt.id === session.slotId);
+  const patient = session.patient;
+  const appointmentId = session.appointmentId;
+  const therapist = session.therapist;
+  const therapyType = session.therapyTypeId;
+  const isCheckedIn = !!session.isCheckedIn;
+
+  if (!showAllDetails) {
+    return (
+      <div
+        className={`rounded border flex flex-col justify-end border-sky-300 px-1 py-0.5 bg-sky-50 text-xs mb-1
+        ${slot && slot.limited ? "border-orange-400 bg-orange-50" : ""}`}
+      >
+        <span className="font-bold text-indigo-900">
+          {getPatientDisplayName(patient)}
+        </span>
+        <span>
+          <span className="text-sky-700">
+            {slot ? slot.label : session.slotId}
+          </span>
+          {slot && slot.limited && (
+            <span className="ml-1 text-amber-600 font-semibold">(Limited)</span>
+          )}
+        </span>
+      </div>
+    );
+  } else {
+    return (
+      <div className="mb-3 p-2 rounded border border-indigo-300 bg-slate-50 flex flex-col">
+        {appointmentId && <AppointmentIdBox appointmentId={appointmentId} />}
+        <div className="mb-1 flex items-center gap-3">
+          <span className="text-xs text-slate-700">{session.date}</span>
+          <span
+            className={`inline-block rounded px-2 py-0.5 mr-1 text-xs font-semibold ${
+              slot && slot.limited
+                ? "bg-amber-100 text-amber-700 border border-amber-300"
+                : "bg-sky-100 text-sky-800"
+            }`}
+          >
+            {slot ? slot.label : session.slotId}
+          </span>
+          {isCheckedIn && (
+            <span className="bg-green-200 px-2 py-0.5 rounded text-green-900 text-xs font-semibold">
+              Checked In
+            </span>
+          )}
+        </div>
+        {patient && <PatientDetailsBox patient={patient} />}
+        {therapyType && <TherapyTypeBox therapyType={therapyType} />}
+        {therapist && <TherapistBox therapist={therapist} />}
+      </div>
+    );
+  }
 }
 
 function Modal({
@@ -190,17 +234,20 @@ function Modal({
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: 50, opacity: 0 }}
           transition={{ type: "spring", stiffness: 250, damping: 30 }}
-          className="bg-white rounded-lg shadow-xl p-6 relative min-w-[320px] max-w-md w-full"
+          className="bg-white rounded-lg shadow-xl p-6 relative min-w-[320px] max-w-lg w-full"
           onClick={(e) => e.stopPropagation()}
         >
           <button
             className="absolute top-2 right-2 text-gray-400 hover:text-black"
             onClick={onClose}
+            tabIndex={-1}
           >
             <FiX size={20} />
           </button>
           {title && (
-            <h2 className="mb-4 text-lg font-bold text-gray-800 border-b pb-2">{title}</h2>
+            <h2 className="mb-4 text-lg font-bold text-gray-800 border-b pb-2">
+              {title}
+            </h2>
           )}
           <div className="overflow-y-auto max-h-[60vh] pr-1">{children}</div>
         </motion.div>
@@ -209,7 +256,27 @@ function Modal({
   );
 }
 
-export default function CalendarAndSchedule() {
+function processBackendSessionList(data: BackendCalendarRecord[]): Session[] {
+  // Only include: appointmentId, patient (id, name), session date, slotId, therapist, therapyTypeId, isCheckedIn, _id
+  return data.map((rec) => {
+    const { appointmentId, patient, session } = rec;
+    return {
+      _id: session._id,
+      appointmentId,
+      patient: patient && {
+        patientId: patient.patientId,
+        name: patient.name,
+      },
+      date: session.date,
+      slotId: session.slotId,
+      therapist: session.therapist,
+      therapyTypeId: session.therapyTypeId,
+      isCheckedIn: session.isCheckedIn,
+    };
+  });
+}
+
+export default function FullCalendar() {
   const [loading, setLoading] = useState(true);
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
@@ -217,35 +284,32 @@ export default function CalendarAndSchedule() {
 
   const [sessions, setSessions] = useState<Session[]>([]);
   const [dataLoading, setDataLoading] = useState<boolean>(true);
-
-  // Modal state for "more sessions"
   const [modalDay, setModalDay] = useState<number | null>(null);
   const [modalSessions, setModalSessions] = useState<Session[] | null>(null);
 
-  // Calendar
   const daysInMonth = getDaysInMonth(year, month);
   const startDay = getStartDay(year, month);
 
-  // Fetch all sessions
   const fetchSessions = useCallback(async () => {
     try {
       const token = localStorage.getItem("therapist-token");
-      const res = await fetch(`${API_BASE_URL}/api/therapist/schedule-calendar`, {
-        headers: {
-          Authorization: `${token}`,
-        },
-      });
+      const res = await fetch(
+        `${API_BASE_URL}/api/admin/bookings/full-calendar`,
+        {
+          headers: {
+            Authorization: `${token}`,
+          },
+        }
+      );
       const json = await res.json();
       if (json && json.success && Array.isArray(json.data)) {
-        setSessions(json.data);
-        console.log("All sessions:", json.data);
+        setSessions(processBackendSessionList(json.data));
+        // console.log("All sessions (processed):", processBackendSessionList(json.data));
       } else {
         setSessions([]);
-        // console.log("All sessions: []");
       }
     } catch (e) {
       setSessions([]);
-      // console.log("Failed to fetch all sessions.");
     }
   }, []);
 
@@ -264,7 +328,7 @@ export default function CalendarAndSchedule() {
     return () => clearTimeout(t);
   }, []);
 
-  // Map sessions by date (string)
+  // Map sessions by date
   const sessionMap: { [date: string]: Session[] } = {};
   sessions.forEach((session) => {
     if (!session.date) return;
@@ -272,7 +336,6 @@ export default function CalendarAndSchedule() {
     sessionMap[session.date].push(session);
   });
 
-  // Helper: get session list for the displayed calendar month
   function getSessionsForDay(day: number) {
     const mth = month + 1;
     const pad = (n: number) => `${n}`.padStart(2, "0");
@@ -306,18 +369,15 @@ export default function CalendarAndSchedule() {
         setYear((y) => y + 1);
       } else setMonth((m) => m + 1);
     }
-    // Close modal if month changed
     setModalDay(null);
     setModalSessions(null);
   };
 
-  // Calculate number of calendar rows (weeks)
   function getCalendarWeeks() {
     const calendarCells = startDay + daysInMonth;
     return Math.ceil(calendarCells / 7);
   }
 
-  // Fullsize calendar layout
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -362,11 +422,10 @@ export default function CalendarAndSchedule() {
           <div
             className={`grid grid-cols-7 w-full flex-1`}
             style={{
-              height: "calc(100vh - 179px)", // Subtract header+days+padding
+              height: "calc(100vh - 179px)",
               minHeight: "0",
               maxHeight: "100%",
               gridTemplateRows: `repeat(${getCalendarWeeks()}, minmax(0, 1fr))`,
-              // shrink font size for cells on the whole calendar
               fontSize: "0.91rem",
             }}
           >
@@ -382,7 +441,7 @@ export default function CalendarAndSchedule() {
                 }}
               />
             ))}
-            {/* Render actual days in month */}
+            {/* Actual days */}
             {Array.from({ length: daysInMonth }).map((_, dayIdx) => {
               const day = dayIdx + 1;
               const sessionsForDay = getSessionsForDay(day);
@@ -391,13 +450,16 @@ export default function CalendarAndSchedule() {
                 month === today.getMonth() &&
                 year === today.getFullYear();
 
-              // Up to 2 session items shown directly, more trigger a "show more" modal
               const showCount = 2;
               const sessionsToDisplay = sessionsForDay.slice(0, showCount);
               const moreSessionsCount = sessionsForDay.length - showCount;
               return (
                 <div
                   key={`day-${day}`}
+                   onClick={() => {
+                            setModalDay(day);
+                            setModalSessions(sessionsForDay);
+                          }}
                   className={`relative border flex flex-col p-1 transition min-h-0 min-w-0
                     ${isToday ? "bg-sky-50 border-sky-400" : "bg-white hover:bg-slate-50"}`}
                   style={{
@@ -426,12 +488,15 @@ export default function CalendarAndSchedule() {
                   {sessionsForDay.length > 0 && (
                     <div className="flex flex-col w-full flex-1">
                       {sessionsToDisplay.map((session, idx) => (
-                        <CalendarSessionItem session={session} key={session._id || `${session.date}-${session.slotId}-${idx}`} />
+                        <CalendarSessionItem
+                          session={session}
+                          key={session._id || `${session.date}-${session.slotId}-${idx}`}
+                        />
                       ))}
                       {moreSessionsCount > 0 && (
                         <button
                           className="px-1 py-0.5 mt-1 text-sky-700 rounded hover:bg-sky-100 text-[0.70rem] font-semibold border border-sky-200 flex items-center justify-center"
-                          style={{minHeight: "22px"}}
+                          style={{ minHeight: "22px" }}
                           onClick={() => {
                             setModalDay(day);
                             setModalSessions(sessionsForDay);
@@ -443,12 +508,11 @@ export default function CalendarAndSchedule() {
                       )}
                     </div>
                   )}
-                  {/* Empty space stub if no sessions */}
                   {sessionsForDay.length === 0 && <div className="flex-1"></div>}
                 </div>
               );
             })}
-            {/* Fill trailing days to cover for grid, so final row finishes */}
+            {/* Fill trailing days for grid */}
             {(() => {
               const totalCells = startDay + daysInMonth;
               const fullGridCells = getCalendarWeeks() * 7;
@@ -457,14 +521,18 @@ export default function CalendarAndSchedule() {
                 <div
                   key={`trailing-${i}`}
                   className="border h-full bg-slate-50"
-                  style={{ minHeight: 0, minWidth: 0, boxSizing: "border-box" }}
+                  style={{
+                    minHeight: 0,
+                    minWidth: 0,
+                    boxSizing: "border-box",
+                  }}
                 />
               ));
             })()}
           </div>
         </div>
       </div>
-      {/* Modal for showing all sessions for a day */}
+      {/* Modal for all session details */}
       <Modal
         open={modalDay !== null}
         onClose={() => {
@@ -479,11 +547,11 @@ export default function CalendarAndSchedule() {
             : undefined
         }
       >
-        {modalDay && modalSessions ? (
+        {modalDay && modalSessions && modalSessions.length > 0 ? (
           <div className="flex flex-col gap-2">
             {modalSessions.map((session, idx) => (
               <div key={session._id || `${session.date}-${session.slotId}-${idx}`}>
-                <CalendarSessionItem session={session} />
+                <CalendarSessionItem session={session} showAllDetails={true} />
               </div>
             ))}
           </div>

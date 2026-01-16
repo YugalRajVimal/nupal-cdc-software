@@ -13,8 +13,6 @@ import dayjs from "dayjs";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "";
 
-// [Types unchanged]
-
 type TherapistType = {
   _id: string;
   userId: {
@@ -74,29 +72,44 @@ type AppointmentType = {
 };
 
 const SESSION_TIME_OPTIONS = [
-  { id: '1000-1045', label: '10:00 to 10:45', limited: false },
-  { id: '1045-1130', label: '10:45 to 11:30', limited: false },
-  { id: '1130-1215', label: '11:30 to 12:15', limited: false },
-  { id: '1215-1300', label: '12:15 to 13:00', limited: false },
-  { id: '1300-1345', label: '13:00 to 13:45', limited: false },
-  { id: '1415-1500', label: '14:15 to 15:00', limited: false },
-  { id: '1500-1545', label: '15:00 to 15:45', limited: false },
-  { id: '1545-1630', label: '15:45 to 16:30', limited: false },
-  { id: '1630-1715', label: '16:30 to 17:15', limited: false },
-  { id: '1715-1800', label: '17:15 to 18:00', limited: false },
-  { id: '0830-0915', label: '08:30 to 09:15', limited: true },
-  { id: '0915-1000', label: '09:15 to 10:00', limited: true },
-  { id: '1800-1845', label: '18:00 to 18:45', limited: true },
-  { id: '1845-1930', label: '18:45 to 19:30', limited: true },
-  { id: '1930-2015', label: '19:30 to 20:15', limited: true },
+  { id: "1000-1045", label: "10:00 to 10:45", limited: false },
+  { id: "1045-1130", label: "10:45 to 11:30", limited: false },
+  { id: "1130-1215", label: "11:30 to 12:15", limited: false },
+  { id: "1215-1300", label: "12:15 to 13:00", limited: false },
+  { id: "1300-1345", label: "13:00 to 13:45", limited: false },
+  { id: "1415-1500", label: "14:15 to 15:00", limited: false },
+  { id: "1500-1545", label: "15:00 to 15:45", limited: false },
+  { id: "1545-1630", label: "15:45 to 16:30", limited: false },
+  { id: "1630-1715", label: "16:30 to 17:15", limited: false },
+  { id: "1715-1800", label: "17:15 to 18:00", limited: false },
+  { id: "0830-0915", label: "08:30 to 09:15", limited: true },
+  { id: "0915-1000", label: "09:15 to 10:00", limited: true },
+  { id: "1800-1845", label: "18:00 to 18:45", limited: true },
+  { id: "1845-1930", label: "18:45 to 19:30", limited: true },
+  { id: "1930-2015", label: "19:30 to 20:15", limited: true },
 ];
 
-// function formatDate(date?: string) {
-//   if (!date) return "-";
-//   const d = new Date(date);
-//   if (isNaN(d.getTime())) return "-";
-//   return dayjs(d).format("DD MMM YYYY");
-// }
+// Map slotId to start/end time for quick calculation (24-hour)
+const SLOT_TIME_LOOKUP: Record<
+  string,
+  { start: string; end: string }
+> = {
+  "1000-1045": { start: "10:00", end: "10:45" },
+  "1045-1130": { start: "10:45", end: "11:30" },
+  "1130-1215": { start: "11:30", end: "12:15" },
+  "1215-1300": { start: "12:15", end: "13:00" },
+  "1300-1345": { start: "13:00", end: "13:45" },
+  "1415-1500": { start: "14:15", end: "15:00" },
+  "1500-1545": { start: "15:00", end: "15:45" },
+  "1545-1630": { start: "15:45", end: "16:30" },
+  "1630-1715": { start: "16:30", end: "17:15" },
+  "1715-1800": { start: "17:15", end: "18:00" },
+  "0830-0915": { start: "08:30", end: "09:15" },
+  "0915-1000": { start: "09:15", end: "10:00" },
+  "1800-1845": { start: "18:00", end: "18:45" },
+  "1845-1930": { start: "18:45", end: "19:30" },
+  "1930-2015": { start: "19:30", end: "20:15" },
+};
 
 type SessionEditState = {
   [sessionKey: string]: {
@@ -114,6 +127,39 @@ type SessionEditState = {
     pendingRequestNewSlotId?: string | null;
   };
 };
+
+// Utility to parse slot start to Date from date + slotId
+function getSlotDateTime(dateStr: string, slotId?: string) {
+  if (!dateStr || !slotId) return null;
+  const slot = SLOT_TIME_LOOKUP[slotId];
+  if (!slot) return null;
+  // Compose date and start time
+  // Date format: YYYY-MM-DD, time format: HH:mm (24hr)
+  const dt = dayjs(`${dateStr}T${slot.start}`);
+  return dt.isValid() ? dt : null;
+}
+
+// Is less than 2 hours (or <= 2hr) from now to this datetime?
+function isLessThan2Hours(dt: dayjs.Dayjs | null) {
+  if (!dt) return false;
+  const now = dayjs();
+  const diffMinutes = dt.diff(now, "minute");
+  return diffMinutes <= 120;
+}
+
+// For bulk edit UI: block/grey out a session if less than 2hr to session start
+function isSessionLocked2Hr(dateStr: string, slotId?: string) {
+  const slotDt = getSlotDateTime(dateStr, slotId);
+  if (!slotDt) return false;
+  return isLessThan2Hours(slotDt);
+}
+
+// For slot dropdown - if the (selected) date+slotId would result in <2hr lock
+function willSelectionBeLocked2Hr(dateStr: string, slotId: string) {
+  // Only check if dateStr is non-empty and slotId is in the slot list
+  if (!dateStr || !slotId) return false;
+  return isSessionLocked2Hr(dateStr, slotId);
+}
 
 export default function RequestEditInAppointment() {
   const [appointments, setAppointments] = useState<AppointmentType[]>([]);
@@ -321,7 +367,9 @@ export default function RequestEditInAppointment() {
       ([, v]) => !v.requested && v.isEditedSlot
     );
 
+    // Check for 2hr lock for all edited sessions
     for (const [k, v] of sessionsToRequest) {
+      // Must use new date/slot values
       if (!v.date || !v.slotId) {
         setSessionEditState((prev) => ({
           ...prev,
@@ -330,6 +378,21 @@ export default function RequestEditInAppointment() {
         setSubmittingAll(false);
         setSubmitAllError(
           "Please fill date & slot for all edited sessions to request."
+        );
+        return;
+      }
+      if (willSelectionBeLocked2Hr(v.date, v.slotId)) {
+        setSessionEditState((prev) => ({
+          ...prev,
+          [k]: {
+            ...prev[k],
+            error:
+              "Cannot request edit for session within 2 hours of its scheduled time.",
+          },
+        }));
+        setSubmittingAll(false);
+        setSubmitAllError(
+          "One or more sessions cannot be edited less than 2 hours before the scheduled time."
         );
         return;
       }
@@ -425,21 +488,19 @@ export default function RequestEditInAppointment() {
   };
 
   // Helper to get session "old" date and slot for given sessionId (for editRequest display)
-  function findSessionOldDetails(sessionId: string, appointment: AppointmentType | null): { oldDate?: string, oldSlotId?: string } {
+  function findSessionOldDetails(
+    sessionId: string,
+    appointment: AppointmentType | null
+  ): { oldDate?: string; oldSlotId?: string } {
     if (!appointment || !Array.isArray(appointment.sessions)) return {};
 
     for (let s of appointment.sessions) {
-      // Handle both string ids and object ids, robustly
-    if(s._id == sessionId) {
-      console.log(s._id, sessionId)
-
-        console.log(s.date, s.slotId)
-
+      if (s._id == sessionId) {
         return {
           oldDate: s.date,
           oldSlotId: s.slotId,
         };
-    }
+      }
     }
     // If not found by _id above, check by sessionId field if present
     for (let s of appointment.sessions) {
@@ -450,7 +511,6 @@ export default function RequestEditInAppointment() {
         };
       }
     }
-    // If nothing found, return empty object
     return {};
   }
 
@@ -489,48 +549,62 @@ export default function RequestEditInAppointment() {
                   </td>
                 </tr>
               )}
-              {appointments.map((a) => (
-                <tr key={a._id} className="border-t">
-                  <td className="px-4 py-4 font-semibold text-slate-700">
-                    {a.appointmentId || a._id}
-                  </td>
-                  <td className="px-4 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-full bg-sky-100 flex items-center justify-center">
-                        <FiUser className="text-sky-600" />
+              {appointments.map((a) => {
+                // Hide the request button if there is a pending or approved request for this appointment
+                // const hasRequest =
+                //   Array.isArray(a.editRequests) &&
+                //   a.editRequests.some(
+                //     (er) =>
+                //       er.status === "pending" || er.status === "approved"
+                //   );
+                return (
+                  <tr key={a._id} className="border-t">
+                    <td className="px-4 py-4 font-semibold text-slate-700">
+                      {a.appointmentId || a._id}
+                    </td>
+                    <td className="px-4 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-full bg-sky-100 flex items-center justify-center">
+                          <FiUser className="text-sky-600" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-slate-800">
+                            {a.patient?.name || (
+                              <span className="italic text-slate-400">N/A</span>
+                            )}
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="font-medium text-slate-800">
-                          {a.patient?.name || (
-                            <span className="italic text-slate-400">N/A</span>
-                          )}
-                        </p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-4">
-                    {a.patient?.patientId ? (
-                      <span className="inline-block rounded bg-blue-50 text-blue-700 px-2 py-1 text-xs font-semibold">
-                        {a.patient.patientId}
-                      </span>
-                    ) : (
-                      <span className="italic text-slate-400">N/A</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-4 text-center font-semibold">
-                    {Array.isArray(a.sessions) ? a.sessions.length : 0}
-                  </td>
-                  <td className="px-4 py-4">
-                    <button
-                      type="button"
-                      className="flex items-center gap-1 px-3 py-1 rounded bg-slate-100 hover:bg-blue-50 border border-slate-200 text-blue-700 shadow-sm text-xs"
-                      onClick={() => setViewAppointment(a)}
-                    >
-                      <FiCalendar className="text-blue-500" /> View / Edit
-                    </button>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="px-4 py-4">
+                      {a.patient?.patientId ? (
+                        <span className="inline-block rounded bg-blue-50 text-blue-700 px-2 py-1 text-xs font-semibold">
+                          {a.patient.patientId}
+                        </span>
+                      ) : (
+                        <span className="italic text-slate-400">N/A</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-4 text-center font-semibold">
+                      {Array.isArray(a.sessions) ? a.sessions.length : 0}
+                    </td>
+                    <td className="px-4 py-4">
+                      <button
+                        type="button"
+                        className="flex items-center gap-1 px-3 py-1 rounded bg-slate-100 hover:bg-blue-50 border border-slate-200 text-blue-700 shadow-sm text-xs"
+                        onClick={() => setViewAppointment(a)}
+                      >
+                        <FiCalendar className="text-blue-500" /> View / Edit
+                      </button>
+                      {/* 
+                        The original "Request Edit For Multiple Sessions" button is shown inside the modal,
+                        so we do not add it here. If you want to hide request edit *per row* (if such a feature appears in the future),
+                        you can use hasRequest
+                      */}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -795,6 +869,13 @@ export default function RequestEditInAppointment() {
                       const showEditedWarn =
                         editAllMode && !alreadyRequested && localState.isEditedSlot;
 
+                      // Is less than 2hr for current session's original date/time/slot?
+                      const locked2hr =
+                        isSessionLocked2Hr(
+                          localState.originalDate ?? localState.date,
+                          localState.originalSlotId ?? localState.slotId
+                        );
+
                       return (
                         <tr key={key} className="border-t">
                           {/* Date cell */}
@@ -820,7 +901,7 @@ export default function RequestEditInAppointment() {
                                     e.target.value
                                   )
                                 }
-                                disabled={submittingAll}
+                                disabled={submittingAll || locked2hr}
                               />
                             ) : s.date ? (
                               dayjs(s.date).format("YYYY-MM-DD")
@@ -842,14 +923,18 @@ export default function RequestEditInAppointment() {
                                 <FiEdit2 /> Changed
                               </div>
                             )}
+                            {locked2hr && (
+                              <div className="text-gray-500 text-[11px] mt-1 flex items-center gap-1">
+                                <FiX /> Can't edit within 2 hours
+                              </div>
+                            )}
                           </td>
                           {/* Slot cell */}
                           <td className="px-3 py-2">
                             {editAllMode && !alreadyRequested ? (
                               <select
-                                className={`border rounded px-1 py-1 text-xs ${
-                                  showEditedWarn ? "border-blue-500" : ""
-                                }`}
+                                className={`border rounded px-1 py-1 text-xs ${showEditedWarn ? "border-blue-500" : ""
+                                  }`}
                                 value={localState.slotId}
                                 onChange={(e) =>
                                   handleSessionFieldChange(
@@ -858,16 +943,29 @@ export default function RequestEditInAppointment() {
                                     e.target.value
                                   )
                                 }
-                                disabled={submittingAll}
+                                disabled={submittingAll || locked2hr}
                               >
                                 <option value="" disabled>
                                   Select Slot
                                 </option>
-                                {SESSION_TIME_OPTIONS.map((opt) => (
-                                  <option key={opt.id} value={opt.id}>
-                                    {opt.label} {opt.limited ? "(Limited)" : ""}
-                                  </option>
-                                ))}
+                                {SESSION_TIME_OPTIONS.map((opt) => {
+                                  // Grey out if the current date+slotId would be locked
+                                  const optionLocked = willSelectionBeLocked2Hr(
+                                    localState.date, // use edited or current field
+                                    opt.id
+                                  );
+                                  return (
+                                    <option
+                                      key={opt.id}
+                                      value={opt.id}
+                                      disabled={optionLocked}
+                                      style={optionLocked ? { color: "#bbbbbb", background: "#f1f1f1" } : {}}
+                                    >
+                                      {opt.label} {opt.limited ? "(Limited)" : ""}
+                                      {optionLocked ? " - Not Available (<2hr)" : ""}
+                                    </option>
+                                  );
+                                })}
                               </select>
                             ) : (
                               SESSION_TIME_OPTIONS.find(
@@ -888,6 +986,11 @@ export default function RequestEditInAppointment() {
                             {showEditedWarn && (
                               <div className="text-green-800 text-[10px] mt-1 flex items-center gap-1">
                                 <FiEdit2 /> Changed
+                              </div>
+                            )}
+                            {editAllMode && locked2hr && (
+                              <div className="text-gray-500 text-[11px] mt-1 flex items-center gap-1">
+                                <FiX /> Can't edit within 2 hours
                               </div>
                             )}
                           </td>
@@ -982,7 +1085,7 @@ export default function RequestEditInAppointment() {
                   </button>
                 </>
               ) : (
-                // Hide edit button if even one session is "requested" (pending/approved), i.e. appointment has a non-rejected edit request
+                // Hide edit button if there is a pending or approved request for this appointment
                 !appointmentHasPendingRequest(viewAppointment) &&
                 Object.values(sessionEditState).some((v) => !v.requested) && (
                   <button

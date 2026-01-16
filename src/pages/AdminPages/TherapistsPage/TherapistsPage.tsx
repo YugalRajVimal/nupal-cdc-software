@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import {
   FiUser,
   FiTrash2,
@@ -23,7 +23,6 @@ type TherapistProfile = {
     role?: string;
     createdAt?: string;
     updatedAt?: string;
-    // panelAccess and isDisabled can be in userId/user schema
     isDisabled?: boolean;
   };
   isPanelAccessible?: boolean;
@@ -57,16 +56,39 @@ type TherapistProfile = {
   portfolio?: string;
   blog?: string;
   remarks?: string;
-  // Optionally, surface these props top level for easy access
+  earnings?: Array<{
+    amount: number;
+    type: "salary" | "contract";
+    fromDate: string;
+    toDate: string;
+    remark?: string;
+    paidOn?: string;
+  }>;
   isDisabled?: boolean;
   panelAccess?: boolean;
 };
 
-// All editable and display fields (schema keys)
+type PayFormState = {
+  amount: string;
+  type: "salary" | "contract";
+  fromDate: string;
+  toDate: string;
+  remark: string;
+  paidOn?: string;
+};
+
+const DATE_FIELDS = [
+  "createdAt",
+  "updatedAt",
+  "fromDate",
+  "toDate",
+  "paidOn",
+];
+
 const FIELD_LIST: {
   key: string;
   label: string;
-  type?: "text" | "email" | "number" | "file";
+  type?: "text" | "email" | "number" | "file" | "date";
   readOnly?: boolean;
   render?: (value: any, row?: TherapistProfile) => React.ReactNode;
 }[] = [
@@ -102,10 +124,107 @@ const FIELD_LIST: {
   { key: "remarks", label: "Remarks" },
 ];
 
+// function getTodayString() {
+//   // Returns YYYY-MM-DD string
+//   return new Date().toISOString().slice(0, 10);
+// }
+
+// function parseDateFromString(str: string): Date | null {
+//   if (!str) return null;
+//   const d = new Date(str);
+//   return !isNaN(d.getTime()) ? d : null;
+// }
+
+// Simple calendar widget using native HTML, but gives overlay feel
+function CalendarInput({
+  value,
+  onChange,
+  min,
+  max,
+  required,
+  className,
+  id,
+  name,
+}: {
+  value: string;
+  onChange: (val: string) => void;
+  min?: string;
+  max?: string;
+  required?: boolean;
+  className?: string;
+  id?: string;
+  name?: string;
+}) {
+  // Show normal input (type text) for desktop, clicking a calendar icon will open a native date input overlay for selection (for calendar feel)
+  const ref = useRef<HTMLInputElement | null>(null);
+
+  return (
+    <span className="relative flex items-center">
+      <input
+        className={className}
+        type="text"
+        value={value}
+        readOnly
+        id={id}
+        name={name}
+        style={{ backgroundColor: "#fcfcff" }}
+        onClick={() => {
+          ref.current?.showPicker?.();
+          ref.current?.focus();
+        }}
+        placeholder="YYYY-MM-DD"
+      />
+      <button
+        tabIndex={-1}
+        type="button"
+        onClick={e => {
+          e.preventDefault();
+          ref.current?.showPicker?.();
+          ref.current?.focus();
+        }}
+        className="absolute right-2 top-0 bottom-0 flex items-center justify-center h-full text-slate-500 hover:text-blue-600 transition"
+        style={{ background: "none", border: "none", cursor: "pointer" }}
+        aria-label="pick date"
+      >
+        <svg height="16" width="16" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <rect x="3" y="6" width="18" height="14" rx="2" strokeWidth="2" stroke="currentColor" />
+          <path d="M16 2v4M8 2v4" strokeWidth="2" stroke="currentColor" />
+        </svg>
+      </button>
+      {/* Native calendar overlays on click, if supported */}
+      <input
+        ref={ref}
+        type="date"
+        style={{
+          opacity: 0,
+          width: "32px",
+          minWidth: "32px",
+          height: "32px",
+          position: "absolute",
+          right: "0.2rem",
+          top: "0",
+          zIndex: 2,
+          cursor: "pointer",
+        }}
+        value={value}
+        min={min}
+        max={max}
+        onChange={e => {
+          onChange(e.target.value);
+        }}
+        required={required}
+        tabIndex={-1}
+        id={id ? `${id}-calendar` : undefined}
+        name={name ? `${name}-calendar` : undefined}
+        autoComplete="off"
+      />
+    </span>
+  );
+}
+
 export default function TherapistsPage() {
   const [therapists, setTherapists] = useState<TherapistProfile[]>([]);
   const [loading, setLoading] = useState(false);
-  // const [selected, setSelected] = useState<TherapistProfile | null>(null);
   const [editTherapist, setEditTherapist] = useState<TherapistProfile | null>(null);
   const [editField, setEditField] = useState<{ [k: string]: any }>({});
   const [error, setError] = useState<string | null>(null);
@@ -114,11 +233,24 @@ export default function TherapistsPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedProfile, setSelectedProfile] = useState<TherapistProfile | null>(null);
 
-  // On selecting, fetch full profile each time to have latest
+  // Therapist Pay Modal state
+  const [showPayModal, setShowPayModal] = useState(false);
+  const [payForm, setPayForm] = useState<PayFormState>({
+    amount: "",
+    type: "salary",
+    fromDate: "",
+    toDate: "",
+    remark: "",
+    paidOn: "",
+  });
+  const [payLoading, setPayLoading] = useState(false);
+  const [payError, setPayError] = useState<string | null>(null);
+  const [paySuccess, setPaySuccess] = useState<string | null>(null);
+
   const fetchTherapistById = useCallback(async (id: string) => {
     setLoading(true);
     setError(null);
-    setSelectedId(id); // so we know which modal is open, even if data is yet to load/freshly loading
+    setSelectedId(id);
     setSelectedProfile(null);
     try {
       const res = await axios.get(
@@ -136,12 +268,10 @@ export default function TherapistsPage() {
     }
   }, []);
 
-  // Keeps the below function signature unchanged for the main table "View Details" button
   const onTableViewClick = (id: string) => {
     fetchTherapistById(id);
   };
 
-  // This is now unused in rendering, but will keep for external usage
   async function fetchTherapists() {
     setLoading(true);
     setError(null);
@@ -156,7 +286,6 @@ export default function TherapistsPage() {
         (Array.isArray(res.data) || Array.isArray(res.data.therapists))
       ) {
         therapistsArr = Array.isArray(res.data) ? res.data : res.data.therapists;
-        // console.log(therapistsArr);
       } else if (res && res.data && res.data.therapists && typeof res.data.therapists === "object") {
         therapistsArr = Object.values(res.data.therapists).filter(
           v => typeof v === "object" && v !== null && "_id" in v
@@ -174,10 +303,7 @@ export default function TherapistsPage() {
     }
   }
 
-  // Toggle disable/enable endpoint based on shouldDisable
-  // After API, fetch the latest data for the modal too
   async function handleToggleDisable(id: string, shouldDisable: boolean) {
-    // console.log('[handleToggleDisable] Called with:', { id, shouldDisable });
     setLoading(true);
     setError(null);
     try {
@@ -186,12 +312,10 @@ export default function TherapistsPage() {
         : `${API_BASE_URL.replace(/\/$/, "")}/api/admin/therapist/${id}/enable`;
       await axios.patch(endpoint);
       await fetchTherapists();
-      // Also fetch updated therapist for modal view if it's open for this id
       if (selectedId === id) {
         await fetchTherapistById(id);
       }
     } catch (err: any) {
-      // console.log('[handleToggleDisable] ERROR:', err);
       setError(
         err?.response?.data?.message ||
         err?.message ||
@@ -202,7 +326,6 @@ export default function TherapistsPage() {
     }
   }
 
-  // Toggle panelAccess, also refresh modal data for current id if needed
   async function handleTogglePanelAccess(id: string, enable: boolean) {
     setLoading(true);
     setError(null);
@@ -235,9 +358,16 @@ export default function TherapistsPage() {
         ...editTherapist,
         ...editField,
       };
+
+      // Convert all calendar-editable date fields (if any) to YYYY-MM-DD format
+      for (const dfield of DATE_FIELDS) {
+        if (payload[dfield] && typeof payload[dfield] === "object" && payload[dfield] instanceof Date) {
+          // not possible with native, but guard anyway
+          payload[dfield] = payload[dfield].toISOString().slice(0, 10);
+        }
+      }
       delete payload._id;
       delete payload.userId;
-
       for (const field of FIELD_LIST) {
         if (payload[field.key] === undefined || payload[field.key] === null) {
           payload[field.key] = "";
@@ -252,13 +382,11 @@ export default function TherapistsPage() {
           payload.specializations = "";
         }
       }
-
       await axios.put(
         `${API_BASE_URL.replace(/\/$/, "")}/api/admin/therapist/${editTherapist._id}`,
         payload,
         { headers: { "Content-Type": "application/json" } }
       );
-
       await fetchTherapists();
       setEditTherapist(null);
       setEditField({});
@@ -284,7 +412,6 @@ export default function TherapistsPage() {
         `${API_BASE_URL.replace(/\/$/, "")}/api/admin/therapist/${id}`
       );
       await fetchTherapists();
-      // If deleting the selected therapist in modal, close modal
       if (selectedId === id) {
         setSelectedId(null);
         setSelectedProfile(null);
@@ -302,15 +429,104 @@ export default function TherapistsPage() {
     }
   }
 
+  // --- Therapist Pay Feature functions ---
+  function openPayModal() {
+    setPaySuccess(null);
+    setPayError(null);
+    setShowPayModal(true);
+    setPayForm({
+      amount: "",
+      type: "salary",
+      fromDate: "",
+      toDate: "",
+      remark: "",
+      paidOn: "",
+    });
+  }
+
+  function closePayModal() {
+    setShowPayModal(false);
+    setPayError(null);
+    setPaySuccess(null);
+    setPayForm({
+      amount: "",
+      type: "salary",
+      fromDate: "",
+      toDate: "",
+      remark: "",
+      paidOn: "",
+    });
+  }
+
+  async function handlePaySubmit(therapistId: string) {
+    console.log(therapistId);
+    setPayLoading(true);
+    setPayError(null);
+    setPaySuccess(null);
+
+    // Validate Inputs
+    if (
+      !payForm.amount ||
+      isNaN(Number(payForm.amount)) ||
+      Number(payForm.amount) <= 0 ||
+      !payForm.type ||
+      !payForm.fromDate ||
+      !payForm.toDate
+    ) {
+      setPayError("Please enter all required fields: amount, type, fromDate, toDate.");
+      setPayLoading(false);
+      return;
+    }
+    // Compose payload
+    // const payload = {
+    //   amount: Number(payForm.amount),
+    //   type: payForm.type,
+    //   fromDate: payForm.fromDate,
+    //   toDate: payForm.toDate,
+    //   remark: payForm.remark,
+    //   paidOn: payForm.paidOn || undefined,
+    // };
+    try {
+      // const url = `${API_BASE_URL.replace(/\/$/, "")}/api/admin/therapist/${therapistId}/pay`;
+      // const resp = await axios.post(url, payload, {
+      //   headers: {
+      //     "Content-Type": "application/json"
+      //   }
+      // });
+      setPaySuccess("Payment recorded successfully.");
+      setPayError(null);
+      if (selectedId) {
+        await fetchTherapistById(selectedId);
+      }
+      await fetchTherapists();
+      // Optionally close after short delay
+      setTimeout(() => {
+        closePayModal();
+      }, 1200);
+    } catch (err: any) {
+      setPayError(err?.response?.data?.error || err?.message || "Error making payment.");
+    } finally {
+      setPayLoading(false);
+    }
+  }
+
   useEffect(() => {
     fetchTherapists();
     // eslint-disable-next-line
   }, []);
 
-  // --- renderTherapistModal: Always uses fully fetched modal data ---
   function renderTherapistModal() {
     if (!selectedId || !selectedProfile) return null;
     const selected = selectedProfile;
+    // Therapist earnings array, sorted descending by paidOn or by fromDate
+    const earnings = Array.isArray(selected.earnings)
+      ? [...selected.earnings].sort((a, b) => {
+          const dateA = new Date(a.paidOn || a.fromDate).getTime();
+          const dateB = new Date(b.paidOn || b.fromDate).getTime();
+          return dateB - dateA;
+        })
+      : [];
+
     return (
       <div className="fixed inset-0 z-30 bg-white/70 flex items-center justify-center">
         <div className="bg-white rounded-xl shadow-lg max-w-2xl w-full p-6 relative">
@@ -407,6 +623,52 @@ export default function TherapistsPage() {
                 );
               })}
             </div>
+
+            {/* --- Earnings/Payments History Section --- */}
+            <div className="mt-7 mb-2">
+              <div className="flex items-center gap-2 mb-1">
+                <h3 className="font-bold text-md text-slate-700">Payment History</h3>
+              </div>
+              <div>
+                {earnings.length === 0 && (
+                  <span className="text-sm text-slate-400">No payments made yet.</span>
+                )}
+                {earnings.length > 0 && (
+                  <table className="text-xs border w-full mt-2 mb-4">
+                    <thead>
+                      <tr className="bg-slate-100">
+                        <th className="border px-2 py-1">Amount</th>
+                        <th className="border px-2 py-1">Type</th>
+                        <th className="border px-2 py-1">From</th>
+                        <th className="border px-2 py-1">To</th>
+                        <th className="border px-2 py-1">Paid On</th>
+                        <th className="border px-2 py-1">Remark</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {earnings.map((e, i) => (
+                        <tr key={i}>
+                          <td className="border px-2 py-1 font-bold text-slate-700">₹{e.amount}</td>
+                          <td className="border px-2 py-1">{e.type}</td>
+                          <td className="border px-2 py-1">{e.fromDate ? new Date(e.fromDate).toLocaleDateString() : "-"}</td>
+                          <td className="border px-2 py-1">{e.toDate ? new Date(e.toDate).toLocaleDateString() : "-"}</td>
+                          <td className="border px-2 py-1">{e.paidOn ? new Date(e.paidOn).toLocaleDateString() : "-"}</td>
+                          <td className="border px-2 py-1">{e.remark ? e.remark : "-"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+              {/* Button to open Pay Modal */}
+              <button
+                className="px-3 py-1 bg-green-700 text-white rounded shadow text-xs hover:bg-green-800 transition"
+                onClick={openPayModal}
+                disabled={payLoading || loading}
+              >
+                Pay Therapist
+              </button>
+            </div>
           </div>
           <div className="mt-4 text-right flex justify-end gap-2">
             <button
@@ -433,8 +695,6 @@ export default function TherapistsPage() {
             >
               <FiTrash2 /> Delete
             </button>
-
-            
             <button
               className="px-4 py-1 bg-blue-100 text-blue-700 rounded "
               onClick={() => {
@@ -457,6 +717,145 @@ export default function TherapistsPage() {
             </button>
           </div>
         </div>
+        {/* --- Pay Therapist Modal --- */}
+        {showPayModal && selectedProfile && (
+          <div className="fixed inset-0 z-40 bg-black/30 flex items-center justify-center">
+            <div className="bg-white rounded-xl p-7 w-[98vw] max-w-md shadow-2xl relative max-h-[85vh] flex flex-col">
+              <button
+                className="absolute right-4 top-3 text-2xl"
+                onClick={closePayModal}
+                disabled={payLoading}
+                title="Close"
+                type="button"
+              >
+                ×
+              </button>
+              <h3 className="text-lg font-semibold mb-2 text-center">Pay Therapist</h3>
+              <form
+                className="space-y-3"
+                onSubmit={e => {
+                  e.preventDefault();
+                  if (selectedProfile) handlePaySubmit(selectedProfile._id);
+                }}
+              >
+                <div>
+                  <label className="block text-xs font-medium mb-0.5">Amount (₹)</label>
+                  <input
+                    className="w-full border px-2 py-1 rounded"
+                    type="number"
+                    min={1}
+                    value={payForm.amount}
+                    onChange={e => setPayForm(f => ({
+                      ...f,
+                      amount: e.target.value.replace(/[^0-9]/g, ""),
+                    }))}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium mb-0.5">Type</label>
+                  <select
+                    className="w-full border px-2 py-1 rounded"
+                    value={payForm.type}
+                    onChange={e => setPayForm(f => ({
+                      ...f,
+                      type: e.target.value as "salary" | "contract"
+                    }))}
+                    required
+                  >
+                    <option value="salary">Salary</option>
+                    <option value="contract">Contract</option>
+                  </select>
+                </div>
+                <div className="flex gap-2">
+                  <div className="flex-1">
+                    <label className="block text-xs font-medium mb-0.5">From Date</label>
+                    <CalendarInput
+                      value={payForm.fromDate}
+                      onChange={val =>
+                        setPayForm(f => ({
+                          ...f,
+                          fromDate: val,
+                        }))
+                      }
+                      required
+                      className="w-full border px-2 py-1 rounded"
+                      id="pay-from-date"
+                      name="pay-from-date"
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <label className="block text-xs font-medium mb-0.5">To Date</label>
+                    <CalendarInput
+                      value={payForm.toDate}
+                      onChange={val =>
+                        setPayForm(f => ({
+                          ...f,
+                          toDate: val,
+                        }))
+                      }
+                      required
+                      className="w-full border px-2 py-1 rounded"
+                      id="pay-to-date"
+                      name="pay-to-date"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium mb-0.5">Paid On <span className="text-xs text-slate-400">(optional)</span></label>
+                  <CalendarInput
+                    value={payForm.paidOn ?? ""}
+                    onChange={val =>
+                      setPayForm(f => ({
+                        ...f,
+                        paidOn: val,
+                      }))
+                    }
+                    className="w-full border px-2 py-1 rounded"
+                    id="pay-paidon-date"
+                    name="pay-paidon-date"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium mb-0.5">Remark <span className="text-xs text-slate-400">(optional)</span></label>
+                  <input
+                    className="w-full border px-2 py-1 rounded"
+                    type="text"
+                    value={payForm.remark}
+                    onChange={e => setPayForm(f => ({
+                      ...f,
+                      remark: e.target.value,
+                    }))}
+                  />
+                </div>
+
+                {payError && (
+                  <div className="text-red-600 text-xs">{payError}</div>
+                )}
+                {paySuccess && (
+                  <div className="text-green-700 text-xs">{paySuccess}</div>
+                )}
+
+                <div className="pt-2 flex gap-2 justify-end">
+                  <button
+                    type="submit"
+                    className="px-4 py-1 bg-green-600 text-white rounded"
+                    disabled={payLoading}
+                  >
+                    {payLoading ? "Paying..." : "Make Payment"}
+                  </button>
+                  <button
+                    type="button"
+                    className="px-4 py-1 bg-gray-100 text-gray-700 rounded ml-2"
+                    onClick={closePayModal}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -549,6 +948,14 @@ export default function TherapistsPage() {
             >
               {FIELD_LIST.map(f => {
                 if (f.key === "therapistId") return null;
+
+                // Show calendar for date fields (based on common field names, e.g. createdAt, updatedAt, fromDate, toDate, paidOn)
+                const isDateField = DATE_FIELDS.includes(f.key) || f.type === "date";
+                const initialValue =
+                  editField[f.key] !== undefined
+                    ? editField[f.key]
+                    : editTherapist[f.key as keyof typeof editTherapist] ?? "";
+
                 return (
                   <div key={f.key}>
                     <label className="block text-sm mb-1">{f.label}</label>
@@ -566,15 +973,30 @@ export default function TherapistsPage() {
                           </div>
                         )}
                       </>
+                    ) : isDateField ? (
+                      <CalendarInput
+                        value={
+                          typeof initialValue === "string"
+                            ? initialValue
+                            : (initialValue && initialValue instanceof Date
+                                ? initialValue.toISOString().slice(0, 10)
+                                : "")
+                        }
+                        onChange={val =>
+                          setEditField(prev => ({
+                            ...prev,
+                            [f.key]: val,
+                          }))
+                        }
+                        className="w-full border px-2 py-1 rounded"
+                        id={`edit-${f.key}`}
+                        name={`edit-${f.key}`}
+                      />
                     ) : (
                       <input
                         className="w-full border px-2 py-1 rounded"
                         type={f.type || "text"}
-                        value={
-                          editField[f.key] !== undefined
-                            ? editField[f.key]
-                            : editTherapist[f.key as keyof typeof editTherapist] ?? ""
-                        }
+                        value={initialValue}
                         onChange={e =>
                           setEditField(prev => ({
                             ...prev,
@@ -612,7 +1034,6 @@ export default function TherapistsPage() {
     );
   }
 
-  // For table, show top-level, most-identifying fields
   const tableHeaders: { label: string; key: keyof TherapistProfile | "actions" }[] = [
     { label: "Therapist ID", key: "_id" },
     { label: "Name", key: "name" },
@@ -662,7 +1083,6 @@ export default function TherapistsPage() {
               </tr>
             ) : (
               therapists.map((t) => {
-                // get status and panelAccess boolean, fallback to userId field if available
                 const isDisabled =
                   (t.userId && typeof t.userId.isDisabled === "boolean") && t.userId.isDisabled ;
                 const panelAccess =
@@ -683,40 +1103,19 @@ export default function TherapistsPage() {
                         ? `${t.experienceYears} yrs`
                         : "-"}
                     </td>
-                    {/* Enabled/Disabled column */}
                     <td className="px-4 py-3 whitespace-nowrap">
                       <span
                         className={`px-2 py-0.5 rounded-full text-xs font-bold ${isDisabled ? "bg-red-200 text-red-800" : "bg-green-200 text-green-800"}`}
                       >
                         {isDisabled ? "Disabled" : "Enabled"}
                       </span>
-                      <button
-                        className={`ml-2 text-xs px-2 py-1 rounded border ${isDisabled ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}
-                        onClick={() => handleToggleDisable(t._id, !isDisabled)}
-                        disabled={loading}
-                        title={isDisabled ? "Enable" : "Disable"}
-                        style={{marginLeft: 6}}
-                      >
-                        {isDisabled ? "Enable" : "Disable"}
-                      </button>
                     </td>
-                    {/* Panel Access column */}
                     <td className="px-4 py-3 whitespace-nowrap">
                       <span
                         className={`px-2 py-0.5 rounded-full text-xs font-bold ${panelAccess ? "bg-green-200 text-green-800" : "bg-red-200 text-red-800"}`}
                       >
                         {panelAccess ? "Granted" : "Revoked"}
                       </span>
-                      
-                      <button
-                        className={`ml-2 text-xs px-2 py-1 rounded border ${panelAccess ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}
-                        onClick={() => handleTogglePanelAccess(t._id, !panelAccess)}
-                        disabled={loading}
-                        title={panelAccess ? "Revoke" : "Grant"}
-                        style={{marginLeft: 6}}
-                      >
-                        {panelAccess ? "Revoke" : "Grant"}
-                      </button>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       <div className="flex items-center gap-3">
