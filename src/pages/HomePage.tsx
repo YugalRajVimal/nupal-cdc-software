@@ -117,7 +117,7 @@ const HomePage = () => {
           <div className="flex justify-center mb-6">
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-blue-200 bg-blue-50/80 text-blue-700 text-xs font-semibold tracking-wide">
               <span className="h-2 w-2 rounded-full bg-blue-600" />
-              NUPAL CHILD DEVELOPMENT CENTER
+              EARLY INTERVENTION CLINIC 
             </div>
           </div>
 

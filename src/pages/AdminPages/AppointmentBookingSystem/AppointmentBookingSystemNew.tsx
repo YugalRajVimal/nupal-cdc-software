@@ -78,6 +78,7 @@ type Booking = {
   payment?:{
     status?:string
   }
+  remark?: string; // Added optional remark for display
 };
 
 function pad2(n: number) { return n < 10 ? `0${n}` : `${n}`; }
@@ -125,6 +126,8 @@ export default function AppointmentBookingSystemNew() {
   const [bookingError, setBookingError] = useState<string | null>(null);
   const [bookingSuccess, setBookingSuccess] = useState<string | null>(null);
   const [editBookingId, setEditBookingId] = useState<string | null>(null);
+  // Remark state
+  const [remark, setRemark] = useState<string>("");
 
   // Payment tracking
   const [paymentLoadingBookingId, setPaymentLoadingBookingId] = useState<string | null>(null);
@@ -522,11 +525,11 @@ export default function AppointmentBookingSystemNew() {
         bookingRequestId,
         isBookingRequest,
         isSessionEditRequest,
-        sessionEditRequestId
+        sessionEditRequestId,
+        remark: remark, // ADD REMARK TO BODY
       };
 
       console.log(body);
-
 
       if (!editBookingId) {
         // CREATE NEW BOOKING
@@ -607,6 +610,9 @@ export default function AppointmentBookingSystemNew() {
       setAppliedCoupon(couponObj || null);
       setCouponInput(couponObj?.couponCode || "");
       setCouponStatus(couponObj ? "valid" : null);
+
+      // ADD: Load remark into form when editing
+      setRemark(booking.remark || "");
     }
     setRepeatDay(""); setRepeatStartDate(""); setRepeatSlotId("");
     setRepeatError(null); setRepeatConflictInfo({});
@@ -647,6 +653,7 @@ export default function AppointmentBookingSystemNew() {
     setRepeatError(null); setRepeatConflictInfo({});
     setBookedSlotsPerRow({});
     setCouponInput(""); setAppliedCoupon(null); setCouponStatus(null);
+    setRemark(""); // clear remark on reset
   }
 
   // Coupon logic
@@ -1025,6 +1032,17 @@ export default function AppointmentBookingSystemNew() {
               🚫 Invalid or expired coupon code.
             </div>
           )}
+
+          {/* REMARK FIELD UI */}
+          <label className="block text-sm mb-1 font-semibold text-slate-700">Remark</label>
+          <textarea
+            className="w-full border rounded px-3 py-2 mb-4"
+            rows={2}
+            placeholder="Add a remark or note for this booking (optional)"
+            value={remark}
+            onChange={e => setRemark(e.target.value)}
+          />
+
           {!editBookingId && (
             <RepeatWeeklyPanel
               repeatDay={repeatDay}
@@ -1673,6 +1691,13 @@ function BookingSummary({ bookings, getTherapistObject, editBookingId, getPatien
                       {getPackageDisplay(booking.package)}
                     </span>
                   </div>
+                  {/* REMARK DISPLAY IF EXISTS */}
+                  {booking.remark && (
+                    <div className="mb-2 text-xs text-slate-700 flex items-center gap-2">
+                      <span className="font-semibold text-slate-500">Remark:</span>
+                      <span className="italic text-slate-800">{booking.remark}</span>
+                    </div>
+                  )}
                   {/* ---- PAYMENT STATUS/Collect Button ---- */}
                   <div className="mb-2 flex items-center gap-2">
                     <FiCreditCard className="text-green-600" />

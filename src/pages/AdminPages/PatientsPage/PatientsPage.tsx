@@ -35,6 +35,7 @@ type Patient = {
   diagnosisInfo?: string;
   areaName?: string;
   address?: string;
+  pincode?: string;
   fatherFullName?: string;
   motherFullName?: string;
   parentEmail?: string;
@@ -66,7 +67,6 @@ export default function PatientsPage() {
       })
       .then((data) => {
         setPatients(data.patients || []);
-        //console.log(data);
       })
       .catch((err) => {
         alert("Failed to fetch patients: " + err.message);
@@ -74,18 +74,25 @@ export default function PatientsPage() {
       .finally(() => setLoading(false));
   }, []);
 
+  // Helper to get display name (either .name or .childFullName, both are same)
+  const getDisplayName = (patient: Patient) => patient.name || patient.childFullName || "";
+
   // Start editing patient (inside view modal)
   const handleEditStart = (patient: Patient) => {
     setEditMode(true);
+    // Since both fields are same, preserve consistency: use patient's name, fallback to childFullName,
+    // and always set both fields to same value in form.
+    const baseName = patient.name || patient.childFullName || "";
     setEditForm({
-      name: patient.name || "",
-      childFullName: patient.childFullName || "",
+      name: baseName,
+      childFullName: baseName,
       gender: patient.gender || "",
       childDOB: patient.childDOB?.slice?.(0, 10) || "",
       mobile1: patient.mobile1 || "",
       mobile2: patient.mobile2 || "",
       areaName: patient.areaName || "",
       address: patient.address || "",
+      pincode: patient.pincode || "",
       diagnosisInfo: patient.diagnosisInfo || "",
       remarks: patient.remarks || "",
       fatherFullName: patient.fatherFullName || "",
@@ -104,10 +111,16 @@ export default function PatientsPage() {
     if (!viewPatient) return;
     setEditLoading(true);
     try {
+      // Always set both name and childFullName to same value if either is present
+      const saveForm = {
+        ...editForm,
+        name: editForm.name ?? editForm.childFullName ?? "",
+        childFullName: editForm.name ?? editForm.childFullName ?? "",
+      };
       const res = await fetch(`${API_BASE_URL}/api/admin/patients/${viewPatient._id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(editForm),
+        body: JSON.stringify(saveForm),
       });
       if (!res.ok) {
         const msg = await res.text();
@@ -131,7 +144,7 @@ export default function PatientsPage() {
 
   // Delete Patient (DELETE)
   const handleDelete = async (patient: Patient) => {
-    if (!window.confirm(`Delete patient "${patient.name || patient.childFullName || ""}"? This cannot be undone.`)) return;
+    if (!window.confirm(`Delete patient "${getDisplayName(patient)}"? This cannot be undone.`)) return;
     try {
       const res = await fetch(`${API_BASE_URL}/api/admin/patients/${patient._id}`, {
         method: "DELETE",
@@ -149,16 +162,15 @@ export default function PatientsPage() {
     }
   };
 
-  // List of all patient fields to show (for modal)
+  // Define "Name" field only once (merge name and childFullName into one field)
   const patientFields: Array<{
     label: string;
     key: keyof Patient | string;
     section?: string;
-    editable?: boolean; // which fields can be edited
+    editable?: boolean;
   }> = [
     { label: "Patient ID", key: "patientId" },
-    { label: "Name", key: "name", editable: true },
-    { label: "Child Full Name", key: "childFullName", editable: true },
+    { label: "Name", key: "name", editable: true }, // Only one field for name
     { label: "Gender", key: "gender", editable: true },
     { label: "DOB", key: "childDOB", editable: true },
     { label: "Father's Name", key: "fatherFullName", editable: true },
@@ -167,6 +179,7 @@ export default function PatientsPage() {
     { label: "Mobile 1", key: "mobile1", editable: true },
     { label: "Mobile 2", key: "mobile2", editable: true },
     { label: "Address", key: "address", editable: true },
+    { label: "Pincode", key: "pincode", editable: true },
     { label: "Area", key: "areaName", editable: true },
     { label: "Diagnosis/Concern", key: "diagnosisInfo", editable: true },
     { label: "Child Reference", key: "childReference", editable: true },
@@ -229,7 +242,7 @@ export default function PatientsPage() {
                         <FiUser className="text-green-600" />
                       </div>
                       <div>
-                        <p className="font-medium text-slate-800">{p.name || p.childFullName}</p>
+                        <p className="font-medium text-slate-800">{getDisplayName(p)}</p>
                         {p.childDOB && (
                           <p className="text-xs text-slate-500">
                             DOB: {new Date(p.childDOB).toLocaleDateString()}
@@ -294,7 +307,10 @@ export default function PatientsPage() {
                     <div key={field.key}>
                       <span className="block text-xs text-slate-400 font-medium">{field.label}</span>
                       <span className="block text-slate-800 font-semibold min-h-[24px]">
-                        {field.key === "gender"
+                        {/* For name "alias", always show the merged value */}
+                        {field.key === "name"
+                          ? getDisplayName(viewPatient)
+                          : field.key === "gender"
                           ? (viewPatient[field.key] || "").charAt(0).toUpperCase() + (viewPatient[field.key] || "").slice(1)
                           : field.key === "childDOB" && viewPatient.childDOB
                           ? new Date(viewPatient.childDOB).toLocaleDateString()
@@ -355,8 +371,8 @@ export default function PatientsPage() {
               >
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {patientFields.map((field) => {
+                    // Only show as readonly field if not editable
                     if (!field.editable) {
-                      // Only show as readonly field
                       return (
                         <div key={field.key}>
                           <label className="block mb-1 text-sm font-medium">{field.label}</label>
@@ -373,6 +389,26 @@ export default function PatientsPage() {
                     }
 
                     // Render field input based on key
+                    if (field.key === "name") {
+                      return (
+                        <div key={field.key}>
+                          <label className="block mb-1 text-sm font-medium">Name</label>
+                          <input
+                            type="text"
+                            className="w-full border rounded px-3 py-2"
+                            value={editForm.name || ""}
+                            onChange={e => {
+                              const value = e.target.value;
+                              setEditForm(f => ({
+                                ...f,
+                                name: value,
+                                childFullName: value // Keep them in sync
+                              }));
+                            }}
+                          />
+                        </div>
+                      );
+                    }
                     if (field.key === "gender") {
                       return (
                         <div key={field.key}>
@@ -425,6 +461,25 @@ export default function PatientsPage() {
                               setEditForm(f => ({
                                 ...f,
                                 remarks: e.target.value,
+                              }))
+                            }
+                          />
+                        </div>
+                      );
+                    }
+                    if (field.key === "pincode") {
+                      return (
+                        <div key={field.key}>
+                          <label className="block mb-1 text-sm font-medium">Pincode</label>
+                          <input
+                            type="text"
+                            pattern="[0-9]*"
+                            className="w-full border rounded px-3 py-2"
+                            value={editForm.pincode || ""}
+                            onChange={e =>
+                              setEditForm(f => ({
+                                ...f,
+                                pincode: e.target.value,
                               }))
                             }
                           />

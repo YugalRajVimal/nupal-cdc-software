@@ -77,6 +77,12 @@ import LogOutParent from "./pages/ParentPages/LogOutParent";
 import LogOutTherapist from "./pages/TherapistPages/LogOutTherapist";
 import MyEarningsTherapist from "./pages/TherapistPages/MyEarnings/MyEarnings";
 import FullCalendar from "./pages/AdminPages/FullCalendar/FullCalendar";
+import SuperAdminTherapistsPage from "./pages/SuperAdminPages/TherapistsPage/TherapistsPage";
+import TherapistSignUp from "./pages/TherapistPages/TherapistSignUpAdKYC/TherapistSignUp";
+import CompleteProfilePage from "./pages/TherapistPages/IncompleteProfile/CompleteProfilePage";
+import ApprovalPending from "./pages/TherapistPages/IncompleteProfile/ApprovalPending";
+import ParentSignUp from "./pages/ParentPages/ParentSignUp/ParentSignUpp";
+import ParentCompleteProfile from "./pages/ParentPages/ParentSignUp/ParentCompleteProfile";
 
 
 export default function App() {
@@ -123,7 +129,7 @@ export default function App() {
             <Route path="/super-admin/audit-logs" element={<h1>Audit Logs</h1>} />
             <Route path="/super-admin/finances" element={<FinancesSuperAdminPage/>} />
             <Route path="/super-admin/full-calendar" element={<FullCalendar/>} />
-            <Route path="/super-admin/therapists" element={<TherapistsPage/>} />
+            <Route path="/super-admin/therapists" element={<SuperAdminTherapistsPage/>} />
             <Route path="/super-admin/children" element={<PatientsPage/>} />
 
 
@@ -190,9 +196,15 @@ export default function App() {
             <Route path="/therapist/earnings" element={<MyEarningsTherapist/>} />
             <Route path="/therapist/profile" element={<TherpaistProfile />} />
             <Route path="/therapist/earnings" element={<MyEarningsTherapist/>} />
-          <Route path="/therapist/logout" element={<LogOutTherapist/>} />
+          
 
           </Route>
+
+          <Route path="/therapist/signup" element={<TherapistSignUp />} />
+          <Route path="/therapist/complete-profile" element={<CompleteProfilePage />} />
+          <Route path="/therapist/pending-approval" element={<ApprovalPending/>} />
+          <Route path="/therapist/logout" element={<LogOutTherapist/>} />
+
 
           <Route element={<ParentAppLayout />}>
             <Route index path="/parent" element={<ParentDashboard />} />
@@ -206,6 +218,9 @@ export default function App() {
 
 
           </Route>       
+
+          <Route path="/parent/signup" element={<ParentSignUp />} />
+          <Route path="/parent/complete-parent-profile" element={<ParentCompleteProfile />} />
 
           <Route path="/signin" element={<AuthPage />} />
         

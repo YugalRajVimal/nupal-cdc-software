@@ -21,6 +21,7 @@ interface FormDataState {
   mobile2: string;
   address: string;
   areaName: string;
+  pincode: string; // <-- ADDED PINCODE
   diagnosisInfo: string;
   childReference: string;
   parentOccupation: string;
@@ -62,6 +63,7 @@ const mandatoryFields: (keyof FormDataState)[] = [
   "mobile1",
   "address",
   "areaName",
+  "pincode", // <-- MANDATORY PINCODE
   "diagnosisInfo",
   "childReference",
   "parentOccupation",
@@ -83,6 +85,7 @@ export default function PatientRegistration() {
     mobile2: "",
     address: "",
     areaName: "",
+    pincode: "", // <-- PINCODE STATE
     diagnosisInfo: "",
     childReference: "",
     parentOccupation: "",
@@ -120,6 +123,7 @@ export default function PatientRegistration() {
               "mobile1",
               "address",
               "areaName",
+              "pincode", // <-- ensure PINCODE is included here
               "diagnosisInfo",
               "childReference",
               "parentOccupation",
@@ -335,6 +339,15 @@ export default function PatientRegistration() {
                     }
                   />
                   <Input
+                    label="Pincode*"
+                    value={formData.pincode}
+                    onChange={(e: ChangeEvent<HTMLInputElement>) => update("pincode", e.target.value)}
+                    required
+                    style={
+                      shouldShowError("pincode") ? { borderColor: "red" } : {}
+                    }
+                  />
+                  <Input
                     label="Brief Information on Diagnosis*"
                     value={formData.diagnosisInfo}
                     onChange={(e: ChangeEvent<HTMLInputElement>) => update("diagnosisInfo", e.target.value)}
@@ -445,6 +458,7 @@ export default function PatientRegistration() {
                         <Detail label="Mobile 1" value={formData.mobile1} />
                         <Detail label="Mobile 2" value={formData.mobile2} />
                         <Detail label="Area Name" value={formData.areaName} />
+                        <Detail label="Pincode" value={formData.pincode} />
                         <Detail label="Address" value={formData.address} />
                       </div>
                       <div>

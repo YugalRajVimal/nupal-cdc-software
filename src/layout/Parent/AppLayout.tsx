@@ -9,10 +9,11 @@ const LayoutContent: React.FC = () => {
   const { isExpanded, isHovered, isMobileOpen } = useSidebar();
 
   return (
-    <div className="min-h-screen xl:flex"
-    style={{
-      background: "linear-gradient(135deg, #fdf4cc 0%, #ffe3ef 45%, #ced3f3 100%)",
-    }}
+    <div
+      className="min-h-screen xl:flex"
+      style={{
+        background: "linear-gradient(135deg, #fdf4cc 0%, #ffe3ef 45%, #ced3f3 100%)",
+      }}
     >
       <div>
         <SubAdminAppSidebar />
@@ -34,6 +35,7 @@ const LayoutContent: React.FC = () => {
 
 const ParentAppLayout: React.FC = () => {
   const [isParentAuthenticated, setIsParentAuthenticated] = useState<boolean | null>(null);
+
 
   useEffect(() => {
     const checkParentAuth = async () => {
@@ -60,6 +62,38 @@ const ParentAppLayout: React.FC = () => {
             body: JSON.stringify({ role: "patient" }),
           }
         );
+
+        if (res.status === 428) {
+          // Parent profile is incomplete, redirect to /complete-parent-profile
+          setIsParentAuthenticated(false);
+          // Try to read name/email from the response, and pass as query params to the redirect
+          let data = {};
+          try {
+            data = await res.json();
+          } catch (e) {
+            data = {};
+          }
+
+          let name = "";
+          let email = "";
+          if (data && typeof data === "object") {
+            name = (data as any).name || "";
+            email = (data as any).email || "";
+          }
+
+
+
+          // Build query params if available
+          let redirectUrl = "/parent/complete-parent-profile";
+          if (name || email) {
+            const params = new URLSearchParams({});
+            if (name) params.set("name", name);
+            if (email) params.set("email", email);
+            redirectUrl += "?" + params.toString();
+          }
+          window.location.href = redirectUrl;
+          return;
+        }
 
         if (res.ok) {
           setIsParentAuthenticated(true);

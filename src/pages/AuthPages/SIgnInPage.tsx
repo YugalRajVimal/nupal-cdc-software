@@ -7,8 +7,9 @@ import {
   FiMail,
   FiLock,
   FiEye,
+  FiHome,
 } from "react-icons/fi";
-import { FaCrown } from "react-icons/fa"; // Using react-icons for a crown icon
+import { FaCrown } from "react-icons/fa";
 
 const roles = [
   { key: "patient", label: "Parent", icon: FiUser },
@@ -23,17 +24,17 @@ const roleTokenMap: Record<Role, string> = {
   patient: "patient-token",
   therapist: "therapist-token",
   admin: "admin-token",
-  superadmin: "",
+  superadmin: "super-admin-token",
 };
 
 const roleHomeMap: Record<Role, string> = {
   patient: "/parent",
   therapist: "/therapist",
   admin: "/admin",
-  superadmin: "/superadmin",
+  superadmin: "/super-admin",
 };
 
-const API_BASE = `${import.meta.env.VITE_API_URL}/api/auth`; // Change to your backend API prefix if needed
+const API_BASE = `${import.meta.env.VITE_API_URL}/api/auth`;
 
 export default function AuthPage() {
   const [role, setRole] = useState<Role>("admin");
@@ -43,14 +44,19 @@ export default function AuthPage() {
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
 
-  // Superadmin logic (kept as is)
+  // Superadmin states
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
-  const isSuperAdmin = role === "superadmin";
-  // Removed useNavigate
+  // Superadmin extra states for forgot password and OTP for superadmin
+  const [superStep, setSuperStep] = useState<"login" | "forgot" | "verify">("login");
 
-  // Handle sending OTP for parent, therapist, admin
+  const [superOtp, setSuperOtp] = useState("");
+  const [superLoading, setSuperLoading] = useState(false);
+
+  const isSuperAdmin = role === "superadmin";
+
+  // Standard roles: Parent, Therapist, Admin
   async function handleSendOtp() {
     setStatus(null);
     setLoading(true);
@@ -76,7 +82,6 @@ export default function AuthPage() {
     }
   }
 
-  // Handle verifying OTP for parent, therapist, admin
   async function handleVerifyOtp() {
     setStatus(null);
     setLoading(true);
@@ -88,10 +93,8 @@ export default function AuthPage() {
       });
       const data = await res.json();
       if (res.ok && data.token) {
-        // Store token to correct role-token key in localStorage
         localStorage.setItem(roleTokenMap[role], data.token);
         setStatus("Login successful!");
-        // Redirect to the user's home page (native redirect)
         setTimeout(() => {
           window.location.href = roleHomeMap[role];
         }, 800);
@@ -103,6 +106,118 @@ export default function AuthPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  // --- SUPERADMIN APIs ---
+
+  // API1: Login with email+password for SuperAdmin
+  async function handleSuperAdminLogin() {
+    setStatus(null);
+    setSuperLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/super-admin/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: email.trim().toLowerCase(),
+          password,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.token) {
+        localStorage.setItem(roleTokenMap["superadmin"], data.token);
+        setStatus("Superadmin login successful!");
+        setTimeout(() => {
+          window.location.href = roleHomeMap["superadmin"];
+        }, 800);
+      } else {
+        setStatus(data?.message || "Invalid login credentials");
+      }
+    } catch (err) {
+      setStatus("An error occurred during superadmin login.");
+    } finally {
+      setSuperLoading(false);
+    }
+  }
+
+  // API2: Superadmin - Forgot password (send OTP to email)
+  async function handleSuperAdminSendOtp() {
+    setStatus(null);
+    setSuperLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/super-admin/forgot-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: email.trim().toLowerCase(),
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setStatus("OTP sent! Please check your superadmin email.");
+
+        setSuperStep("verify");
+      } else {
+
+        setStatus(data?.message || "Failed to send OTP");
+      }
+    } catch (err) {
+      setStatus("An error occurred.");
+
+    } finally {
+      setSuperLoading(false);
+    }
+  }
+
+  // API3: Superadmin - verify OTP, reset password (optional, just verify for now)
+  async function handleSuperAdminVerifyOtp() {
+    setStatus(null);
+    setSuperLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/super-admin/verify-account`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: email.trim().toLowerCase(),
+          otp: superOtp,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.token) {
+        localStorage.setItem(roleTokenMap["superadmin"], data.token);
+        setStatus("Superadmin OTP verified & login successful!");
+        setTimeout(() => {
+          window.location.href = roleHomeMap["superadmin"];
+        }, 800);
+      } else {
+        setStatus(data?.message || "OTP verification failed");
+      }
+    } catch (err) {
+      setStatus("An error occurred while verifying the OTP.");
+    } finally {
+      setSuperLoading(false);
+    }
+  }
+
+  // Superadmin: handle "forgot password" / "back to login"
+  function handleSuperAdminEnterForgot() {
+    setSuperStep("forgot");
+    setStatus(null);
+    setSuperOtp("");
+    setPassword("");
+
+  }
+  function handleSuperAdminBackToLogin() {
+    setSuperStep("login");
+    setStatus(null);
+    setSuperOtp("");
+    setPassword("");
+
+  }
+
+  // Handler for back to home button
+  function handleBackToHome() {
+    window.location.href = "/";
   }
 
   return (
@@ -137,12 +252,27 @@ export default function AuthPage() {
           >
             {isSuperAdmin ? "System Control" : "Welcome to Nupal CDC"}
           </h1>
-          <p className={`text-sm ${isSuperAdmin ? "text-slate-400" : "text-slate-500"}`}>
+          <p
+            className={`text-sm ${isSuperAdmin ? "text-slate-400" : "text-slate-500"}`}
+          >
             {isSuperAdmin
               ? "Restricted Access Area"
               : "Login or Sign Up"}
           </p>
         </motion.div>
+
+        {/* Back to Home Button */}
+        <button
+          type="button"
+          onClick={handleBackToHome}
+          className={`flex items-center space-x-1 text-xs text-blue-600 hover:underline mb-3 bg-transparent border-0 p-0 shadow-none ${
+            isSuperAdmin ? "text-amber-300 hover:text-amber-400" : "text-blue-600 hover:text-blue-800"
+          }`}
+          style={{ fontWeight: 500 }}
+        >
+          <FiHome className="text-base" />
+          <span>Back to Home</span>
+        </button>
 
         {/* Role Switch with smooth transitions */}
         <motion.div
@@ -162,6 +292,10 @@ export default function AuthPage() {
                   setRole(r.key);
                   setOtpSent(false);
                   setStatus(null);
+                  setSuperStep("login");
+                  setSuperOtp("");
+                  setPassword("");
+
                 }}
                 initial="initial"
                 animate={active ? "selected" : "notSelected"}
@@ -306,6 +440,21 @@ export default function AuthPage() {
               transition={{ duration: 0.45, type: "spring", damping: 18 }}
               className="space-y-4"
             >
+              {/* Show status/error message */}
+              {status && (
+                <motion.div
+                  className={`block text-sm px-2 py-1 mb-1 rounded ${
+                    status.includes("successful") || status.includes("sent")
+                      ? "bg-green-200 text-green-900"
+                      : "bg-red-200 text-red-900"
+                  }`}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  {status}
+                </motion.div>
+              )}
               <motion.div
                 className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-300"
                 initial={{ opacity: 0, scale: 0.95 }}
@@ -314,67 +463,174 @@ export default function AuthPage() {
               >
                 Authorized Personnel Only. Unauthorized access will be logged.
               </motion.div>
-              <motion.label
-                className="text-sm font-medium text-slate-300"
-                initial={{ opacity: 0, x: -15 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.11, duration: 0.3 }}
-              >
-                Administrator Email
-              </motion.label>
-              <motion.input
-                // disabled
-                // value="superadmin@nupal.com"
-                className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-slate-300 transition-all"
-                initial={{ opacity: 0, x: 25 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.14, duration: 0.3 }}
-              />
+              {superStep === "login" && (
+                <>
+                  <motion.label
+                    className="text-sm font-medium text-slate-300"
+                    initial={{ opacity: 0, x: -15 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.11, duration: 0.3 }}
+                  >
+                    Administrator Email
+                  </motion.label>
+                  <motion.input
+                    type="email"
+                    value={email}
+                    autoComplete="username"
+                    onChange={e => setEmail(e.target.value)}
+                    placeholder="Superadmin email"
+                    className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-slate-300 transition-all"
+                    initial={{ opacity: 0, x: 25 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.14, duration: 0.3 }}
+                  />
 
-              <motion.label
-                className="text-sm font-medium text-slate-300"
-                initial={{ opacity: 0, x: -15 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.15, duration: 0.3 }}
-              >
-                Secure Password
-              </motion.label>
-              <div className="relative">
-                <FiLock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <motion.input
-                  type={showPassword ? "text" : "password"}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full rounded-lg bg-slate-800 border border-slate-700 pl-10 pr-10 py-2 text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all"
-                  initial={{ opacity: 0, x: 25 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.18, duration: 0.35 }}
-                />
-                <motion.button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
-                  whileTap={{ scale: 0.8, rotate: 15 }}
-                  whileHover={{ scale: 1.15 }}
-                  aria-label={showPassword ? "Hide password" : "Show password"}
-                >
-                  <FiEye />
-                </motion.button>
-              </div>
-
-              <motion.button
-                whileHover={{ scale: 1.03 }}
-                whileTap={{ scale: 0.97 }}
-                className="w-full rounded-lg bg-gradient-to-r from-amber-500 to-orange-600 py-2.5 font-medium text-slate-900 hover:opacity-90 transition"
-                transition={{ duration: 0.18 }}
-                type="button"
-              >
-                Authenticate System Access
-              </motion.button>
+                  <motion.label
+                    className="text-sm font-medium text-slate-300"
+                    initial={{ opacity: 0, x: -15 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.15, duration: 0.3 }}
+                  >
+                    Secure Password
+                  </motion.label>
+                  <div className="relative">
+                    <FiLock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <motion.input
+                      type={showPassword ? "text" : "password"}
+                      value={password}
+                      autoComplete="current-password"
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="w-full rounded-lg bg-slate-800 border border-slate-700 pl-10 pr-10 py-2 text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all"
+                      initial={{ opacity: 0, x: 25 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.18, duration: 0.35 }}
+                    />
+                    <motion.button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+                      whileTap={{ scale: 0.8, rotate: 15 }}
+                      whileHover={{ scale: 1.15 }}
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                    >
+                      <FiEye />
+                    </motion.button>
+                  </div>
+                  <motion.button
+                    whileHover={{ scale: 1.03 }}
+                    whileTap={{ scale: 0.97 }}
+                    className="w-full rounded-lg bg-gradient-to-r from-amber-500 to-orange-600 py-2.5 font-medium text-slate-900 hover:opacity-90 transition"
+                    transition={{ duration: 0.18 }}
+                    type="button"
+                    onClick={handleSuperAdminLogin}
+                    disabled={superLoading || !email.trim() || !password}
+                  >
+                    {superLoading ? "Authenticating..." : "Authenticate System Access"}
+                  </motion.button>
+                  <motion.button
+                    className="w-full text-xs text-amber-300 mt-2 hover:underline"
+                    type="button"
+                    whileTap={{ scale: 0.96 }}
+                    onClick={handleSuperAdminEnterForgot}
+                    disabled={superLoading}
+                  >
+                    Forgot password?
+                  </motion.button>
+                </>
+              )}
+              {superStep === "forgot" && (
+                <>
+                  <motion.label
+                    className="text-sm font-medium text-slate-300"
+                    initial={{ opacity: 0, x: -15 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.11, duration: 0.3 }}
+                  >
+                    Enter Superadmin Email for OTP
+                  </motion.label>
+                  <motion.input
+                    type="email"
+                    value={email}
+                    autoComplete="username"
+                    onChange={e => setEmail(e.target.value)}
+                    placeholder="Superadmin email"
+                    className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-slate-300 transition-all"
+                    initial={{ opacity: 0, x: 25 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.14, duration: 0.3 }}
+                    disabled={superLoading}
+                  />
+                  <motion.button
+                    whileHover={{ scale: 1.03 }}
+                    whileTap={{ scale: 0.97 }}
+                    className="w-full rounded-lg bg-amber-600 py-2.5 font-medium text-slate-900 hover:opacity-90 transition"
+                    transition={{ duration: 0.18 }}
+                    type="button"
+                    onClick={handleSuperAdminSendOtp}
+                    disabled={superLoading || !email.trim()}
+                  >
+                    {superLoading ? "Sending OTP..." : "Send OTP"}
+                  </motion.button>
+                  <motion.button
+                    className="w-full text-xs text-amber-300 mt-2 hover:underline"
+                    type="button"
+                    whileTap={{ scale: 0.96 }}
+                    onClick={handleSuperAdminBackToLogin}
+                    disabled={superLoading}
+                  >
+                    ← Back to Login
+                  </motion.button>
+                </>
+              )}
+              {superStep === "verify" && (
+                <>
+                  <motion.label
+                    className="text-sm font-medium text-slate-300"
+                    initial={{ opacity: 0, x: -15 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.13, duration: 0.3 }}
+                  >
+                    Enter OTP sent to your email
+                  </motion.label>
+                  <div className="relative">
+                    <FiLock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <motion.input
+                      type="text"
+                      value={superOtp}
+                      onChange={e => setSuperOtp(e.target.value)}
+                      placeholder="Enter OTP"
+                      className="w-full rounded-lg bg-slate-800 border border-slate-700 pl-10 pr-3 py-2 text-slate-100 focus:outline-none focus:ring-2 focus:ring-amber-500 transition-all"
+                      initial={{ opacity: 0, x: 30 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.14, duration: 0.38 }}
+                      disabled={superLoading}
+                    />
+                  </div>
+                  <motion.button
+                    whileHover={{ scale: 1.03 }}
+                    whileTap={{ scale: 0.97 }}
+                    className="w-full rounded-lg bg-gradient-to-r from-amber-500 to-orange-600 py-2.5 font-medium text-slate-900 hover:opacity-90 transition"
+                    transition={{ duration: 0.18 }}
+                    type="button"
+                    onClick={handleSuperAdminVerifyOtp}
+                    disabled={superLoading || !superOtp.trim()}
+                  >
+                    {superLoading ? "Verifying OTP..." : "Verify & Login"}
+                  </motion.button>
+                  <motion.button
+                    className="w-full text-xs text-amber-300 mt-2 hover:underline"
+                    type="button"
+                    whileTap={{ scale: 0.96 }}
+                    onClick={handleSuperAdminBackToLogin}
+                    disabled={superLoading}
+                  >
+                    ← Back to Login
+                  </motion.button>
+                </>
+              )}
             </motion.div>
           )}
         </AnimatePresence>
-
         {/* Footer */}
         {isSuperAdmin && (
           <motion.p

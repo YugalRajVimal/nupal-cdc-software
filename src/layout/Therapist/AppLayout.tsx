@@ -64,6 +64,56 @@ const TherapistAppLayout: React.FC = () => {
         );
         console.log("[TherapistAppLayout] /api/auth status:", res.status);
 
+        if (res.status === 428) {
+          setIsTherapistAuthenticated(false); // Their session is not fully active
+
+          // Try to extract name & email from the response body
+          let name = '';
+          let email = '';
+          try {
+            const data = await res.json();
+            name = data?.name || '';
+            email = data?.email || '';
+            console.log("[TherapistAppLayout] Incomplete profile:", { name, email });
+          } catch (e) {
+            console.warn("[TherapistAppLayout] Could not parse 428 JSON response:", e);
+          }
+
+          // Redirect to /therapist/complete-profile, passing name and email as query params
+          if (window.location.pathname !== "/therapist/complete-profile") {
+            const qp =
+              `?${name ? `name=${encodeURIComponent(name)}&` : ""}` +
+              `${email ? `email=${encodeURIComponent(email)}` : ""}`;
+            window.location.href = `/therapist/complete-profile${qp.length > 1 ? qp : ""}`;
+          }
+          return;
+        }
+
+        if (res.status === 451) {
+          setIsTherapistAuthenticated(false); // Panel access is not enabled yet
+
+          // Try to extract name & email from the response body
+          let name = '';
+          let email = '';
+          try {
+            const data = await res.json();
+            name = data?.name || '';
+            email = data?.email || '';
+            console.log("[TherapistAppLayout] Therapist panel not accessible (451):", { name, email });
+          } catch (e) {
+            console.warn("[TherapistAppLayout] Could not parse 451 JSON response:", e);
+          }
+
+          // Redirect to /therapist/pending-approval (add any params for clarity)
+          if (window.location.pathname !== "/therapist/pending-approval") {
+            const qp =
+              `?${name ? `name=${encodeURIComponent(name)}&` : ""}` +
+              `${email ? `email=${encodeURIComponent(email)}` : ""}`;
+            window.location.href = `/therapist/pending-approval${qp.length > 1 ? qp : ""}`;
+          }
+          return;
+        }
+
         if (res.ok) {
           setIsTherapistAuthenticated(true);
           console.log("[TherapistAppLayout] Therapist authenticated successfully!");

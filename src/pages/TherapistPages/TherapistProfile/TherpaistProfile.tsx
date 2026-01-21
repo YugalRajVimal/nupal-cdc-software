@@ -18,6 +18,18 @@ function formatDate(dateStr?: string, opts: Intl.DateTimeFormatOptions = {}) {
   }
 }
 
+// Utility for formatting currency safely
+function formatCurrency(amount?: number | null) {
+  if (typeof amount === "number" && !isNaN(amount)) {
+    try {
+      return amount.toLocaleString("en-IN");
+    } catch {
+      return `${amount}`;
+    }
+  }
+  return "—";
+}
+
 type UserType = {
   _id: string;
   role: string;
@@ -633,7 +645,7 @@ export default function TherpaistProfile() {
                       <tr key={e._id || `${e.fromDate}-${e.amount}`}>
                         <td className="py-1 px-2">{formatDate(e.paidOn || e.toDate)}</td>
                         <td className="py-1 px-2 font-mono text-purple-900 font-semibold">
-                          ₹{e.amount.toLocaleString("en-IN")}
+                          ₹{formatCurrency(e.amount)}
                         </td>
                         <td className="py-1 px-2 capitalize">{e.type}</td>
                         <td className="py-1 px-2">
