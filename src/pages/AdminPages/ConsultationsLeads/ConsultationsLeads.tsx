@@ -14,12 +14,13 @@ import {
   FiArrowRight,
   FiX,
   FiHash,
+  FiSearch,
+  FiChevronLeft,
+  FiChevronRight,
 } from "react-icons/fi";
 
-// Set API base URL from environment variable or blank as fallback
 const API_BASE_URL = import.meta.env.VITE_API_URL || "";
 
-// Example staff list for the dropdown (could fetch from API in future)
 const staffMembers = [
   "Dr. Anjali Sharma",
   "Rahul Singh",
@@ -56,8 +57,7 @@ type Lead = {
   email: string;
   status: string;
   actions: string[];
-  // Extended properties for typed local use
-  leadId?: string; // <-- add this
+  leadId?: string;
   callDate?: string;
   staff?: string;
   staffOther?: string;
@@ -74,63 +74,146 @@ type Lead = {
   remarks?: string;
 };
 
-export default function ConsultationsLeads() {
-  const [loading, setLoading] = useState(true);
-  const [guideOpen, setGuideOpen] = useState(false);
+type LeadsApiResponse = {
+  success: boolean;
+  leads: any[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+};
 
-  // Leads
-  const [leads, setLeads] = useState<Lead[] | null>(null);
+const statusOptions = [
+  { value: "", label: "All" },
+  { value: "converted", label: "Converted" },
+  { value: "pending", label: "Pending" },
+];
 
-  // For enquiry modal
-  const [enqModalOpen, setEnqModalOpen] = useState(false);
-  const [enqForm, setEnqForm] = useState({
-    callDate: "",
-    staff: "",
-    staffOther: "",
-    referralSource: "",
-    parentName: "",
-    parentRelationship: "",
-    parentMobile: "",
-    parentEmail: "",
-    parentArea: "",
-    childName: "",
-    childDOB: "",
-    childGender: "",
-    therapistAlready: "",
-    diagnosis: "",
-    visitFinalized: "",
-    appointmentDate: "",
-    appointmentTime: "",
-    remarks: "",
-    status: "pending", // Default status set as pending for the edit API
-    // Don't include leadId in enqForm; it's not editable
-  });
+function FilterSearchBar({
+  search,
+  setSearch,
+  filters,
+  setFilters,
+}: {
+  search: string;
+  setSearch: (search: string) => void;
+  filters: { status: string };
+  setFilters: (filters: { status: string }) => void;
+}) {
+  const [localSearchInput, setLocalSearchInput] = useState(search ?? "");
 
-  // Track which lead is being edited (for PUT)
-  const [editingLeadId, setEditingLeadId] = useState<string | null>(null);
+  useEffect(() => {
+    setLocalSearchInput(search ?? "");
+  }, [search]);
 
-  // Focus on first field when modal opens
-  const parentNameRef = useRef<HTMLInputElement | null>(null);
+  return (
+    <div className="flex flex-wrap gap-2 items-end mb-3">
+      <div className="w-full sm:w-auto flex-1">
+        <form
+          onSubmit={e => {
+            e.preventDefault();
+            setSearch(localSearchInput);
+          }}
+          className="flex items-center gap-2"
+        >
+          <div className="relative flex-1">
+            <FiSearch className="absolute left-2 top-2 text-slate-400" />
+            <input
+              className="pl-8 pr-2 py-2 border rounded w-full text-sm"
+              type="search"
+              placeholder="Search parent, child, mobile or email…"
+              value={localSearchInput}
+              onChange={e => setLocalSearchInput(e.target.value)}
+              aria-label="Search leads"
+            />
+          </div>
+          <button
+            type="submit"
+            className="text-slate-700 border border-slate-200 px-3 py-2 rounded hover:bg-slate-100"
+            tabIndex={-1}
+            style={{ display: 'none' }}
+          >Search</button>
+        </form>
+      </div>
+    
+      {filters.status && (
+        <button
+          className="text-xs px-2 py-1 bg-blue-50 border-blue-200 border rounded ml-2"
+          type="button"
+          onClick={() => setFilters({ ...filters, status: "" })}
+          title="Clear status filter"
+        >
+          {statusOptions.find(o => o.value === filters.status)?.label || filters.status}
+          <FiX className="inline ml-1" />
+        </button>
+      )}
+        <div className="flex items-center gap-2 ml-1 mt-2">
+          <label className="text-xs font-semibold">Status:</label>
+          <select
+            className="text-sm border px-2 py-1 rounded"
+            value={filters.status}
+            onChange={e => {
+              setFilters({ ...filters, status: e.target.value });
+            }}
+          >
+            {statusOptions.map(opt => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </div>
+    </div>
+  );
+}
 
-  // Calendar state for date fields
-  const [showCallDateCalendar, setShowCallDateCalendar] = useState(false);
-  const [showChildDOBCalendar, setShowChildDOBCalendar] = useState(false);
-  const [showAppointmentDateCalendar, setShowAppointmentDateCalendar] = useState(false);
+// --- Pagination implementation and table ---
+function LeadsTableSection({
+  search,
+  filters,
+  fetchKey,
+  tableLoading,
+  setTableLoading,
+  parentRefreshFlag,
+  setParentRefreshFlag,
+  openEditModal,
+}: {
+  search: string;
+  filters: { status: string };
+  fetchKey: string;
+  tableLoading: boolean;
+  setTableLoading: (b: boolean) => void;
+  parentRefreshFlag: boolean;
+  setParentRefreshFlag: (b: boolean) => void;
+  openEditModal: (lead: Lead) => void;
+}) {
+  const [leads, setLeads] = useState<Lead[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(15);
+  const [totalPages, setTotalPages] = useState(1);
 
-  // Fetch leads from backend
+  const [localRefreshFlag, setLocalRefreshFlag] = useState(false);
+
+  // ------------- PAGINATION/LEAD FETCH LOGIC -------------
+  // Implements: GET leads with ?page, ?pageSize, search, and filters (pagination logic)
+
   useEffect(() => {
     let ignore = false;
     async function fetchLeads() {
+      setTableLoading(true);
+      // Compose URL: supports page, pageSize, search, status
+      let url = `${API_BASE_URL}/api/admin/leads?page=${page}&pageSize=${pageSize}`;
+      if (search && search.trim() !== "") url += `&search=${encodeURIComponent(search.trim())}`;
+      if (filters.status) url += `&status=${encodeURIComponent(filters.status)}`;
       try {
-        const res = await fetch(`${API_BASE_URL}/api/admin/leads`, {
-          credentials: "same-origin",
-        });
-        const data = await res.json();
+        const res = await fetch(url, { credentials: "same-origin" });
+        const data: LeadsApiResponse = await res.json();
         if (!res.ok) throw new Error("Failed to fetch leads");
-
-        // data is expected: { success: true, leads: [...] }
-        if (Array.isArray(data.leads)) {
-          const uiLeads: Lead[] = data.leads.map((lead: any) => ({
+        // Map API -> UI fields
+        if (ignore) return;
+        const uiLeads: Lead[] = Array.isArray(data.leads)
+          ? data.leads.map((lead: any) => ({
             id: lead._id,
             leadId: lead.leadId || "",
             parent: lead.parentName,
@@ -139,56 +222,215 @@ export default function ConsultationsLeads() {
             email: lead.parentEmail,
             status: lead.status,
             actions: [],
-            callDate: lead.callDate ? new Date(lead.callDate).toISOString().slice(0, 16) : "",
+            callDate: lead.callDate
+              ? new Date(lead.callDate).toISOString().slice(0, 16)
+              : "",
             staff: lead.staff || "",
             staffOther: lead.staffOther || "",
             referralSource: lead.referralSource || "",
             parentRelationship: lead.parentRelationship || "",
             parentArea: lead.parentArea || "",
-            childDOB: lead.childDOB ? new Date(lead.childDOB).toISOString().slice(0, 10) : "",
+            childDOB: lead.childDOB
+              ? new Date(lead.childDOB).toISOString().slice(0, 10)
+              : "",
             childGender: lead.childGender || "",
             therapistAlready: lead.therapistAlready || "",
             diagnosis: lead.diagnosis || "",
             visitFinalized: lead.visitFinalized || "",
-            appointmentDate: lead.appointmentDate ? new Date(lead.appointmentDate).toISOString().slice(0, 10) : "",
+            appointmentDate: lead.appointmentDate
+              ? new Date(lead.appointmentDate).toISOString().slice(0, 10)
+              : "",
             appointmentTime: lead.appointmentTime || "",
             remarks: lead.remarks || "",
-          }));
-          if (!ignore) setLeads(uiLeads);
-        } else {
-          if (!ignore) setLeads([]);
-        }
+          }))
+          : [];
+        setLeads(uiLeads);
+        setTotal(data.total || 0);
+        setPage(data.page || 1);
+        setPageSize(data.pageSize || 15);
+        setTotalPages(data.totalPages || 1);
       } catch (err) {
-        // eslint-disable-next-line no-console
-        console.error("Failed to fetch leads", err);
-        if (!ignore) setLeads([]);
+        setLeads([]);
+        setTotal(0);
+        setPage(1);
+        setTotalPages(1);
       }
-      setLoading(false);
+      setTableLoading(false);
     }
     fetchLeads();
     return () => {
       ignore = true;
     };
-  }, []);
+    // Note: dependencies cover all variables that reset or affect pagination, filtering, refresh
+  }, [page, pageSize, search, filters.status, localRefreshFlag, parentRefreshFlag, fetchKey]);
 
+  // When search or filters change, reset to page 1
   useEffect(() => {
-    if (enqModalOpen && parentNameRef.current) {
-      parentNameRef.current.focus();
-    }
-  }, [enqModalOpen]);
+    setPage(1);
+  }, [search, filters.status]);
 
-  // Set callDate automatically - on open of modal (only for 'add')
-  useEffect(() => {
-    if (enqModalOpen && !editingLeadId) {
-      setEnqForm((prev) => ({
-        ...prev,
-        callDate: new Date().toISOString().slice(0, 16),
-        status: "pending", // Ensure default status for new adds
-      }));
-    }
-  }, [enqModalOpen, editingLeadId]);
+  // Table row actions (delete, convert)
+  const [actionInProgressId, setActionInProgressId] = useState<string | null>(null);
+  const triggerRefresh = () => setLocalRefreshFlag(f => !f);
 
-  // Helper to show nice status
+  async function handleDeleteLead(lead: Lead) {
+    if (
+      !window.confirm(
+        `Delete lead for parent '${lead.parent}' and child '${lead.child}'?`,
+      )
+    )
+      return;
+    try {
+      setActionInProgressId(lead.id);
+      const res = await fetch(`${API_BASE_URL}/api/admin/leads/${lead.id}`, {
+        method: "DELETE",
+        credentials: "same-origin",
+      });
+      if (!res.ok) throw new Error("Failed to delete lead");
+      // If only one lead left on a page, move back a page
+      if (leads.length === 1 && page > 1) {
+        setPage(page - 1);
+      } else {
+        triggerRefresh();
+        setParentRefreshFlag(!parentRefreshFlag);
+      }
+    } catch (error) {
+      alert("Failed to delete lead.");
+    } finally {
+      setActionInProgressId(null);
+    }
+  }
+
+  async function handleConvertLead(lead: Lead) {
+    if (
+      !window.confirm(
+        `Convert lead for parent '${lead.parent}' and child '${lead.child}' to registration?`,
+      )
+    )
+      return;
+    try {
+      setActionInProgressId(lead.id);
+      const res = await fetch(`${API_BASE_URL}/api/admin/leads/${lead.id}`, {
+        method: "PUT",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...lead,
+          status: "converted",
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to convert lead");
+      triggerRefresh();
+      setParentRefreshFlag(!parentRefreshFlag);
+    } catch (error) {
+      alert("Failed to convert lead.");
+    } finally {
+      setActionInProgressId(null);
+    }
+  }
+
+  function Pagination() {
+    if (totalPages <= 1) return null;
+    let startPage = Math.max(1, page - 2);
+    let endPage = Math.min(totalPages, page + 2);
+    if (endPage - startPage < 4 && totalPages > 4) {
+      if (startPage === 1) endPage = Math.min(5, totalPages);
+      if (endPage === totalPages) startPage = Math.max(1, totalPages - 4);
+    }
+    const pageNumbers = [];
+    for (let i = startPage; i <= endPage; i++) pageNumbers.push(i);
+    return (
+      <div className="flex flex-wrap items-center justify-between gap-4 px-2 py-4">
+        <div className="text-xs text-slate-500">
+          Showing{" "}
+          <span className="font-semibold">
+            {total === 0
+              ? 0
+              : (page - 1) * pageSize + 1}
+          </span>
+          {"–"}
+          <span className="font-semibold">
+            {Math.min(page * pageSize, total)}
+          </span>
+          {" of "}
+          <span className="font-semibold">{total}</span> leads
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            className="p-2 rounded disabled:opacity-30"
+            disabled={page === 1}
+            onClick={() => setPage(page - 1)}
+            aria-label="Previous page"
+            type="button"
+          >
+            <FiChevronLeft />
+          </button>
+          {pageNumbers[0] > 1 && (
+            <button
+              className="px-2 text-xs rounded hover:bg-slate-100"
+              onClick={() => setPage(1)}
+              type="button"
+            >
+              1
+            </button>
+          )}
+          {pageNumbers[0] > 2 && <span className="px-1 text-xs">…</span>}
+          {pageNumbers.map((pg) => (
+            <button
+              key={pg}
+              className={`px-3 py-1 text-xs rounded font-semibold ${
+                pg === page
+                  ? "bg-blue-600 text-white"
+                  : "hover:bg-slate-100"
+              }`}
+              onClick={() => setPage(pg)}
+              disabled={pg === page}
+              type="button"
+            >
+              {pg}
+            </button>
+          ))}
+          {pageNumbers[pageNumbers.length - 1] < totalPages - 1 && (
+            <span className="px-1 text-xs">…</span>
+          )}
+          {pageNumbers[pageNumbers.length - 1] < totalPages && (
+            <button
+              className="px-2 text-xs rounded hover:bg-slate-100"
+              onClick={() => setPage(totalPages)}
+              type="button"
+            >
+              {totalPages}
+            </button>
+          )}
+          <button
+            className="p-2 rounded disabled:opacity-30"
+            disabled={page === totalPages}
+            onClick={() => setPage(page + 1)}
+            aria-label="Next page"
+            type="button"
+          >
+            <FiChevronRight />
+          </button>
+        </div>
+        <div className="flex items-center gap-2 text-xs">
+          <span>Rows per page:</span>
+          <select
+            className="border rounded px-1 py-0.5"
+            value={pageSize}
+            onChange={e => {
+              setPageSize(Number(e.target.value));
+              setPage(1);
+            }}
+          >
+            {[10, 15, 25, 50, 100].map(sz => (
+              <option key={sz} value={sz}>{sz}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+    );
+  }
+
   function renderStatus(status: string) {
     switch (status) {
       case "converted":
@@ -223,7 +465,7 @@ export default function ConsultationsLeads() {
           className={`${actionButton} text-amber-600 bg-amber-50 hover:bg-amber-100 border border-amber-100`}
           title="Edit"
           type="button"
-          onClick={() => handleEditLead(row)}
+          onClick={() => openEditModal(row)}
         >
           <FiEdit2 {...iconProps} />
         </button>
@@ -234,6 +476,7 @@ export default function ConsultationsLeads() {
             title="Convert to Registration"
             type="button"
             onClick={() => handleConvertLead(row)}
+            disabled={actionInProgressId === row.id}
           >
             <FiArrowRight {...iconProps} />
             <span className="hidden md:inline">Convert</span>
@@ -245,6 +488,7 @@ export default function ConsultationsLeads() {
           title="Delete"
           type="button"
           onClick={() => handleDeleteLead(row)}
+          disabled={actionInProgressId === row.id}
         >
           <FiTrash2 {...iconProps} />
         </button>
@@ -252,12 +496,177 @@ export default function ConsultationsLeads() {
     );
   }
 
-  // Modal handlers
-  function handleModalInput(
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
-  ) {
-    const { name, value } = e.target;
-    setEnqForm((prev) => ({ ...prev, [name]: value }));
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ delay: 0.2 }}
+      className="bg-white border border-slate-200 rounded-lg overflow-y-auto mb-2"
+    >
+      {tableLoading ? (
+        <div className="flex items-center justify-center py-12 text-slate-600">
+          Loading...
+        </div>
+      ) : (
+        <>
+          <table className="w-full text-sm">
+            <thead className="bg-slate-100 text-slate-600">
+              <tr>
+                <th className="px-4 py-3 text-left font-medium">Lead&nbsp;ID</th>
+                <th className="px-4 py-3 text-left font-medium">Parent</th>
+                <th className="px-4 py-3 text-left font-medium">Child</th>
+                <th className="px-4 py-3 text-left font-medium">Contact</th>
+                <th className="px-4 py-3 text-left font-medium">Status</th>
+                <th className="px-4 py-3 text-left font-medium">Remarks</th>
+                <th className="px-4 py-3 text-right font-medium">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {leads.length === 0 && (
+                <tr>
+                  <td colSpan={7} className="px-4 py-12 text-center text-slate-400">
+                    No leads found.
+                  </td>
+                </tr>
+              )}
+              {leads.map((lead) => (
+                <tr className="border-t" key={lead.id}>
+                  <td className="px-4 py-4 text-slate-600 font-mono flex items-center gap-2">
+                    <FiHash className="text-blue-500" />
+                    {lead.leadId && lead.leadId !== "" ? lead.leadId : lead.id}
+                  </td>
+                  <td className="px-4 py-4 font-medium text-slate-800">{lead.parent}</td>
+                  <td className="px-4 py-4">{lead.child}</td>
+                  <td className="px-4 py-4 space-y-1 text-slate-600">
+                    <div className="flex items-center gap-2">
+                      <FiPhone /> {lead.phone}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <FiMail /> {lead.email}
+                    </div>
+                  </td>
+                  <td className="px-4 py-4">{renderStatus(lead.status)}</td>
+                  <td className="px-4 py-4">
+                    {lead.remarks && lead.remarks.trim() !== "" ? (
+                      <span className="block text-slate-700 break-words whitespace-pre-line">
+                        {lead.remarks}
+                      </span>
+                    ) : (
+                      <span className="block text-slate-400 italic">—</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-4 text-right">{renderActions(lead)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <Pagination />
+        </>
+      )}
+    </motion.div>
+  );
+}
+
+export default function ConsultationsLeads() {
+  // const [loading, setLoading] = useState(true);
+  const [guideOpen, setGuideOpen] = useState(false);
+
+  const [tableLoading, setTableLoading] = useState(false);
+  const [parentRefreshFlag, setParentRefreshFlag] = useState(false);
+  const [tableKey, setTableKey] = useState(() => Math.random().toString(36));
+
+  const [search, setSearch] = useState("");
+  const [filters, setFilters] = useState({ status: "" });
+
+  const [enqModalOpen, setEnqModalOpen] = useState(false);
+  const [enqForm, setEnqForm] = useState({
+    callDate: "",
+    staff: "",
+    staffOther: "",
+    referralSource: "",
+    parentName: "",
+    parentRelationship: "",
+    parentMobile: "",
+    parentEmail: "",
+    parentArea: "",
+    childName: "",
+    childDOB: "",
+    childGender: "",
+    therapistAlready: "",
+    diagnosis: "",
+    visitFinalized: "",
+    appointmentDate: "",
+    appointmentTime: "",
+    remarks: "",
+    status: "pending",
+  });
+
+  const [editingLeadId, setEditingLeadId] = useState<string | null>(null);
+  // const [currentLeads, setCurrentLeads] = useState<Lead[]>([]);
+
+  const parentNameRef = useRef<HTMLInputElement | null>(null);
+  const [showCallDateCalendar, setShowCallDateCalendar] = useState(false);
+  const [showChildDOBCalendar, setShowChildDOBCalendar] = useState(false);
+  const [showAppointmentDateCalendar, setShowAppointmentDateCalendar] = useState(false);
+
+  useEffect(() => {
+    if (enqModalOpen && !editingLeadId) {
+      setEnqForm((prev) => ({
+        ...prev,
+        callDate: new Date().toISOString().slice(0, 16),
+        status: "pending",
+      }));
+    }
+  }, [enqModalOpen, editingLeadId]);
+
+  useEffect(() => {
+    if (enqModalOpen && parentNameRef.current) {
+      parentNameRef.current.focus();
+    }
+  }, [enqModalOpen]);
+
+  async function handleModalSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    try {
+      const payload = {
+        ...enqForm,
+        staff: enqForm.staff === "Other" && enqForm.staffOther
+          ? enqForm.staffOther
+          : enqForm.staff,
+        status: enqForm.status || "pending",
+      };
+
+      let res;
+      if (editingLeadId) {
+        res = await fetch(
+          `${API_BASE_URL}/api/admin/leads/${editingLeadId}`,
+          {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            credentials: "same-origin",
+            body: JSON.stringify(payload),
+          }
+        );
+        if (!res.ok) throw new Error("Failed to update lead");
+      } else {
+        res = await fetch(`${API_BASE_URL}/api/admin/leads`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) throw new Error("Failed to submit lead");
+      }
+      setParentRefreshFlag((f) => !f);
+      setTableKey(Math.random().toString(36));
+      handleModalClose();
+    } catch (error) {
+      alert(
+        editingLeadId
+          ? "Failed to update lead. Please try again."
+          : "Failed to create lead. Please try again."
+      );
+    }
   }
 
   function handleModalClose() {
@@ -281,8 +690,7 @@ export default function ConsultationsLeads() {
       appointmentDate: "",
       appointmentTime: "",
       remarks: "",
-      status: "pending", // Reset as per default on close
-      // not leadId
+      status: "pending",
     });
     setEditingLeadId(null);
     setShowCallDateCalendar(false);
@@ -290,141 +698,7 @@ export default function ConsultationsLeads() {
     setShowAppointmentDateCalendar(false);
   }
 
-  // Unified modal submit ADD/EDIT handler
-  async function handleModalSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    try {
-      const payload = {
-        ...enqForm,
-        staff:
-          enqForm.staff === "Other" && enqForm.staffOther
-            ? enqForm.staffOther
-            : enqForm.staff,
-        status: enqForm.status || "pending", // ensure status is always present for edit/add
-        // leadId is NOT sent from UI; only for view, non-editable
-      };
-
-      let res;
-      if (editingLeadId) {
-        // EDIT mode, use PUT
-        res = await fetch(
-          `${API_BASE_URL}/api/admin/leads/${editingLeadId}`,
-          {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            credentials: "same-origin",
-            body: JSON.stringify(payload),
-          }
-        );
-        if (!res.ok) throw new Error("Failed to update lead");
-        // The backend returns { success: true, message: ..., lead: {...fields...} }
-        const result = await res.json();
-        console.log(result);
-
-        if (!result.success || !result.lead) {
-          throw new Error(result.message || "No lead returned from server");
-        }
-
-        const updatedLeadData = result.lead;
-
-        setLeads((prev) =>
-          prev
-            ? prev.map((l) =>
-                l.id === editingLeadId
-                  ? {
-                      ...l,
-                      id: updatedLeadData._id || updatedLeadData.id || editingLeadId,
-                      leadId: updatedLeadData.leadId || "",
-                      parent: updatedLeadData.parentName,
-                      child: updatedLeadData.childName,
-                      phone: updatedLeadData.parentMobile,
-                      email: updatedLeadData.parentEmail,
-                      status: updatedLeadData.status,
-                      callDate: updatedLeadData.callDate
-                        ? new Date(updatedLeadData.callDate).toISOString().slice(0, 16)
-                        : "",
-                      staff: updatedLeadData.staff || "",
-                      staffOther: updatedLeadData.staffOther || "",
-                      referralSource: updatedLeadData.referralSource || "",
-                      parentRelationship: updatedLeadData.parentRelationship || "",
-                      parentArea: updatedLeadData.parentArea || "",
-                      childDOB: updatedLeadData.childDOB
-                        ? new Date(updatedLeadData.childDOB).toISOString().slice(0, 10)
-                        : "",
-                      childGender: updatedLeadData.childGender || "",
-                      therapistAlready: updatedLeadData.therapistAlready || "",
-                      diagnosis: updatedLeadData.diagnosis || "",
-                      visitFinalized: updatedLeadData.visitFinalized || "",
-                      appointmentDate: updatedLeadData.appointmentDate
-                        ? new Date(updatedLeadData.appointmentDate).toISOString().slice(0, 10)
-                        : "",
-                      appointmentTime: updatedLeadData.appointmentTime || "",
-                      remarks: updatedLeadData.remarks || "",
-                      actions: [],
-                    }
-                  : l
-              )
-            : null
-        );
-      } else {
-        // ADD mode, use POST
-        res = await fetch(`${API_BASE_URL}/api/admin/leads`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "same-origin",
-          body: JSON.stringify(payload),
-        });
-        if (!res.ok) throw new Error("Failed to submit lead");
-        const createdResult = await res.json();
-
-        // The backend returns { success, message, lead }
-        if (!createdResult.success || !createdResult.lead) {
-          throw new Error(createdResult.message || "No lead returned from server");
-        }
-
-        const createdLeadData = createdResult.lead;
-
-        // Map backend response to the Lead type (with extras for edit):
-        const newLead: Lead = {
-          id: createdLeadData._id || createdLeadData.id,
-          leadId: createdLeadData.leadId || "",
-          parent: createdLeadData.parentName,
-          child: createdLeadData.childName,
-          phone: createdLeadData.parentMobile,
-          email: createdLeadData.parentEmail,
-          status: createdLeadData.status,
-          actions: [],
-          callDate: createdLeadData.callDate ? new Date(createdLeadData.callDate).toISOString().slice(0, 16) : "",
-          staff: createdLeadData.staff || "",
-          staffOther: createdLeadData.staffOther || "",
-          referralSource: createdLeadData.referralSource || "",
-          parentRelationship: createdLeadData.parentRelationship || "",
-          parentArea: createdLeadData.parentArea || "",
-          childDOB: createdLeadData.childDOB ? new Date(createdLeadData.childDOB).toISOString().slice(0, 10) : "",
-          childGender: createdLeadData.childGender || "",
-          therapistAlready: createdLeadData.therapistAlready || "",
-          diagnosis: createdLeadData.diagnosis || "",
-          visitFinalized: createdLeadData.visitFinalized || "",
-          appointmentDate: createdLeadData.appointmentDate ? new Date(createdLeadData.appointmentDate).toISOString().slice(0, 10) : "",
-          appointmentTime: createdLeadData.appointmentTime || "",
-          remarks: createdLeadData.remarks || "",
-        };
-        setLeads((prev) => prev ? [newLead, ...prev] : [newLead]);
-      }
-      handleModalClose();
-    } catch (error) {
-      // eslint-disable-next-line no-console
-      console.error(editingLeadId ? "Failed to update lead" : "Failed to create lead", error);
-      alert(
-        editingLeadId
-          ? "Failed to update lead. Please try again."
-          : "Failed to create lead. Please try again."
-      );
-    }
-  }
-
-  // Edit, delete, convert logic
-  function handleEditLead(lead: Lead) {
+  function handleEditModalOpen(lead: Lead) {
     setEnqModalOpen(true);
     setEditingLeadId(lead.id);
     setEnqForm({
@@ -446,97 +720,10 @@ export default function ConsultationsLeads() {
       appointmentDate: lead.appointmentDate || "",
       appointmentTime: lead.appointmentTime || "",
       remarks: lead.remarks || "",
-      status: lead.status || "pending", // Propagate current status into form for edit API
-      // not leadId!
+      status: lead.status || "pending",
     });
   }
 
-  async function handleDeleteLead(lead: Lead) {
-    if (
-      !window.confirm(
-        `Delete lead for parent '${lead.parent}' and child '${lead.child}'?`,
-      )
-    )
-      return;
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/admin/leads/${lead.id}`, {
-        method: "DELETE",
-        credentials: "same-origin",
-      });
-      if (!res.ok) throw new Error("Failed to delete lead");
-      setLeads((prev) => (prev ? prev.filter((l) => l.id !== lead.id) : []));
-    } catch (error) {
-      // eslint-disable-next-line no-console
-      console.error("Delete failed", error);
-      alert("Failed to delete lead.");
-    }
-  }
-
-  async function handleConvertLead(lead: Lead) {
-    if (
-      !window.confirm(
-        `Convert lead for parent '${lead.parent}' and child '${lead.child}' to registration?`,
-      )
-    )
-      return;
-    try {
-      // Use the same edit (PUT) API to set status to 'converted'
-      const res = await fetch(`${API_BASE_URL}/api/admin/leads/${lead.id}`, {
-        method: "PUT",
-        credentials: "same-origin",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          ...lead,
-          status: "converted",
-        }),
-      });
-      if (!res.ok) throw new Error("Failed to convert lead");
-      setLeads((prev) =>
-        prev
-          ? prev.map((l) =>
-              l.id === lead.id
-                ? {
-                    ...l,
-                    status: "converted",
-                  }
-                : l,
-            )
-          : [],
-      );
-    } catch (error) {
-      // eslint-disable-next-line no-console
-      console.error("Convert failed", error);
-      alert("Failed to convert lead.");
-    }
-  }
-
-  // Move all 'converted' status to the bottom
-  const sortedLeads =
-    leads && leads.length
-      ? [...leads].sort((a, b) => {
-          if (a.status === "converted" && b.status !== "converted") return 1;
-          if (a.status !== "converted" && b.status === "converted") return -1;
-          return 0;
-        })
-      : [];
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="text-slate-600 font-semibold"
-        >
-          Loading Consultations & Leads…
-        </motion.div>
-      </div>
-    );
-  }
-
-  // Helper to allow showing/hiding calendar input overlay for a given text input + input type="date"
   function DateInputWithCalendar({
     label,
     name,
@@ -550,7 +737,6 @@ export default function ConsultationsLeads() {
     setShowCalendar,
     min,
     max,
-
   }: {
     label: string;
     name: string;
@@ -565,17 +751,12 @@ export default function ConsultationsLeads() {
     min?: string;
     max?: string;
   }) {
-    // On click the "text input", show the type="date" input
-    // On change in date pick, update value and hide calendar
-    // On blur, hide calendar (after a moment so date pick is registered)
     const inputRef = useRef<HTMLInputElement>(null);
-
     return (
       <div style={{ position: "relative" }}>
         <label className="block text-xs font-semibold text-slate-600 mb-1">
           {label}
         </label>
-        {/* Show as text input unless calendar shown */}
         {!showCalendar ? (
           <input
             type="text"
@@ -590,7 +771,6 @@ export default function ConsultationsLeads() {
             disabled={disabled}
             readOnly={readOnly}
             autoComplete="off"
-            // inputMode={inputMode}
           />
         ) : (
           <input
@@ -641,12 +821,8 @@ export default function ConsultationsLeads() {
     min?: string;
     max?: string;
   }) {
-    // On click text input, show calendar (datetime-local)
-    // On blur, hide calendar
     const inputRef = useRef<HTMLInputElement>(null);
-
     function formatToReadableDateTime(val: string) {
-      // Convert 2024-06-12T11:22 to 12 Jun 2024, 11:22
       if (!val) return "";
       const d = new Date(val);
       if (isNaN(d.getTime())) return val;
@@ -656,7 +832,6 @@ export default function ConsultationsLeads() {
       };
       return d.toLocaleString(undefined, opts);
     }
-
     return (
       <div style={{ position: "relative" }}>
         <label className="block text-xs font-semibold text-slate-600 mb-1">
@@ -717,7 +892,6 @@ export default function ConsultationsLeads() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
-            {/* Outer container with safe scroll for small screens */}
             <div
               className="flex items-center justify-center w-full h-full"
               style={{
@@ -730,7 +904,6 @@ export default function ConsultationsLeads() {
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.97, opacity: 0 }}
                 transition={{ duration: 0.2 }}
-                // Improved! Add scroll for modal on small screens, with max height, safe for all mobile
                 className="bg-white rounded-xl shadow-2xl w-full max-w-2xl p-0 overflow-y-auto max-h-[98vh] sm:max-h-[90vh]"
                 onClick={(e) => e.stopPropagation()}
                 role="dialog"
@@ -756,7 +929,6 @@ export default function ConsultationsLeads() {
                   autoComplete="off"
                   onSubmit={handleModalSubmit}
                 >
-                  {/* Lead ID (readonly, non-editable, shows only on edit) */}
                   {editingLeadId && (
                     <div>
                       <label className="block text-xs font-semibold text-slate-600 mb-1">
@@ -766,34 +938,25 @@ export default function ConsultationsLeads() {
                         type="text"
                         className="w-full border px-3 py-2 rounded bg-slate-100 text-slate-600"
                         name="leadId"
-                        value={
-                          (leads?.find((l) => l.id === editingLeadId)?.leadId &&
-                            leads.find((l) => l.id === editingLeadId)?.leadId !== ""
-                          )
-                            ? leads?.find((l) => l.id === editingLeadId)?.leadId
-                            : (leads?.find((l) => l.id === editingLeadId)?.id || editingLeadId)
-                        }
+                        value={editingLeadId}
                         readOnly
                         disabled
                       />
                     </div>
                   )}
-
-                  {/* Date/Time of Call as calendar */}
                   <div className="flex flex-col md:flex-row md:gap-4">
                     <div className="flex-1 mb-2 md:mb-0">
                       <DateTimeInputWithCalendar
                         label="Date/Time of Call"
                         name="callDate"
                         value={enqForm.callDate}
-                        onChange={handleModalInput}
+                        onChange={e => setEnqForm(f => ({ ...f, [e.target.name]: e.target.value }))}
                         readOnly={!!editingLeadId}
                         disabled={!!editingLeadId}
                         showCalendar={showCallDateCalendar}
                         setShowCalendar={setShowCallDateCalendar}
                       />
                     </div>
-                    {/* Staff member */}
                     <div className="flex-1 mb-2 md:mb-0">
                       <label className="block text-xs font-semibold text-slate-600 mb-1">
                         Staff Member Taking Call
@@ -802,14 +965,12 @@ export default function ConsultationsLeads() {
                         className="w-full border px-3 py-2 rounded"
                         name="staff"
                         value={enqForm.staff}
-                        onChange={handleModalInput}
+                        onChange={e => setEnqForm(f => ({ ...f, staff: e.target.value }))}
                         required
                       >
                         <option value="">Select...</option>
-                        {staffMembers.map((staff) => (
-                          <option key={staff} value={staff}>
-                            {staff}
-                          </option>
+                        {staffMembers.map(staff => (
+                          <option key={staff} value={staff}>{staff}</option>
                         ))}
                       </select>
                       {enqForm.staff === "Other" && (
@@ -818,14 +979,13 @@ export default function ConsultationsLeads() {
                           type="text"
                           name="staffOther"
                           value={enqForm.staffOther}
-                          onChange={handleModalInput}
+                          onChange={e => setEnqForm(f => ({ ...f, staffOther: e.target.value }))}
                           placeholder="Enter staff name"
                           required
                         />
                       )}
                     </div>
                   </div>
-                  {/* Referral Source */}
                   <div>
                     <label className="block text-xs font-semibold text-slate-600 mb-1">
                       Where did you find us? (Referral source)
@@ -835,11 +995,10 @@ export default function ConsultationsLeads() {
                       type="text"
                       name="referralSource"
                       value={enqForm.referralSource}
-                      onChange={handleModalInput}
+                      onChange={e => setEnqForm(f => ({ ...f, referralSource: e.target.value }))}
                       placeholder="e.g. Google, Doctor, Friend"
                     />
                   </div>
-                  {/* Parent/Guardian Info */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-semibold text-slate-600 mb-1">
@@ -851,7 +1010,7 @@ export default function ConsultationsLeads() {
                         name="parentName"
                         ref={parentNameRef}
                         value={enqForm.parentName}
-                        onChange={handleModalInput}
+                        onChange={e => setEnqForm(f => ({ ...f, parentName: e.target.value }))}
                         required
                       />
                     </div>
@@ -864,7 +1023,7 @@ export default function ConsultationsLeads() {
                         type="text"
                         name="parentRelationship"
                         value={enqForm.parentRelationship}
-                        onChange={handleModalInput}
+                        onChange={e => setEnqForm(f => ({ ...f, parentRelationship: e.target.value }))}
                       />
                     </div>
                     <div>
@@ -876,7 +1035,7 @@ export default function ConsultationsLeads() {
                         type="tel"
                         name="parentMobile"
                         value={enqForm.parentMobile}
-                        onChange={handleModalInput}
+                        onChange={e => setEnqForm(f => ({ ...f, parentMobile: e.target.value }))}
                         required
                       />
                     </div>
@@ -889,7 +1048,7 @@ export default function ConsultationsLeads() {
                         type="email"
                         name="parentEmail"
                         value={enqForm.parentEmail}
-                        onChange={handleModalInput}
+                        onChange={e => setEnqForm(f => ({ ...f, parentEmail: e.target.value }))}
                       />
                     </div>
                     <div>
@@ -901,11 +1060,10 @@ export default function ConsultationsLeads() {
                         type="text"
                         name="parentArea"
                         value={enqForm.parentArea}
-                        onChange={handleModalInput}
+                        onChange={e => setEnqForm(f => ({ ...f, parentArea: e.target.value }))}
                       />
                     </div>
                   </div>
-                  {/* Child Info */}
                   <div className="mt-2 grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                       <label className="block text-xs font-semibold text-slate-600 mb-1">
@@ -916,16 +1074,15 @@ export default function ConsultationsLeads() {
                         type="text"
                         name="childName"
                         value={enqForm.childName}
-                        onChange={handleModalInput}
+                        onChange={e => setEnqForm(f => ({ ...f, childName: e.target.value }))}
                       />
                     </div>
                     <div>
-                      {/* Date of Birth as calendar */}
                       <DateInputWithCalendar
                         label="Date of Birth"
                         name="childDOB"
                         value={enqForm.childDOB}
-                        onChange={handleModalInput}
+                        onChange={e => setEnqForm(f => ({ ...f, childDOB: e.target.value }))}
                         showCalendar={showChildDOBCalendar}
                         setShowCalendar={setShowChildDOBCalendar}
                         placeholder="Select date"
@@ -939,7 +1096,7 @@ export default function ConsultationsLeads() {
                         className="w-full border px-3 py-2 rounded"
                         name="childGender"
                         value={enqForm.childGender}
-                        onChange={handleModalInput}
+                        onChange={e => setEnqForm(f => ({ ...f, childGender: e.target.value }))}
                       >
                         <option value="">Select...</option>
                         <option value="Boy">Boy</option>
@@ -957,7 +1114,7 @@ export default function ConsultationsLeads() {
                         type="text"
                         name="therapistAlready"
                         value={enqForm.therapistAlready}
-                        onChange={handleModalInput}
+                        onChange={e => setEnqForm(f => ({ ...f, therapistAlready: e.target.value }))}
                         placeholder="e.g. Yes, speech therapy at XYZ"
                       />
                     </div>
@@ -970,12 +1127,11 @@ export default function ConsultationsLeads() {
                         type="text"
                         name="diagnosis"
                         value={enqForm.diagnosis}
-                        onChange={handleModalInput}
+                        onChange={e => setEnqForm(f => ({ ...f, diagnosis: e.target.value }))}
                         placeholder="e.g. Autism, Down's syndrome"
                       />
                     </div>
                   </div>
-                  {/* Visit finalized */}
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-2">
                     <div>
                       <label className="block text-xs font-semibold text-slate-600 mb-1">
@@ -985,7 +1141,7 @@ export default function ConsultationsLeads() {
                         className="w-full border px-3 py-2 rounded"
                         name="visitFinalized"
                         value={enqForm.visitFinalized}
-                        onChange={handleModalInput}
+                        onChange={e => setEnqForm(f => ({ ...f, visitFinalized: e.target.value }))}
                       >
                         <option value="">Select...</option>
                         <option value="Yes">Yes</option>
@@ -994,12 +1150,11 @@ export default function ConsultationsLeads() {
                       </select>
                     </div>
                     <div>
-                      {/* Appointment Date as calendar */}
                       <DateInputWithCalendar
                         label="Appointment Date"
                         name="appointmentDate"
                         value={enqForm.appointmentDate}
-                        onChange={handleModalInput}
+                        onChange={e => setEnqForm(f => ({ ...f, appointmentDate: e.target.value }))}
                         showCalendar={showAppointmentDateCalendar}
                         setShowCalendar={setShowAppointmentDateCalendar}
                         placeholder="Select date"
@@ -1013,7 +1168,7 @@ export default function ConsultationsLeads() {
                         className="w-full border px-3 py-2 rounded"
                         name="appointmentTime"
                         value={enqForm.appointmentTime}
-                        onChange={handleModalInput}
+                        onChange={e => setEnqForm(f => ({ ...f, appointmentTime: e.target.value }))}
                       >
                         <option value="">Select...</option>
                         {appointmentTimes.map((t) => (
@@ -1024,7 +1179,6 @@ export default function ConsultationsLeads() {
                       </select>
                     </div>
                   </div>
-                  {/* Remarks */}
                   <div>
                     <label className="block text-xs font-semibold text-slate-600 mb-1">
                       Remarks
@@ -1033,12 +1187,11 @@ export default function ConsultationsLeads() {
                       className="w-full border px-3 py-2 rounded"
                       name="remarks"
                       value={enqForm.remarks}
-                      onChange={handleModalInput}
+                      onChange={e => setEnqForm(f => ({ ...f, remarks: e.target.value }))}
                       placeholder="Additional notes, comments, next steps, etc."
                       rows={2}
                     />
                   </div>
-                  {/* Status field: hidden input to propagate value to API (for edit) */}
                   <input type="hidden" name="status" value={enqForm.status || "pending"} />
                   <div className="flex gap-2 justify-end pt-6">
                     <button
@@ -1063,10 +1216,12 @@ export default function ConsultationsLeads() {
       </AnimatePresence>
 
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-          <FiUserPlus /> Consultations & Leads
-        </h1>
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-6">
+        <div className="flex items-center gap-2">
+          <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+            <FiUserPlus /> Consultations & Leads
+          </h1>
+        </div>
         <button
           className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition"
           onClick={() => {
@@ -1091,7 +1246,7 @@ export default function ConsultationsLeads() {
               appointmentDate: "",
               appointmentTime: "",
               remarks: "",
-              status: "pending", // Default status set as pending for new inquiry
+              status: "pending",
             });
             setShowCallDateCalendar(false);
             setShowChildDOBCalendar(false);
@@ -1102,7 +1257,13 @@ export default function ConsultationsLeads() {
         </button>
       </div>
 
-      {/* Guide (collapsible) */}
+      <FilterSearchBar
+        search={search}
+        setSearch={setSearch}
+        filters={filters}
+        setFilters={setFilters}
+      />
+
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -1169,68 +1330,17 @@ export default function ConsultationsLeads() {
         </AnimatePresence>
       </motion.div>
 
-      {/* Table */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.2 }}
-        className="bg-white border border-slate-200 rounded-lg overflow-y-auto"
-      >
-        <table className="w-full  text-sm">
-          <thead className="bg-slate-100 text-slate-600">
-            <tr>
-              <th className="px-4 py-3 text-left font-medium">Lead&nbsp;ID</th>
-              <th className="px-4 py-3 text-left font-medium">Parent</th>
-              <th className="px-4 py-3 text-left font-medium">Child</th>
-              <th className="px-4 py-3 text-left font-medium">Contact</th>
-              <th className="px-4 py-3 text-left font-medium">Status</th>
-              <th className="px-4 py-3 text-left font-medium">Remarks</th>
-              <th className="px-4 py-3 text-right font-medium">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sortedLeads?.length === 0 && (
-              <tr>
-                <td colSpan={7} className="px-4 py-12 text-center text-slate-400">
-                  No leads found.
-                </td>
-              </tr>
-            )}
-            {sortedLeads?.map((lead) => (
-              <tr className="border-t" key={lead.id}>
-                <td className="px-4 py-4 text-slate-600 font-mono flex items-center gap-2">
-                  <FiHash className="text-blue-500" />
-                  {/* show leadId if present, else fallback to display id */}
-                  {lead.leadId && lead.leadId !== "" ? lead.leadId : lead.id}
-                </td>
-                <td className="px-4 py-4 font-medium text-slate-800">{lead.parent}</td>
-                <td className="px-4 py-4">{lead.child}</td>
-                <td className="px-4 py-4 space-y-1 text-slate-600">
-                  <div className="flex items-center gap-2">
-                    <FiPhone /> {lead.phone}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <FiMail /> {lead.email}
-                  </div>
-                </td>
-                <td className="px-4 py-4">
-                  {renderStatus(lead.status)}
-                </td>
-                <td className="px-4 py-4">
-                  {lead.remarks && lead.remarks.trim() !== "" ? (
-                    <span className="block text-slate-700 break-words whitespace-pre-line">{lead.remarks}</span>
-                  ) : (
-                    <span className="block text-slate-400 italic">—</span>
-                  )}
-                </td>
-                <td className="px-4 py-4 text-right">
-                  {renderActions(lead)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </motion.div>
+      {/* Leads table with implemented pagination */}
+      <LeadsTableSection
+        search={search}
+        filters={filters}
+        fetchKey={tableKey}
+        tableLoading={tableLoading}
+        setTableLoading={setTableLoading}
+        parentRefreshFlag={parentRefreshFlag}
+        setParentRefreshFlag={setParentRefreshFlag}
+        openEditModal={handleEditModalOpen}
+      />
     </motion.div>
   );
 }

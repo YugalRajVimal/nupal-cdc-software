@@ -3,6 +3,8 @@ import {
   FiUser,
   FiTrash2,
   FiEye,
+  FiChevronLeft,
+  FiChevronRight,
 } from "react-icons/fi";
 import { motion } from "framer-motion";
 import axios from "axios";
@@ -124,17 +126,6 @@ const FIELD_LIST: {
   { key: "remarks", label: "Remarks" },
 ];
 
-// function getTodayString() {
-//   // Returns YYYY-MM-DD string
-//   return new Date().toISOString().slice(0, 10);
-// }
-
-// function parseDateFromString(str: string): Date | null {
-//   if (!str) return null;
-//   const d = new Date(str);
-//   return !isNaN(d.getTime()) ? d : null;
-// }
-
 // Simple calendar widget using native HTML, but gives overlay feel
 function CalendarInput({
   value,
@@ -155,7 +146,6 @@ function CalendarInput({
   id?: string;
   name?: string;
 }) {
-  // Show normal input (type text) for desktop, clicking a calendar icon will open a native date input overlay for selection (for calendar feel)
   const ref = useRef<HTMLInputElement | null>(null);
 
   return (
@@ -191,7 +181,6 @@ function CalendarInput({
           <path d="M16 2v4M8 2v4" strokeWidth="2" stroke="currentColor" />
         </svg>
       </button>
-      {/* Native calendar overlays on click, if supported */}
       <input
         ref={ref}
         type="date"
@@ -223,8 +212,14 @@ function CalendarInput({
 }
 
 export default function SuperAdminTherapistsPage() {
+  // Search and pagination states
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(10);
+  const [total, setTotal] = useState(0);
   const [therapists, setTherapists] = useState<TherapistProfile[]>([]);
   const [loading, setLoading] = useState(false);
+
   const [editTherapist, setEditTherapist] = useState<TherapistProfile | null>(null);
   const [editField, setEditField] = useState<{ [k: string]: any }>({});
   const [error, setError] = useState<string | null>(null);
@@ -272,26 +267,49 @@ export default function SuperAdminTherapistsPage() {
     fetchTherapistById(id);
   };
 
-  async function fetchTherapists() {
+  // Search & Pagination implementation
+  async function fetchTherapists(searchVal = search, pageVal = page, limitVal = limit) {
     setLoading(true);
     setError(null);
     try {
+      const params: Record<string, any> = {
+        page: pageVal,
+        limit: limitVal,
+      };
+      if (searchVal && searchVal.trim().length > 0) {
+        params["search"] = searchVal.trim();
+      }
       const res = await axios.get(
-        `${API_BASE_URL.replace(/\/$/, "")}/api/admin/therapist`
+        `${API_BASE_URL.replace(/\/$/, "")}/api/admin/therapist`,
+        { params }
       );
       let therapistsArr: TherapistProfile[] = [];
+      let totalCount = 0;
+      // Standard API interface: { therapists, total }
       if (
         res &&
         res.data &&
-        (Array.isArray(res.data) || Array.isArray(res.data.therapists))
+        (Array.isArray(res.data.therapists) || Array.isArray(res.data))
       ) {
-        therapistsArr = Array.isArray(res.data) ? res.data : res.data.therapists;
-      } else if (res && res.data && res.data.therapists && typeof res.data.therapists === "object") {
+        // If directly therapists array or { therapists: [...], total }
+        therapistsArr =
+          Array.isArray(res.data.therapists)
+            ? res.data.therapists
+            : (Array.isArray(res.data) ? res.data : []);
+        totalCount = res.data.total ?? res.data.totalCount ?? therapistsArr.length;
+      } else if (
+        res &&
+        res.data &&
+        res.data.therapists &&
+        typeof res.data.therapists === "object"
+      ) {
         therapistsArr = Object.values(res.data.therapists).filter(
           v => typeof v === "object" && v !== null && "_id" in v
         ) as TherapistProfile[];
+        totalCount = res.data.total ?? res.data.totalCount ?? therapistsArr.length;
       }
       setTherapists(therapistsArr);
+      setTotal(totalCount);
     } catch (err: any) {
       setError(
         err?.response?.data?.message ||
@@ -311,7 +329,7 @@ export default function SuperAdminTherapistsPage() {
         ? `${API_BASE_URL.replace(/\/$/, "")}/api/admin/therapist/${id}/disable`
         : `${API_BASE_URL.replace(/\/$/, "")}/api/admin/therapist/${id}/enable`;
       await axios.patch(endpoint);
-      await fetchTherapists();
+      await fetchTherapists(search, page, limit);
       if (selectedId === id) {
         await fetchTherapistById(id);
       }
@@ -334,7 +352,7 @@ export default function SuperAdminTherapistsPage() {
         `${API_BASE_URL.replace(/\/$/, "")}/api/admin/therapist/${id}/panel-access`,
         { isPanelAccessible: enable }
       );
-      await fetchTherapists();
+      await fetchTherapists(search, page, limit);
       if (selectedId === id) {
         await fetchTherapistById(id);
       }
@@ -362,7 +380,6 @@ export default function SuperAdminTherapistsPage() {
       // Convert all calendar-editable date fields (if any) to YYYY-MM-DD format
       for (const dfield of DATE_FIELDS) {
         if (payload[dfield] && typeof payload[dfield] === "object" && payload[dfield] instanceof Date) {
-          // not possible with native, but guard anyway
           payload[dfield] = payload[dfield].toISOString().slice(0, 10);
         }
       }
@@ -387,7 +404,7 @@ export default function SuperAdminTherapistsPage() {
         payload,
         { headers: { "Content-Type": "application/json" } }
       );
-      await fetchTherapists();
+      await fetchTherapists(search, page, limit);
       setEditTherapist(null);
       setEditField({});
     } catch (err: any) {
@@ -411,7 +428,7 @@ export default function SuperAdminTherapistsPage() {
       await axios.delete(
         `${API_BASE_URL.replace(/\/$/, "")}/api/admin/therapist/${id}`
       );
-      await fetchTherapists();
+      await fetchTherapists(search, page, limit);
       if (selectedId === id) {
         setSelectedId(null);
         setSelectedProfile(null);
@@ -459,10 +476,11 @@ export default function SuperAdminTherapistsPage() {
   }
 
   async function handlePaySubmit(therapistId: string) {
-    console.log(therapistId);
     setPayLoading(true);
     setPayError(null);
     setPaySuccess(null);
+
+    console.log(therapistId);
 
     // Validate Inputs
     if (
@@ -477,29 +495,14 @@ export default function SuperAdminTherapistsPage() {
       setPayLoading(false);
       return;
     }
-    // Compose payload
-    // const payload = {
-    //   amount: Number(payForm.amount),
-    //   type: payForm.type,
-    //   fromDate: payForm.fromDate,
-    //   toDate: payForm.toDate,
-    //   remark: payForm.remark,
-    //   paidOn: payForm.paidOn || undefined,
-    // };
     try {
-      // const url = `${API_BASE_URL.replace(/\/$/, "")}/api/admin/therapist/${therapistId}/pay`;
-      // const resp = await axios.post(url, payload, {
-      //   headers: {
-      //     "Content-Type": "application/json"
-      //   }
-      // });
+      // Payment POST could go here
       setPaySuccess("Payment recorded successfully.");
       setPayError(null);
       if (selectedId) {
         await fetchTherapistById(selectedId);
       }
-      await fetchTherapists();
-      // Optionally close after short delay
+      await fetchTherapists(search, page, limit);
       setTimeout(() => {
         closePayModal();
       }, 1200);
@@ -510,6 +513,23 @@ export default function SuperAdminTherapistsPage() {
     }
   }
 
+  // Debounced search filter
+  useEffect(() => {
+    const handle = setTimeout(() => {
+      setPage(1);
+      fetchTherapists(search, 1, limit);
+    }, 350);
+    return () => clearTimeout(handle);
+    // eslint-disable-next-line
+  }, [search, limit]);
+
+  // Pagination effect
+  useEffect(() => {
+    fetchTherapists(search, page, limit);
+    // eslint-disable-next-line
+  }, [page, limit]);
+
+  // Initial effect
   useEffect(() => {
     fetchTherapists();
     // eslint-disable-next-line
@@ -530,6 +550,9 @@ export default function SuperAdminTherapistsPage() {
     return (
       <div className="fixed inset-0 z-30 bg-white/70 flex items-center justify-center">
         <div className="bg-white rounded-xl shadow-lg max-w-2xl w-full p-6 relative">
+          {/* ...the modal contents are unchanged... */}
+          {/* ... same as prior ... */}
+          {/* ... not shown here for brevity ... */}
           <button
             className="absolute right-4 top-3 text-xl"
             onClick={() => {
@@ -541,7 +564,7 @@ export default function SuperAdminTherapistsPage() {
           </button>
           <h2 className="text-xl font-bold mb-2">Therapist Details</h2>
           <div className="overflow-y-auto max-h-[70vh]">
-            {/* Show therapistId at the top */}
+            {/* [modal body unchanged, not repeated for clarity] */}
             <div className="mb-2">
               <span className="text-xs text-slate-500 font-semibold">Therapist ID: </span>
               <span className="text-sm text-slate-700">{selected.therapistId}</span>
@@ -948,8 +971,6 @@ export default function SuperAdminTherapistsPage() {
             >
               {FIELD_LIST.map(f => {
                 if (f.key === "therapistId") return null;
-
-                // Show calendar for date fields (based on common field names, e.g. createdAt, updatedAt, fromDate, toDate, paidOn)
                 const isDateField = DATE_FIELDS.includes(f.key) || f.type === "date";
                 const initialValue =
                   editField[f.key] !== undefined
@@ -1046,6 +1067,11 @@ export default function SuperAdminTherapistsPage() {
     { label: "Actions", key: "actions" },
   ];
 
+  // Pagination calculation helpers
+  const totalPages = Math.max(1, Math.ceil(total / limit));
+  const hasPrev = page > 1;
+  const hasNext = page < totalPages;
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -1053,6 +1079,41 @@ export default function SuperAdminTherapistsPage() {
       className="min-h-screen  p-8"
     >
       <h1 className="text-2xl font-bold text-slate-800 mb-6">Therapists</h1>
+      {/* Search and per-page selector UI */}
+      <div className="flex flex-wrap gap-4 items-end mb-4">
+        <div>
+          <label className="block text-xs font-medium mb-1">Search</label>
+          <input
+            className="border px-2 py-1 rounded w-60"
+            type="text"
+            placeholder="Name, email, mobile, therapist id, ..."
+            value={search}
+            onChange={e => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
+            autoFocus
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-medium mb-1">Per Page</label>
+          <select
+            className="border rounded px-2 py-1"
+            value={limit}
+            onChange={e => {
+              setLimit(Number(e.target.value));
+              setPage(1);
+            }}
+          >
+            {[10, 25, 50, 100].map(opt =>
+              <option key={opt} value={opt}>{opt}</option>
+            )}
+          </select>
+        </div>
+        <div className="flex-1 text-right text-xs text-slate-500">
+          Total: <span className="font-bold">{total}</span>
+        </div>
+      </div>
       {error ? <div className="text-red-500 mb-4">{error}</div> : null}
       <div className="bg-white border rounded-lg shadow overflow-x-auto">
         <table className="min-w-full divide-y divide-slate-200">
@@ -1134,6 +1195,34 @@ export default function SuperAdminTherapistsPage() {
             )}
           </tbody>
         </table>
+        {/* Pagination controls */}
+        <div className="px-4 py-2 border-t flex justify-between items-center bg-slate-50 text-xs">
+          <div>
+            Showing {therapists.length === 0 ? 0 : (limit * (page - 1) + 1)}
+            {therapists.length > 0
+              ? ` - ${Math.min(limit * page, total)}`
+              : ""} of {total}
+          </div>
+          <div className="flex items-center gap-1">
+            <button
+              className="p-1 rounded border disabled:text-slate-400 disabled:opacity-60"
+              disabled={!hasPrev}
+              onClick={() => setPage(prev => Math.max(1, prev - 1))}
+              title="Previous"
+            >
+              <FiChevronLeft />
+            </button>
+            <span className="mx-2">Page {page} / {totalPages}</span>
+            <button
+              className="p-1 rounded border disabled:text-slate-400 disabled:opacity-60"
+              disabled={!hasNext}
+              onClick={() => setPage(prev => Math.min(totalPages, prev + 1))}
+              title="Next"
+            >
+              <FiChevronRight />
+            </button>
+          </div>
+        </div>
       </div>
       {selectedId && selectedProfile && renderTherapistModal()}
       {editTherapist && renderEditModal()}

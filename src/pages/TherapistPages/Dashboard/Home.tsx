@@ -234,7 +234,7 @@ export default function TherapistDashboardHome() {
                       <th className="py-2 px-3 text-left text-gray-600 font-semibold">Time</th>
                       <th className="py-2 px-3 text-left text-gray-600 font-semibold">Patient</th>
                       <th className="py-2 px-3 text-left text-gray-600 font-semibold">Therapy</th>
-                      <th className="py-2 px-3 text-left text-gray-600 font-semibold">Appointment ID</th>
+                      <th className="py-2 px-3 text-left text-gray-600 font-semibold">Booking ID</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -272,7 +272,7 @@ export default function TherapistDashboardHome() {
                       <th className="py-2 px-3 text-left text-gray-600 font-semibold">Time</th>
                       <th className="py-2 px-3 text-left text-gray-600 font-semibold">Patient</th>
                       <th className="py-2 px-3 text-left text-gray-600 font-semibold">Therapy</th>
-                      <th className="py-2 px-3 text-left text-gray-600 font-semibold">Appointment ID</th>
+                      <th className="py-2 px-3 text-left text-gray-600 font-semibold">Booking ID</th>
                     </tr>
                   </thead>
                   <tbody>

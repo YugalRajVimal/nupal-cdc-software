@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import {
   FiCalendar,
   FiUser,
@@ -7,12 +7,18 @@ import {
   FiX,
   FiSave,
   FiChevronDown,
+  FiSearch,
+  FiChevronLeft,
+  FiChevronRight,
+  FiChevronsLeft,
+  FiChevronsRight,
 } from "react-icons/fi";
 import { motion } from "framer-motion";
 import dayjs from "dayjs";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "";
 
+// --- TYPE DEFINITIONS (unchanged, omitted for brevity - keep all from the original!) ---
 type TherapistType = {
   _id: string;
   userId: {
@@ -21,7 +27,6 @@ type TherapistType = {
   } | string;
   therapistId: string;
 };
-
 type SessionType = {
   _id?: string;
   date: string;
@@ -32,7 +37,6 @@ type SessionType = {
   therapist?: TherapistType;
   [key: string]: any;
 };
-
 type PatientType = {
   _id: string;
   userId: string;
@@ -42,13 +46,11 @@ type PatientType = {
   name: string;
   [key: string]: any;
 };
-
 type EditRequestSessionEntry = {
   sessionId: string;
   newDate: string;
   newSlotId: string;
 };
-
 type EditRequestType = {
   _id: string;
   appointmentId: string;
@@ -59,7 +61,6 @@ type EditRequestType = {
   updatedAt?: string;
   [key: string]: any;
 };
-
 type AppointmentType = {
   _id: string;
   appointmentId?: string;
@@ -70,7 +71,6 @@ type AppointmentType = {
   editRequests?: EditRequestType[];
   [key: string]: any;
 };
-
 const SESSION_TIME_OPTIONS = [
   { id: "1000-1045", label: "10:00 to 10:45", limited: false },
   { id: "1045-1130", label: "10:45 to 11:30", limited: false },
@@ -88,12 +88,7 @@ const SESSION_TIME_OPTIONS = [
   { id: "1845-1930", label: "18:45 to 19:30", limited: true },
   { id: "1930-2015", label: "19:30 to 20:15", limited: true },
 ];
-
-// Map slotId to start/end time for quick calculation (24-hour)
-const SLOT_TIME_LOOKUP: Record<
-  string,
-  { start: string; end: string }
-> = {
+const SLOT_TIME_LOOKUP: Record<string, { start: string; end: string }> = {
   "1000-1045": { start: "10:00", end: "10:45" },
   "1045-1130": { start: "10:45", end: "11:30" },
   "1130-1215": { start: "11:30", end: "12:15" },
@@ -110,7 +105,6 @@ const SLOT_TIME_LOOKUP: Record<
   "1845-1930": { start: "18:45", end: "19:30" },
   "1930-2015": { start: "19:30", end: "20:15" },
 };
-
 type SessionEditState = {
   [sessionKey: string]: {
     date: string;
@@ -122,73 +116,86 @@ type SessionEditState = {
     originalDate?: string;
     originalSlotId?: string;
     isEditedSlot?: boolean;
-    // Also keep info about requested slot if pending/approved for display
     pendingRequestNewDate?: string | null;
     pendingRequestNewSlotId?: string | null;
   };
 };
 
-// Utility to parse slot start to Date from date + slotId
+// --- SEARCH & PAGINATION HOOKS ---
+
+function useDebounce<T>(value: T, delay: number) {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+  useEffect(() => {
+    const handler = setTimeout(() => setDebouncedValue(value), delay);
+    return () => clearTimeout(handler);
+  }, [value, delay]);
+  return debouncedValue;
+}
+
+// --- UTILS (original utilities, unchanged) ---
 function getSlotDateTime(dateStr: string, slotId?: string) {
   if (!dateStr || !slotId) return null;
   const slot = SLOT_TIME_LOOKUP[slotId];
   if (!slot) return null;
-  // Compose date and start time
-  // Date format: YYYY-MM-DD, time format: HH:mm (24hr)
   const dt = dayjs(`${dateStr}T${slot.start}`);
   return dt.isValid() ? dt : null;
 }
-
-// Is less than 2 hours (or <= 2hr) from now to this datetime?
 function isLessThan2Hours(dt: dayjs.Dayjs | null) {
   if (!dt) return false;
   const now = dayjs();
   const diffMinutes = dt.diff(now, "minute");
   return diffMinutes <= 120;
 }
-
-// For bulk edit UI: block/grey out a session if less than 2hr to session start
 function isSessionLocked2Hr(dateStr: string, slotId?: string) {
   const slotDt = getSlotDateTime(dateStr, slotId);
   if (!slotDt) return false;
   return isLessThan2Hours(slotDt);
 }
-
-// For slot dropdown - if the (selected) date+slotId would result in <2hr lock
 function willSelectionBeLocked2Hr(dateStr: string, slotId: string) {
-  // Only check if dateStr is non-empty and slotId is in the slot list
   if (!dateStr || !slotId) return false;
   return isSessionLocked2Hr(dateStr, slotId);
 }
 
 export default function RequestEditInAppointment() {
+  // -- Search & Pagination state -- keeps these separated from appointments
+  const [searchText, setSearchText] = useState("");
+  const debouncedSearchText = useDebounce(searchText, 350);
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [totalCount, setTotalCount] = useState(0);
+
+  // -- Table data --
   const [appointments, setAppointments] = useState<AppointmentType[]>([]);
   const [loading, setLoading] = useState(false);
 
+  // A ref so that after modal closes we reload or stay at same search/pagination.
+  const reloadKey = useRef(0);
+
+  // -- Modal/Edit states --
   const [viewAppointment, setViewAppointment] = useState<AppointmentType | null>(null);
-
   const [sessionEditState, setSessionEditState] = useState<SessionEditState>({});
-  const [requestEditMessage, setRequestEditMessage] = useState<string | null>(null);
-
-  // Modal state for bulk session edit (existing/unchanged)
+  const [requestEditMessage, setRequestEditMessage] = useState<string | null>(
+    null
+  );
   const [editAllMode, setEditAllMode] = useState(false);
   const [submittingAll, setSubmittingAll] = useState(false);
   const [submitAllError, setSubmitAllError] = useState<string | null>(null);
+  const [expandedEditRequests, setExpandedEditRequests] = useState<{
+    [editRequestId: string]: boolean;
+  }>({});
 
-  // For expanded requested editRequests in modal
-  const [expandedEditRequests, setExpandedEditRequests] = useState<{[editRequestId: string]: boolean}>({});
-
-  // -- Utility: Build a mapping of sessionId -> latest pending/approved edit-request for showing pending requests in session rows --
+  // -- Utility/Mapping --
   function getSessionPendingRequestMap(appointment: AppointmentType) {
-    const sessionReqMap: Record<string, { status: string, newDate?: string, newSlotId?: string }> = {};
-
-    // Only pending/approved edit requests are relevant
+    const sessionReqMap: Record<
+      string,
+      { status: string; newDate?: string; newSlotId?: string }
+    > = {};
     const validEditRequests = Array.isArray(appointment.editRequests)
       ? appointment.editRequests.filter(
           (er) => er.status === "pending" || er.status === "approved"
         )
       : [];
-
     validEditRequests.forEach((editReq) => {
       (editReq.sessions || []).forEach((sessionObj) => {
         const sessionIdStr =
@@ -202,7 +209,6 @@ export default function RequestEditInAppointment() {
     });
     return sessionReqMap;
   }
-
   function appointmentHasPendingRequest(appointment: AppointmentType) {
     if (!appointment || !Array.isArray(appointment.editRequests)) return false;
     return appointment.editRequests.some(
@@ -210,10 +216,17 @@ export default function RequestEditInAppointment() {
     );
   }
 
+  // -- FETCH: Search & paginated table --
   useEffect(() => {
     setLoading(true);
     const patientToken = localStorage.getItem("patient-token");
-    fetch(`${API_BASE_URL}/api/parent/appointments`, {
+    // Compose query: search, page, pageSize
+    const params = new URLSearchParams();
+    params.append("page", String(currentPage));
+    params.append("limit", String(pageSize));
+    if (debouncedSearchText.length > 0) params.append("search", debouncedSearchText);
+
+    fetch(`${API_BASE_URL}/api/parent/appointments?${params.toString()}`, {
       headers: {
         ...(patientToken ? { Authorization: `${patientToken}` } : {}),
       },
@@ -223,18 +236,24 @@ export default function RequestEditInAppointment() {
         const raw = await res.json();
         if (raw && raw.success && Array.isArray(raw.data)) {
           setAppointments(raw.data);
-          console.log(raw.data);
+          setTotalCount(raw.total || raw.count || raw.data.length); // Make sure backend sends total count for pagination! (else fallback)
         } else {
           setAppointments([]);
+          setTotalCount(0);
           window.alert("Failed to fetch appointments.");
         }
       })
       .catch(() => {
+        setAppointments([]);
+        setTotalCount(0);
         window.alert("Error fetching appointments.");
       })
       .finally(() => setLoading(false));
-  }, []);
+    // Only refetch when these change (not when edit modal is closed)
+    // eslint-disable-next-line
+  }, [debouncedSearchText, currentPage, pageSize, reloadKey.current]);
 
+  // -- Session edit state per appointment MODAL
   useEffect(() => {
     setEditAllMode(false);
     setSubmittingAll(false);
@@ -287,7 +306,29 @@ export default function RequestEditInAppointment() {
     setRequestEditMessage(null);
   }, [viewAppointment]);
 
-  // Handle bulk edit for all sessions
+  // Isn't reloaded after closing modal by default!
+  function reloadTableDataAfterEdit() {
+    reloadKey.current += 1;
+    setViewAppointment(null);
+    // triggers refetch by bumping reloadKey
+  }
+
+  // --- Search/Pagination UI & HANDLERS ---
+  function handleSearchInput(e: React.ChangeEvent<HTMLInputElement>) {
+    setSearchText(e.target.value);
+    setCurrentPage(1);
+  }
+  function handlePageSizeChange(e: React.ChangeEvent<HTMLSelectElement>) {
+    setPageSize(Number(e.target.value));
+    setCurrentPage(1);
+  }
+  function handlePage(page: number) {
+    if (page < 1) return;
+    const maxPage = Math.ceil(totalCount / pageSize) || 1;
+    if (page > maxPage) return;
+    setCurrentPage(page);
+  }
+  // --- EDIT BULK ACTIONS (unchanged) ---
   const handleEditAllClick = () => {
     setEditAllMode(true);
     setSubmitAllError(null);
@@ -304,8 +345,6 @@ export default function RequestEditInAppointment() {
       return next;
     });
   };
-
-  // Change session field (date/slot) for specific session
   const handleSessionFieldChange = (
     key: string,
     field: "date" | "slotId",
@@ -337,7 +376,6 @@ export default function RequestEditInAppointment() {
       };
     });
   };
-
   const handleCancelEditAll = () => {
     setEditAllMode(false);
     setSubmitAllError(null);
@@ -357,7 +395,6 @@ export default function RequestEditInAppointment() {
       return reset;
     });
   };
-
   const handleSubmitAllEdit = async () => {
     setSubmittingAll(true);
     setSubmitAllError(null);
@@ -369,7 +406,6 @@ export default function RequestEditInAppointment() {
 
     // Check for 2hr lock for all edited sessions
     for (const [k, v] of sessionsToRequest) {
-      // Must use new date/slot values
       if (!v.date || !v.slotId) {
         setSessionEditState((prev) => ({
           ...prev,
@@ -473,13 +509,14 @@ export default function RequestEditInAppointment() {
       setRequestEditMessage(
         "Edit request(s) sent to admin/center. Please wait for confirmation."
       );
+      reloadTableDataAfterEdit();
     } catch (e: any) {
       setSubmittingAll(false);
       setSubmitAllError(e?.message || "Failed to request edit.");
     }
   };
 
-  // EXPAND/COLLAPSE utility for requested edits
+  // EXPAND/COLLAPSE for requested edits in modal
   const toggleEditRequestExpand = (editRequestId: string) => {
     setExpandedEditRequests((prev) => ({
       ...prev,
@@ -487,7 +524,6 @@ export default function RequestEditInAppointment() {
     }));
   };
 
-  // Helper to get session "old" date and slot for given sessionId (for editRequest display)
   function findSessionOldDetails(
     sessionId: string,
     appointment: AppointmentType | null
@@ -502,9 +538,12 @@ export default function RequestEditInAppointment() {
         };
       }
     }
-    // If not found by _id above, check by sessionId field if present
     for (let s of appointment.sessions) {
-      if ("sessionId" in s && s.sessionId && s.sessionId.toString() === sessionId.toString()) {
+      if (
+        "sessionId" in s &&
+        s.sessionId &&
+        s.sessionId.toString() === sessionId.toString()
+      ) {
         return {
           oldDate: s.date,
           oldSlotId: s.slotId,
@@ -514,7 +553,7 @@ export default function RequestEditInAppointment() {
     return {};
   }
 
-  // --- Modal component ---
+  // --- UI ---
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -524,6 +563,43 @@ export default function RequestEditInAppointment() {
       <h1 className="text-2xl font-bold text-slate-800 mb-6">
         My Children's Appointments
       </h1>
+      {/* Search and Pagination UI (above table, does not get reset on table refresh) */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-5">
+        <div className="flex items-center gap-2">
+          <FiSearch className="text-blue-700 text-xl mr-1" />
+          <input
+            type="text"
+            placeholder="Search by Patient Name, ID, or Appointment ID"
+            value={searchText}
+            onChange={handleSearchInput}
+            className="w-64 md:w-80 border border-slate-200 rounded px-2 py-1 text-sm focus:outline-none"
+          />
+        </div>
+        <div className="flex items-center gap-4 mt-2 md:mt-0">
+          <div className="flex items-center gap-2">
+            <label className="font-medium mr-1 text-xs text-slate-600">Rows:</label>
+            <select
+              className="border rounded px-2 py-1 text-xs"
+              value={pageSize}
+              onChange={handlePageSizeChange}
+            >
+              {[5, 10, 20, 50].map((num) => (
+                <option value={num} key={num}>
+                  {num}
+                </option>
+              ))}
+            </select>
+          </div>
+          {/* Pagination nav */}
+          <PaginationNav
+            currentPage={currentPage}
+            pageSize={pageSize}
+            totalCount={totalCount}
+            onPage={handlePage}
+          />
+        </div>
+      </div>
+      {/* Appointment Table */}
       {loading ? (
         <div className="text-center text-slate-400">Loading...</div>
       ) : (
@@ -541,22 +617,12 @@ export default function RequestEditInAppointment() {
             <tbody>
               {appointments.length === 0 && (
                 <tr>
-                  <td
-                    colSpan={5}
-                    className="px-4 py-8 text-slate-400 text-center"
-                  >
+                  <td colSpan={5} className="px-4 py-8 text-slate-400 text-center">
                     No appointments found.
                   </td>
                 </tr>
               )}
               {appointments.map((a) => {
-                // Hide the request button if there is a pending or approved request for this appointment
-                // const hasRequest =
-                //   Array.isArray(a.editRequests) &&
-                //   a.editRequests.some(
-                //     (er) =>
-                //       er.status === "pending" || er.status === "approved"
-                //   );
                 return (
                   <tr key={a._id} className="border-t">
                     <td className="px-4 py-4 font-semibold text-slate-700">
@@ -596,11 +662,6 @@ export default function RequestEditInAppointment() {
                       >
                         <FiCalendar className="text-blue-500" /> View / Edit
                       </button>
-                      {/* 
-                        The original "Request Edit For Multiple Sessions" button is shown inside the modal,
-                        so we do not add it here. If you want to hide request edit *per row* (if such a feature appears in the future),
-                        you can use hasRequest
-                      */}
                     </td>
                   </tr>
                 );
@@ -609,6 +670,16 @@ export default function RequestEditInAppointment() {
           </table>
         </div>
       )}
+
+      {/* Pagination nav below table for wide screens */}
+      <div className="flex justify-end mt-2">{!loading && (
+        <PaginationNav
+          currentPage={currentPage}
+          pageSize={pageSize}
+          totalCount={totalCount}
+          onPage={handlePage}
+        />
+      )}</div>
 
       {/* Modal for appointment details: bulk session edit mode */}
       {viewAppointment && (
@@ -627,7 +698,7 @@ export default function RequestEditInAppointment() {
             <div className="mb-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block mb-1 text-sm font-medium text-slate-700">
-                  Appointment ID
+                  Booking ID
                 </label>
                 <input
                   type="text"
@@ -755,13 +826,11 @@ export default function RequestEditInAppointment() {
                                   </thead>
                                   <tbody>
                                     {editReq.sessions.map((sess, sidx) => {
-                                      // Find label for slotId in SESSION_TIME_OPTIONS
                                       const slotLabel =
                                         SESSION_TIME_OPTIONS.find(
                                           (opt) => opt.id === sess.newSlotId
                                         )?.label || sess.newSlotId;
 
-                                      // Get old session details by matching with appointment.sessions by _id/sessionId
                                       const { oldDate, oldSlotId } = findSessionOldDetails(
                                         sess.sessionId,
                                         viewAppointment
@@ -806,8 +875,6 @@ export default function RequestEditInAppointment() {
                   </div>
                 </div>
               )}
-
-            {/* Sessions Table */}
             <h3 className="font-semibold mb-2 mt-6 text-blue-900">Sessions</h3>
             {requestEditMessage && (
               <div className="mb-3 px-3 py-2 bg-blue-50 text-blue-900 rounded text-xs">
@@ -851,7 +918,6 @@ export default function RequestEditInAppointment() {
                       let alreadyRequested = localState.requested;
                       let alreadyApproved = localState.status === "approved";
 
-                      // Determine edit-requested fields for this session
                       let requestedNewDate: string | null =
                         localState.pendingRequestNewDate ?? null;
                       let requestedNewSlotId: string | null =
@@ -869,7 +935,6 @@ export default function RequestEditInAppointment() {
                       const showEditedWarn =
                         editAllMode && !alreadyRequested && localState.isEditedSlot;
 
-                      // Is less than 2hr for current session's original date/time/slot?
                       const locked2hr =
                         isSessionLocked2Hr(
                           localState.originalDate ?? localState.date,
@@ -883,14 +948,13 @@ export default function RequestEditInAppointment() {
                             {editAllMode && !alreadyRequested ? (
                               <input
                                 type="date"
-                                className={`border rounded px-1 py-1 text-xs ${
-                                  showEditedWarn ? "border-blue-500" : ""
-                                }`}
+                                className={`border rounded px-1 py-1 text-xs ${showEditedWarn ? "border-blue-500" : ""
+                                  }`}
                                 value={
                                   localState.date
                                     ? dayjs(localState.date).format(
-                                        "YYYY-MM-DD"
-                                      )
+                                      "YYYY-MM-DD"
+                                    )
                                     : ""
                                 }
                                 min={dayjs().format("YYYY-MM-DD")}
@@ -908,11 +972,10 @@ export default function RequestEditInAppointment() {
                             ) : (
                               "-"
                             )}
-                            {/* Show new requested date, if applicable */}
                             {alreadyRequested &&
                               requestedNewDate &&
                               requestedNewDate !==
-                                dayjs(s.date).format("YYYY-MM-DD") && (
+                              dayjs(s.date).format("YYYY-MM-DD") && (
                                 <div className="text-blue-700 text-[11px] mt-1">
                                   <span className="italic">Requested:</span>{" "}
                                   {requestedNewDate}
@@ -949,9 +1012,8 @@ export default function RequestEditInAppointment() {
                                   Select Slot
                                 </option>
                                 {SESSION_TIME_OPTIONS.map((opt) => {
-                                  // Grey out if the current date+slotId would be locked
                                   const optionLocked = willSelectionBeLocked2Hr(
-                                    localState.date, // use edited or current field
+                                    localState.date,
                                     opt.id
                                   );
                                   return (
@@ -959,7 +1021,11 @@ export default function RequestEditInAppointment() {
                                       key={opt.id}
                                       value={opt.id}
                                       disabled={optionLocked}
-                                      style={optionLocked ? { color: "#bbbbbb", background: "#f1f1f1" } : {}}
+                                      style={
+                                        optionLocked
+                                          ? { color: "#bbbbbb", background: "#f1f1f1" }
+                                          : {}
+                                      }
                                     >
                                       {opt.label} {opt.limited ? "(Limited)" : ""}
                                       {optionLocked ? " - Not Available (<2hr)" : ""}
@@ -974,7 +1040,6 @@ export default function RequestEditInAppointment() {
                               s.slotId ||
                               "--"
                             )}
-                            {/* Show new requested slot */}
                             {alreadyRequested &&
                               requestedNewSlotLabel &&
                               requestedNewSlotId !== s.slotId && (
@@ -999,10 +1064,10 @@ export default function RequestEditInAppointment() {
                             {localState.therapistName
                               ? localState.therapistName
                               : typeof s.therapist === "object"
-                              ? typeof s.therapist.userId === "object"
-                                ? s.therapist.userId.name
-                                : ""
-                              : (
+                                ? typeof s.therapist.userId === "object"
+                                  ? s.therapist.userId.name
+                                  : ""
+                                : (
                                   <span className="italic text-slate-400">
                                     –
                                   </span>
@@ -1011,18 +1076,15 @@ export default function RequestEditInAppointment() {
                           {/* Status cell */}
                           <td className="px-3 py-2 capitalize">
                             {localState.status &&
-                            typeof localState.status === "string" ? (
+                              typeof localState.status === "string" ? (
                               localState.status
                             ) : (
                               <span className="italic text-slate-400">N/A</span>
                             )}
-                            {/* Status detail - pending/approved etc */}
                             {alreadyRequested && (
                               <span className="ml-2 text-green-600 flex gap-1 items-center text-xs">
                                 <FiCheck />
-                                {alreadyApproved
-                                  ? "Edit Approved"
-                                  : "Requested"}
+                                {alreadyApproved ? "Edit Approved" : "Requested"}
                               </span>
                             )}
                           </td>
@@ -1043,7 +1105,6 @@ export default function RequestEditInAppointment() {
               </table>
             </div>
 
-            {/* Per-session errors */}
             {editAllMode && (
               <div className="mb-2 grid gap-1">
                 {Object.entries(sessionEditState).map(([k, v]) =>
@@ -1056,7 +1117,6 @@ export default function RequestEditInAppointment() {
               </div>
             )}
 
-            {/* Bulk action buttons */}
             <div className="flex items-center gap-2 justify-end mt-2">
               {editAllMode ? (
                 <>
@@ -1085,7 +1145,6 @@ export default function RequestEditInAppointment() {
                   </button>
                 </>
               ) : (
-                // Hide edit button if there is a pending or approved request for this appointment
                 !appointmentHasPendingRequest(viewAppointment) &&
                 Object.values(sessionEditState).some((v) => !v.requested) && (
                   <button
@@ -1108,5 +1167,74 @@ export default function RequestEditInAppointment() {
         </div>
       )}
     </motion.div>
+  );
+}
+
+// --- PaginationNav component (separated for brevity, reusable, and so the search/pagination UI is not reset on table reload) ---
+function PaginationNav({
+  currentPage,
+  pageSize,
+  totalCount,
+  onPage,
+}: {
+  currentPage: number;
+  pageSize: number;
+  totalCount: number;
+  onPage: (page: number) => void;
+}) {
+  const maxPage = Math.max(1, Math.ceil((totalCount || 0) / pageSize));
+  if (maxPage <= 1) return null;
+  function quickJump(delta: number) {
+    onPage(Math.min(maxPage, Math.max(1, currentPage + delta)));
+  }
+  return (
+    <div className="flex items-center gap-1 select-none">
+      <button
+        onClick={() => onPage(1)}
+        disabled={currentPage === 1}
+        className="px-2 py-1 rounded border text-xs disabled:opacity-40"
+        tabIndex={0}
+        type="button"
+        aria-label="First"
+      >
+        <FiChevronsLeft />
+      </button>
+      <button
+        onClick={() => quickJump(-1)}
+        disabled={currentPage === 1}
+        className="px-2 py-1 rounded border text-xs disabled:opacity-40"
+        tabIndex={0}
+        type="button"
+        aria-label="Previous"
+      >
+        <FiChevronLeft />
+      </button>
+      <span className="mx-2 text-xs font-semibold">
+        Page {currentPage} of {maxPage}
+      </span>
+      <button
+        onClick={() => quickJump(1)}
+        disabled={currentPage === maxPage}
+        className="px-2 py-1 rounded border text-xs disabled:opacity-40"
+        tabIndex={0}
+        type="button"
+        aria-label="Next"
+      >
+        <FiChevronRight />
+      </button>
+      <button
+        onClick={() => onPage(maxPage)}
+        disabled={currentPage === maxPage}
+        className="px-2 py-1 rounded border text-xs disabled:opacity-40"
+        tabIndex={0}
+        type="button"
+        aria-label="Last"
+      >
+        <FiChevronsRight />
+      </button>
+      <span className="ml-2 text-slate-500 text-xs">
+        ({totalCount} total)
+      </span>
+    </div>
   );
 }

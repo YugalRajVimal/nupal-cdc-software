@@ -1,6 +1,16 @@
 import React, { useEffect, useState, useRef } from 'react';
 import axios from 'axios';
-import { FiUser, FiMail, FiPhone, FiTag, FiHash, FiLogIn } from "react-icons/fi";
+import {
+  FiUser,
+  FiMail,
+  FiPhone,
+  FiTag,
+  FiHash,
+  FiLogIn,
+  FiSearch,
+  FiChevronLeft,
+  FiChevronRight,
+} from "react-icons/fi";
 import { useNavigate } from "react-router-dom";
 
 const API_BASE = import.meta.env.VITE_API_URL;
@@ -16,14 +26,13 @@ type FlattenedUser = {
   [key: string]: any;
 };
 
-// For grouping patient family
 type FamilyGroupPatient = {
-  _id: string; // main userId._id of the family (parent userId)
-  shortId: string; // display as string, or "-"
-  name: string; // Parent Name (Father + Mother full name, fallback to user name)
+  _id: string;
+  shortId: string;
+  name: string;
   parentEmail: string;
-  familyPatients: any[]; // List of all children for that family
-  displayNames: string; // joined children names
+  familyPatients: any[];
+  displayNames: string;
   role: string;
   fromCollection: 'patients';
   phone?: string;
@@ -46,21 +55,17 @@ const extractShortId = (user: any, type: string): string => {
   return user._id || '';
 };
 
-// New: helper to group patients by parentEmail or userId.email
 const groupPatientsByParentEmail = (patients: any[]): FamilyGroupPatient[] => {
   const familyGroups: { [key: string]: FamilyGroupPatient } = {};
 
   for (const patient of patients) {
     if (!patient.userId) continue;
-
-    // Fallback logic for grouping: first try parentEmail, then userId.email.
     const parentEmail = patient.parentEmail || patient.userId.email;
     const userId = patient.userId._id || patient._id;
     const userEmail = patient.userId.email || patient.parentEmail || '';
     if (!parentEmail) continue;
 
     if (!familyGroups[parentEmail]) {
-      // Parent display name logic
       let displayParentName = 'N/A';
       if (patient.fatherFullName || patient.motherFullName) {
         displayParentName =
@@ -77,7 +82,7 @@ const groupPatientsByParentEmail = (patients: any[]): FamilyGroupPatient[] => {
         shortId: extractShortId(patient, 'patients'),
         name: displayParentName,
         parentEmail: parentEmail,
-        displayNames: '', // to fill in below
+        displayNames: '',
         familyPatients: [],
         role: patient.userId.role || 'patient',
         fromCollection: 'patients',
@@ -92,14 +97,10 @@ const groupPatientsByParentEmail = (patients: any[]): FamilyGroupPatient[] => {
     familyGroups[parentEmail].familyPatients.push(patient);
   }
 
-  // Populate displayNames for children (comma separated)
   Object.values(familyGroups).forEach(family => {
     family.displayNames = family.familyPatients.map(p => `${p.name} (${p.patientId || '-'})`).join(', ');
   });
-
-  // If shortId not representative, fall back to family
   Object.values(familyGroups).forEach(family => {
-    // Compose shortId as comma separated patientIds (first one used as key)
     family.shortId =
       family.familyPatients.map(p => p.patientId || '-').join(', ') ||
       family.familyPatients.map(p => p._id).join(', ') ||
@@ -114,7 +115,6 @@ const extractUsersFromResponse = (data: any): FlattenedUser[] => {
 
   if (!data) return users;
 
-  // Therapists and admins as before
   if (Array.isArray(data.therapists)) {
     data.therapists.forEach((therapist: any) => {
       if (therapist.userId) {
@@ -131,22 +131,20 @@ const extractUsersFromResponse = (data: any): FlattenedUser[] => {
     });
   }
 
-  // Group patients by parent email for display
   if (Array.isArray(data.patients)) {
-    // New: Get all grouped family patients
     const families = groupPatientsByParentEmail(data.patients);
     for (const family of families) {
       users.push({
         _id: family._id,
-        shortId: family.shortId, // now a comma-separated patient ids string
-        name: family.name, // parent names if present
-        email: family.userEmail || family.parentEmail, // main userId email
+        shortId: family.shortId,
+        name: family.name,
+        email: family.userEmail || family.parentEmail,
         parentEmail: family.parentEmail,
-        displayNames: family.displayNames, // children names
+        displayNames: family.displayNames,
         role: family.role,
         fromCollection: 'patients',
         phone: family.phone,
-        familyPatients: family.familyPatients, // array of all children for that parentEmail
+        familyPatients: family.familyPatients,
         fatherFullName: family.fatherFullName,
         motherFullName: family.motherFullName,
         address: family.address,
@@ -171,12 +169,12 @@ const extractUsersFromResponse = (data: any): FlattenedUser[] => {
   return users;
 };
 
-// Add All Users to the tab switches
+// Here, map UI role switches to api role
 const ROLE_OPTIONS = [
-  { label: "All Users", value: "all" },
-  { label: "All Patients", value: "patients" },
-  { label: "All Therapist", value: "therapists" },
-  { label: "All Admin", value: "admin" },
+  { label: "All Users", value: "all", apiRole: "all" },
+  { label: "All Patients", value: "patients", apiRole: "patients" },
+  { label: "All Therapist", value: "therapists", apiRole: "therapists" },
+  { label: "All Admin", value: "admin", apiRole: "admin" },
 ];
 
 const TableHeadCell = ({
@@ -216,7 +214,6 @@ const UserRow = ({
   onLoginAsUser,
   loggingInUserId,
 }: UserRowProps) => {
-  // For "patients" show children under family if applicable
   const showFamilyChildren = user.fromCollection === 'patients' && user.displayNames;
   return (
     <tr
@@ -328,76 +325,130 @@ type AllUsersProps = {
   navigate?: ReturnType<typeof useNavigate>;
 };
 
-// To support being called inside and outside <Router>, AllUsers checks for navigate prop
+const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
+
 const AllUsers: React.FC<AllUsersProps> = () => {
   const [users, setUsers] = useState<FlattenedUser[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeRole, setActiveRole] = useState<'all' | 'patients' | 'therapists' | 'admin'>('patients');
-  const hasFetchedOnce = useRef(false);
-
+  const [activeRole, setActiveRole] = useState<'all' | 'patients' | 'therapists' | 'admin'>('all');
   const [loggingInUserId, setLoggingInUserId] = useState<string | null>(null);
 
-  // let _navigate: ReturnType<typeof useNavigate> | undefined;
-  // Support for being run both inside and outside of a Router
-  // try {
-  //   _navigate = props.navigate ?? useNavigate();
-  // } catch (e) {
-  //   _navigate = undefined;
-  // }
+  // Pagination & search states
+  const [page, setPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(25);
+  const [total, setTotal] = useState<number>(0);
+  const [search, setSearch] = useState<string>('');
+  const [searchInput, setSearchInput] = useState<string>('');
+  const searchTimeout = useRef<any>(null);
 
-  const fetchAllUsers = async (abortSignal?: AbortSignal) => {
+  // Fetch users from server with role, search, pagination
+  useEffect(() => {
+    let controller = new AbortController();
     setLoading(true);
     setError(null);
-    try {
-      const res = await axios.get(`${API_BASE}/api/super-admin/users`, {
-        signal: abortSignal,
-      });
-      const { data } = res;
-      console.log(data);
-      let extractedUsers: FlattenedUser[] = [];
-      if (
-        typeof data === 'object' &&
-        (Array.isArray(data.therapists) ||
-          Array.isArray(data.patients) ||
-          Array.isArray(data.admins))
-      ) {
-        extractedUsers = extractUsersFromResponse(data);
-      } else if (Array.isArray(data)) {
-        extractedUsers = data.map(u => ({
-          ...u,
-          fromCollection: 'unknown',
-          shortId: u._id,
-        }));
-      } else {
-        extractedUsers = [];
-      }
-      setUsers(extractedUsers);
-    } catch (err: unknown) {
-      let errMessage = 'Failed to fetch users';
-      if (axios.isAxiosError(err)) {
-        if (err.response) {
-          errMessage =
-            (typeof err.response.data === 'string'
-              ? err.response.data
-              : err.response.data?.message) ||
-            `Server responded with status ${err.response.status}`;
-        } else if (err.request) {
-          errMessage = 'No response received from server. Check your connection.';
-        } else if (err.message) {
+
+    async function fetchUsers() {
+      try {
+        const params: any = {
+          page,
+          limit: pageSize,
+        };
+        // ALWAYS send type for filtering, "all" as "all"
+        params.role = activeRole; // here, send patients, therapist, admin or all as role, per controller convention
+        if (search) params.search = search;
+
+        const res = await axios.get(`${API_BASE}/api/super-admin/users`, {
+          params,
+          signal: controller.signal,
+        });
+
+        const { data } = res;
+
+        let extractedUsers: FlattenedUser[] = [];
+        let totalUsers: number =
+          typeof data.total === 'number'
+            ? data.total
+            : Array.isArray(data.therapists)
+            ? data.therapistsTotal ?? data.therapists.length
+            : Array.isArray(data.patients)
+            ? data.patientsTotal ?? data.patients.length
+            : Array.isArray(data.admins)
+            ? data.adminsTotal ?? data.admins.length
+            : Array.isArray(data.users)
+            ? data.total ?? data.users.length
+            : Array.isArray(data)
+            ? data.length
+            : 0;
+
+        if (
+          typeof data === 'object' &&
+          (Array.isArray(data.therapists) ||
+            Array.isArray(data.patients) ||
+            Array.isArray(data.admins))
+        ) {
+          extractedUsers = extractUsersFromResponse(data);
+        } else if (Array.isArray(data.users)) {
+          extractedUsers = data.users.map((u: any) => ({
+            ...u,
+            fromCollection: u.fromCollection || 'unknown',
+            shortId: u.shortId || u._id,
+          }));
+        } else if (Array.isArray(data)) {
+          extractedUsers = data.map(u => ({
+            ...u,
+            fromCollection: 'unknown',
+            shortId: u._id,
+          }));
+        }
+
+        setUsers(extractedUsers);
+        setTotal(totalUsers);
+      } catch (err: unknown) {
+        let errMessage = 'Failed to fetch users';
+        if (axios.isAxiosError(err)) {
+          if (err.code === "ERR_CANCELED") {
+            return;
+          }
+          if (err.response) {
+            errMessage =
+              (typeof err.response.data === 'string'
+                ? err.response.data
+                : err.response.data?.message) ||
+              `Server responded with status ${err.response.status}`;
+          } else if (err.request) {
+            errMessage = 'No response received from server. Check your connection.';
+          } else if (err.message) {
+            errMessage = err.message;
+          }
+        } else if (err instanceof Error) {
           errMessage = err.message;
         }
-      } else if (err instanceof Error) {
-        errMessage = err.message;
+        setError(errMessage);
+        setUsers([]);
+        setTotal(0);
+      } finally {
+        setLoading(false);
       }
-      setError(errMessage);
-      setUsers([]);
-    } finally {
-      setLoading(false);
     }
-  };
 
-  // Log In As User Handler
+    fetchUsers();
+    return () => controller.abort();
+  }, [activeRole, page, pageSize, search]);
+
+  // Debounced search input -> search param
+  useEffect(() => {
+    if (searchTimeout.current) clearTimeout(searchTimeout.current);
+    searchTimeout.current = setTimeout(() => {
+      setPage(1);
+      setSearch(searchInput.trim());
+    }, 400);
+    return () => {
+      if (searchTimeout.current) clearTimeout(searchTimeout.current);
+    };
+    // eslint-disable-next-line
+  }, [searchInput]);
+
   const handleLoginAsUser = async (user: FlattenedUser) => {
     if (!user || !user._id) return;
     setLoggingInUserId(user._id);
@@ -413,9 +464,6 @@ const AllUsers: React.FC<AllUsersProps> = () => {
       );
       const { token, role, user: userData } = res.data;
 
-      console.log(res.data);
-
-      // Set token in localStorage based on the user's role
       if (role === "patient") {
         localStorage.setItem("patient-token", token);
         window.location.href = "/parent";
@@ -450,48 +498,63 @@ const AllUsers: React.FC<AllUsersProps> = () => {
     }
   };
 
-  // Ensure API is hit correctly on first visit/mount
-  useEffect(() => {
-    if (!hasFetchedOnce.current) {
-      hasFetchedOnce.current = true;
-      setUsers([]);
-      setLoading(true);
-      setError(null);
-      const controller = new AbortController();
-      fetchAllUsers(controller.signal);
-      return () => {
-        controller.abort();
-      };
-    }
-    // eslint-disable-next-line
-  }, []);
+  // pagination etc
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
+  // Defensive: invalidate page if exceeding
   useEffect(() => {
-    if (hasFetchedOnce.current) {
-      setUsers([]);
-      setLoading(true);
-      setError(null);
-      const controller = new AbortController();
-      fetchAllUsers(controller.signal);
-      return () => {
-        controller.abort();
-      };
-    }
+    if (page > totalPages) setPage(1);
     // eslint-disable-next-line
-  }, [activeRole]);
+  }, [totalPages]);
 
-  // Filtering: for "patients", now users are per family/parentEmail, so no further filtering needed
-  let filteredUsers: FlattenedUser[];
-  if (activeRole === 'all') {
-    filteredUsers = users;
-  } else {
-    filteredUsers = users.filter(user => user.fromCollection === activeRole);
-  }
+  // Reset to first page on search/role/pageSize change
+  useEffect(() => {
+    setPage(1);
+  }, [activeRole, pageSize, search]);
 
   return (
     <div className="w-full px-5 py-4">
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-xl md:text-2xl font-semibold tracking-tight text-blue-900">All Users</h1>
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+        <h1 className="text-xl md:text-2xl font-semibold tracking-tight text-blue-900">
+          All Users
+        </h1>
+        <form
+          onSubmit={e => {
+            e.preventDefault();
+            setSearch(searchInput.trim());
+            setPage(1);
+          }}
+          className="flex items-center gap-2"
+        >
+          <div className="relative flex items-center">
+            <span className="absolute left-3 text-slate-400">
+              <FiSearch />
+            </span>
+            <input
+              type="text"
+              value={searchInput}
+              onChange={e => setSearchInput(e.target.value)}
+              placeholder="Search by name, email, phone, id..."
+              className="pl-9 pr-3 py-2 text-sm w-64 rounded-md border border-slate-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-200 outline-none"
+              autoCorrect="off"
+              spellCheck={false}
+            />
+          </div>
+          {search && (
+            <button
+              type="button"
+              title="Clear search"
+              className="ml-1 px-2 h-9 rounded bg-slate-100 text-slate-500 hover:bg-red-50 hover:text-red-600 transition"
+              onClick={() => {
+                setSearchInput('');
+                setSearch('');
+                setPage(1);
+              }}
+            >
+              ×
+            </button>
+          )}
+        </form>
       </div>
 
       {/* Tab Switches */}
@@ -500,14 +563,12 @@ const AllUsers: React.FC<AllUsersProps> = () => {
           <button
             key={opt.value}
             onClick={() => {
-              setUsers([]);
-              setLoading(true);
-              setError(null);
-              setActiveRole(opt.value as 'all' | 'patients' | 'therapists' | 'admin');
+              setActiveRole(opt.apiRole as 'all' | 'patients' | 'therapists' | 'admin');
+              setPage(1);
             }}
             className={
               "text-sm font-semibold px-4 py-2 rounded-full transition border border-blue-300" +
-              (activeRole === opt.value
+              (activeRole === opt.apiRole
                 ? " bg-blue-600 text-white border-blue-700 shadow"
                 : " bg-white text-blue-700 hover:bg-blue-50")
             }
@@ -526,14 +587,12 @@ const AllUsers: React.FC<AllUsersProps> = () => {
               <TableHeadCell>
                 {activeRole === 'patients'
                   ? 'Parent / Family Name'
-                  : 'Name'
-                }
+                  : 'Name'}
               </TableHeadCell>
               <TableHeadCell>
                 {activeRole === 'patients'
                   ? 'Parent/Child Email'
-                  : 'Email'
-                }
+                  : 'Email'}
               </TableHeadCell>
               <TableHeadCell>Role</TableHeadCell>
               <TableHeadCell>Type</TableHeadCell>
@@ -559,21 +618,22 @@ const AllUsers: React.FC<AllUsersProps> = () => {
                   {error}
                 </td>
               </tr>
-            ) : filteredUsers.length === 0 ? (
+            ) : users.length === 0 ? (
               <tr>
                 <td colSpan={7} className="py-6 text-center text-slate-500">
-                  No {activeRole === 'all'
-                    ? 'users'
-                    : activeRole === 'patients'
-                    ? 'families'
-                    : activeRole === 'therapists'
-                    ? 'therapists'
-                    : 'admins'
-                  } found.
+                  No{" "}
+                  {activeRole === "all"
+                    ? "users"
+                    : activeRole === "patients"
+                    ? "families"
+                    : activeRole === "therapists"
+                    ? "therapists"
+                    : "admins"}{" "}
+                  found.
                 </td>
               </tr>
             ) : (
-              filteredUsers.map(user => (
+              users.map(user => (
                 <UserRow
                   key={`${user._id}-${user.fromCollection}`}
                   user={user}
@@ -584,6 +644,74 @@ const AllUsers: React.FC<AllUsersProps> = () => {
             )}
           </tbody>
         </table>
+      </div>
+
+      {/* Pagination Controls */}
+      <div className="flex flex-col md:flex-row items-center justify-between py-4 gap-y-3">
+        <div className="flex items-center gap-2 text-sm text-gray-700">
+          <label htmlFor="pageSize-select">Rows per page:</label>
+          <select
+            id="pageSize-select"
+            className="py-1 px-2 rounded border border-slate-300 focus:border-blue-400"
+            value={pageSize}
+            onChange={e => {
+              setPageSize(Number(e.target.value));
+              setPage(1);
+            }}
+          >
+            {PAGE_SIZE_OPTIONS.map(sz => (
+              <option key={sz} value={sz}>
+                {sz}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="flex items-center gap-1 text-sm text-slate-500">
+          <button
+            className="px-2 py-1 rounded border border-slate-300 bg-white hover:bg-blue-50 transition disabled:opacity-50"
+            title="Previous Page"
+            disabled={page === 1 || loading}
+            onClick={() => setPage(prev => Math.max(1, prev - 1))}
+            aria-label="Previous Page"
+          >
+            <FiChevronLeft />
+          </button>
+          <span className="px-2 select-none">
+            Page{" "}
+            <input
+              type="number"
+              min={1}
+              max={totalPages}
+              value={page}
+              onChange={e => {
+                let val = Number(e.target.value);
+                if (Number.isNaN(val) || val < 1) val = 1;
+                if (val > totalPages) val = totalPages;
+                setPage(val);
+              }}
+              className="w-12 text-center border border-gray-300 rounded mx-1 py-0.5 px-1 text-sm"
+              style={{ width: 44 }}
+              disabled={loading || totalPages <= 1}
+            />{" "}
+            of {totalPages}
+          </span>
+          <button
+            className="px-2 py-1 rounded border border-slate-300 bg-white hover:bg-blue-50 transition disabled:opacity-50"
+            title="Next Page"
+            disabled={page === totalPages || loading || totalPages <= 1}
+            onClick={() => setPage(prev => Math.min(totalPages, prev + 1))}
+            aria-label="Next Page"
+          >
+            <FiChevronRight />
+          </button>
+          <span className="pl-3">
+            {total > 0 && (
+              <>
+                {(page - 1) * pageSize + 1}-{Math.min(total, page * pageSize)} of {total} users
+              </>
+            )}
+          </span>
+        </div>
       </div>
     </div>
   );

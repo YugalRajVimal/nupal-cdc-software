@@ -15,6 +15,7 @@ const LayoutContent: React.FC = () => {
         background: "linear-gradient(135deg, #fdf4cc 0%, #ffe3ef 45%, #ced3f3 100%)",
       }}
     >
+    
       <div>
         <SubAdminAppSidebar />
         <SubAdminBackdrop />

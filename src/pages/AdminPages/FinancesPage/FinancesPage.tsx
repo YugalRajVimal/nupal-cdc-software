@@ -1,31 +1,35 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import {  FiArrowUpCircle, FiDownload } from "react-icons/fi";
+import { FiArrowUpCircle, FiDownload, FiSearch, FiArrowLeft, FiArrowRight } from "react-icons/fi";
 import axios from "axios";
 // @ts-ignore
 import * as XLSX from "xlsx";
 
-// Finance log matches backend controller export structure
 interface FinanceLog {
   Date: string;
   Description: string;
   Type: string;
   Amount: number;
+  CreditDebitStatus?: string;
 }
 
-// The server returns an object matching finance.controller.js
 interface FinanceDetailsResponse {
   success: boolean;
   totalIncome: number;
   totalExpenses: number;
   netBalance: number;
   logs: FinanceLog[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
   message?: string;
   error?: string;
 }
 
+const DEFAULT_PAGE_SIZE = 10;
+
 function downloadExcel(filename: string, rows: FinanceLog[]) {
-  // Prepare data for Excel, ensure header order
   const worksheetRows = rows.map((row) => ({
     Date: row.Date
       ? new Date(row.Date).toLocaleDateString("en-GB")
@@ -33,10 +37,11 @@ function downloadExcel(filename: string, rows: FinanceLog[]) {
     Description: row.Description,
     Type: row.Type,
     Amount: row.Amount,
+    CreditDebitStatus: row.CreditDebitStatus ?? "",
   }));
 
   const worksheet = XLSX.utils.json_to_sheet(worksheetRows, {
-    header: ["Date", "Description", "Type", "Amount"],
+    header: ["Date", "Description", "Type", "Amount", "CreditDebitStatus"],
   });
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, "Finances");
@@ -47,12 +52,22 @@ export default function FinancesPage() {
   const [financeData, setFinanceData] = useState<FinanceDetailsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize] = useState(DEFAULT_PAGE_SIZE);
 
-  useEffect(() => {
+  const fetchData = () => {
     setLoading(true);
     const baseUrl = import.meta.env.VITE_API_URL || "";
+    const params: Record<string, any> = {
+      page,
+      pageSize,
+    };
+    if (search.trim()) params.search = search.trim();
+
     axios
-      .get(`${baseUrl}/api/admin/finance/details`)
+      .get(`${baseUrl}/api/admin/finance/details`, { params })
       .then((response) => {
         setFinanceData(response.data);
         setLoading(false);
@@ -65,7 +80,12 @@ export default function FinancesPage() {
         );
         setLoading(false);
       });
-  }, []);
+  };
+
+  useEffect(() => {
+    fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, pageSize, search]);
 
   const handleExportExcel = () => {
     if (financeData?.logs && financeData.logs.length > 0) {
@@ -73,17 +93,54 @@ export default function FinancesPage() {
     }
   };
 
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    setPage(1); // Reset to first page on new search
+    setSearch(searchInput);
+  };
+
+  const onPageChange = (newPage: number) => {
+    setPage(newPage);
+  };
+
   return (
-    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="min-h-screen p-8">
-      <div className="flex items-center justify-between mb-6">
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="min-h-screen p-8"
+    >
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4">
         <h1 className="text-2xl font-bold text-slate-800">Finances</h1>
-        <button
-          className="flex items-center gap-2 border px-4 py-2 rounded hover:bg-slate-100 disabled:opacity-50"
-          onClick={handleExportExcel}
-          disabled={!financeData?.logs?.length}
-        >
-          <FiDownload /> Export Excel
-        </button>
+        <div className="flex flex-col sm:flex-row gap-4">
+          <form
+            onSubmit={handleSearch}
+            className="flex items-center border px-2 rounded bg-white"
+          >
+            <input
+              type="text"
+              className="py-2 px-3 outline-none bg-transparent placeholder:text-slate-400 text-sm"
+              placeholder="Search by description, amount, type, date..."
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              autoCorrect="off"
+              autoComplete="off"
+            />
+            <button
+              type="submit"
+              className="p-2 text-slate-500 hover:text-blue-600"
+              aria-label="Search"
+            >
+              <FiSearch />
+            </button>
+          </form>
+          <button
+            className="flex items-center gap-2 border px-4 py-2 rounded hover:bg-slate-100 disabled:opacity-50"
+            onClick={handleExportExcel}
+            disabled={!financeData?.logs?.length}
+          >
+            <FiDownload /> Export Excel
+          </button>
+        </div>
       </div>
 
       {loading && (
@@ -95,7 +152,7 @@ export default function FinancesPage() {
 
       {!loading && !error && financeData && (
         <>
-          <div className="grid grid-cols-1  gap-6 mb-6">
+          <div className="grid grid-cols-1 gap-6 mb-6">
             <div className="bg-white border rounded-lg p-6">
               <div className="flex items-center justify-between text-sm text-slate-500">
                 <span>Total Income</span>
@@ -105,24 +162,6 @@ export default function FinancesPage() {
                 ₹{Number(financeData.totalIncome ?? 0).toLocaleString("en-IN")}
               </p>
             </div>
-            {/* <div className="bg-white border rounded-lg p-6">
-              <div className="flex items-center justify-between text-sm text-slate-500">
-                <span>Total Expenses</span>
-                <FiArrowDownCircle className="text-red-500" />
-              </div>
-              <p className="text-2xl font-bold text-red-500">
-                ₹{Number(financeData.totalExpenses ?? 0).toLocaleString("en-IN")}
-              </p>
-            </div> */}
-            {/* <div className="bg-white border rounded-lg p-6">
-              <div className="flex items-center justify-between text-sm text-slate-500">
-                <span>Net Balance</span>
-                <FiDollarSign className="text-blue-600" />
-              </div>
-              <p className="text-2xl font-bold text-slate-800">
-                ₹{Number(financeData.netBalance ?? 0).toLocaleString("en-IN")}
-              </p>
-            </div> */}
           </div>
 
           <div className="bg-white border rounded-lg overflow-hidden">
@@ -132,6 +171,7 @@ export default function FinancesPage() {
                   <th className="px-4 py-3 text-left">Date</th>
                   <th className="px-4 py-3 text-left">Description</th>
                   <th className="px-4 py-3 text-left">Type</th>
+                  <th className="px-4 py-3 text-left">Credit/Debit</th>
                   <th className="px-4 py-3 text-right">Amount</th>
                 </tr>
               </thead>
@@ -146,6 +186,7 @@ export default function FinancesPage() {
                       </td>
                       <td className="px-4 py-3">{log.Description}</td>
                       <td className="px-4 py-3">{log.Type}</td>
+                      <td className="px-4 py-3">{log.CreditDebitStatus ?? "-"}</td>
                       <td
                         className={`px-4 py-3 text-right ${
                           log.Type === "Income"
@@ -161,7 +202,7 @@ export default function FinancesPage() {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={4} className="px-4 py-6 text-center text-slate-400">
+                    <td colSpan={5} className="px-4 py-6 text-center text-slate-400">
                       No finance logs found.
                     </td>
                   </tr>
@@ -169,6 +210,28 @@ export default function FinancesPage() {
               </tbody>
             </table>
           </div>
+
+          {financeData.totalPages > 1 && (
+            <div className="mt-6 flex justify-center items-center gap-2">
+              <button
+                className="px-2 py-1 rounded border bg-white text-slate-700 disabled:opacity-30 flex items-center"
+                onClick={() => onPageChange(page - 1)}
+                disabled={page <= 1}
+              >
+                <FiArrowLeft /> Prev
+              </button>
+              <span className="mx-2 text-sm select-none">
+                {financeData.page} / {financeData.totalPages}
+              </span>
+              <button
+                className="px-2 py-1 rounded border bg-white text-slate-700 disabled:opacity-30 flex items-center"
+                onClick={() => onPageChange(page + 1)}
+                disabled={page >= financeData.totalPages}
+              >
+                Next <FiArrowRight />
+              </button>
+            </div>
+          )}
         </>
       )}
     </motion.div>

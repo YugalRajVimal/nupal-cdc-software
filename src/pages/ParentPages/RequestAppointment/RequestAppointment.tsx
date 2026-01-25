@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { motion } from "framer-motion";
 import {
   FiCalendar,
@@ -14,6 +14,7 @@ import {
   FiRepeat,
   FiEdit2,
   FiTrash2,
+  FiSearch
 } from "react-icons/fi";
 import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -117,6 +118,9 @@ function getDayIndex(dayShort: string): number {
   return idx >= 0 ? idx : 0;
 }
 
+// --- SEARCH & PAGINATION state for Request list ---
+const DEFAULT_PAGE_SIZE = 5;
+
 export default function RequestAppointment() {
   const [loading, setLoading] = useState<boolean>(true);
   const today = new Date();
@@ -147,6 +151,78 @@ export default function RequestAppointment() {
   // New: Requested bookings (pending requests)
   const [requestedBookings, setRequestedBookings] = useState<Booking[]>([]);
   const [requestsLoading, setRequestsLoading] = useState<boolean>(false);
+
+  // --- SEARCH & PAGINATION state for Requested Booking table ---
+  // These states are managed outside the data fetching, so user input remains even on table refresh.
+  const [reqSearch, setReqSearch] = useState<string>(""); // independent search input
+  const [reqSearchImmediate, setReqSearchImmediate] = useState<string>(""); // controlled input box
+  const [reqPage, setReqPage] = useState<number>(1);
+  const [reqPageSize, setReqPageSize] = useState<number>(DEFAULT_PAGE_SIZE);
+  const reqSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Pagination: compute filtered bookings for table only
+  const getFilteredRequestedBookings = useCallback(() => {
+    if (!reqSearch) return requestedBookings;
+    const term = reqSearch.toLowerCase();
+    return requestedBookings.filter(br => {
+      // Find By: Request ID, Patient Name, Patient ID, Therapy, Status, Coupon, Date(s)
+      const patient =
+        typeof br.patient === "object" && br.patient
+          ? br.patient
+          : undefined;
+      const matches =
+        (br.requestId && br.requestId.toLowerCase().includes(term)) ||
+        (patient?.name && patient.name.toLowerCase().includes(term)) ||
+        (patient?.patientId && String(patient.patientId).toLowerCase().includes(term)) ||
+        (br.therapy &&
+          br.therapy.name &&
+          br.therapy.name.toLowerCase().includes(term)) ||
+        (br.status && br.status.toLowerCase().includes(term)) ||
+        (br.discountInfo &&
+          br.discountInfo.coupon &&
+          br.discountInfo.coupon.couponCode &&
+          br.discountInfo.coupon.couponCode.toLowerCase().includes(term)) ||
+        (Array.isArray(br.sessions) &&
+          br.sessions.some(
+            (sess) =>
+              (sess.date && String(sess.date).toLowerCase().includes(term)) ||
+              (sess.slotId &&
+                SESSION_TIME_OPTIONS.find((opt) => opt.id === sess.slotId)?.label
+                  ?.toLowerCase()
+                  .includes(term))
+          ));
+      return !!matches;
+    });
+  }, [reqSearch, requestedBookings]);
+
+  const paginatedRequestedBookings = (() => {
+    const filtered = getFilteredRequestedBookings();
+    const start = (reqPage - 1) * reqPageSize;
+    return filtered.slice(start, start + reqPageSize);
+  })();
+
+  const totalFilteredRequestedBookings = getFilteredRequestedBookings().length;
+  const lastPage = Math.max(1, Math.ceil(totalFilteredRequestedBookings / reqPageSize));
+
+  // Reset page to 1 if search/filters change and out-of-bound
+  useEffect(() => {
+    if ((reqPage - 1) * reqPageSize >= totalFilteredRequestedBookings) {
+      setReqPage(1);
+    }
+    // eslint-disable-next-line
+  }, [reqSearch, reqPageSize, totalFilteredRequestedBookings]);
+
+  // Debounced/controlled search input: only commit after user pauses typing
+  useEffect(() => {
+    // Debounce delay: 300ms
+    if (reqSearchTimer.current) clearTimeout(reqSearchTimer.current as any);
+    reqSearchTimer.current = setTimeout(() => {
+      setReqSearch(reqSearchImmediate.trim());
+    }, 300);
+    return () => {
+      if (reqSearchTimer.current) clearTimeout(reqSearchTimer.current as any);
+    };
+  }, [reqSearchImmediate]);
 
   // Change month utility
   const changeMonth = (direction: "prev" | "next") => {
@@ -430,12 +506,6 @@ export default function RequestAppointment() {
     }
   };
 
-  // --- BEGIN: Multi-slot sessions for same date ---
-
-  // function getUsedSlotsForDate(dateKey: string): string[] {
-  //   return sessions.filter((s) => s.date === dateKey).map((s) => s.slotId).filter(Boolean);
-  // }
-
   const addSessionForDate = (day: number) => {
     const dateKey = getDateKey(year, month + 1, day);
     if (
@@ -679,6 +749,8 @@ export default function RequestAppointment() {
     setSessions([]);
   }
 
+  // ------- RENDER --------
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -790,7 +862,7 @@ export default function RequestAppointment() {
                 return (
                   <div className="mb-3">
                     <label className="block text-sm mb-1 flex items-center gap-1 text-gray-700 font-semibold">
-                      <FiHash /> Appointment ID
+                      <FiHash /> Booking ID
                     </label>
                     <input
                       type="text"
@@ -1157,7 +1229,8 @@ export default function RequestAppointment() {
             )}
         </div>
       </div>
-      {/* NEW: Booking Request List */}
+
+      {/* --- Enhanced Requested Booking List: Search & Pagination --- */}
       <div className="mt-8">
         <div className="bg-white border rounded-lg p-4 text-sm">
           <p className="font-medium mb-2 flex items-center gap-2">
@@ -1168,13 +1241,81 @@ export default function RequestAppointment() {
               </span>
             )}
           </p>
-          {requestedBookings && requestedBookings.length === 0 ? (
+          {/* Search and pagination controls (outside list/table) */}
+          <div className="flex flex-col md:flex-row md:items-end gap-2 md:gap-6 mb-4">
+            <div className="flex flex-row items-center gap-2">
+              <FiSearch />
+              <input
+                type="text"
+                value={reqSearchImmediate}
+                placeholder="Search by request id / patient / therapy / status / coupon / date"
+                className="px-2 py-1 border rounded text-sm w-64"
+                onChange={e => setReqSearchImmediate(e.target.value)}
+                spellCheck={false}
+              />
+              {!!reqSearchImmediate && (
+                <button
+                  className="text-xs px-2 py-1 text-gray-600 hover:text-red-600"
+                  onClick={() => { setReqSearchImmediate(""); setReqSearch(""); }}
+                  title="Clear Search"
+                  type="button"
+                >
+                  <FiX />
+                </button>
+              )}
+            </div>
+            <div className="flex flex-row items-center gap-2">
+              <label htmlFor="reqpage-size" className="text-xs text-slate-600">Show</label>
+              <select
+                id="reqpage-size"
+                value={reqPageSize}
+                className="border px-2 py-1 rounded text-xs"
+                onChange={e => {
+                  setReqPageSize(Number(e.target.value));
+                }}
+              >
+                {[5, 10, 25, 50].map(sz => (
+                  <option value={sz} key={sz}>{sz}</option>
+                ))}
+              </select>
+              <span className="text-xs text-slate-600">per page</span>
+            </div>
+            <div className="flex-1 flex flex-row justify-end items-center gap-2">
+              <span className="text-xs text-slate-500">
+                {totalFilteredRequestedBookings === 0
+                  ? "No "
+                  : `Showing ${paginatedRequestedBookings.length > 0
+                      ? ((reqPage - 1) * reqPageSize + 1)
+                      : 0
+                    }-${(reqPage - 1) * reqPageSize + paginatedRequestedBookings.length} of ${totalFilteredRequestedBookings} `}
+                results
+              </span>
+              <button
+                type="button"
+                className="text-xs px-2 py-1 border rounded bg-gray-50 hover:bg-blue-100 disabled:opacity-60"
+                disabled={reqPage <= 1}
+                onClick={() => setReqPage(p => Math.max(1, p - 1))}
+              >
+                <FiChevronLeft />
+              </button>
+              <span className="text-xs font-mono">{reqPage} / {lastPage}</span>
+              <button
+                type="button"
+                className="text-xs px-2 py-1 border rounded bg-gray-50 hover:bg-blue-100 disabled:opacity-60"
+                disabled={reqPage >= lastPage}
+                onClick={() => setReqPage(p => Math.min(lastPage, p + 1))}
+              >
+                <FiChevronRight />
+              </button>
+            </div>
+          </div>
+          {requestedBookings && totalFilteredRequestedBookings === 0 ? (
             <div>
-              <p className="text-slate-500 mb-3">No requested bookings found.</p>
+              <p className="text-slate-500 mb-3">No requested bookings found{reqSearch ? " for your search." : "."}</p>
             </div>
           ) : (
             <div className="flex flex-col gap-4">
-              {requestedBookings.map((br) => (
+              {paginatedRequestedBookings.map((br) => (
                 <div
                   className={`border p-3 rounded bg-sky-50 relative`}
                   key={br._id}

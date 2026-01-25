@@ -3,6 +3,7 @@ import {
   FiUser,
   FiTrash2,
   FiEye,
+  FiSearch,
 } from "react-icons/fi";
 import { motion } from "framer-motion";
 import axios from "axios";
@@ -135,7 +136,6 @@ function CalendarInput({
   id?: string;
   name?: string;
 }) {
-  // Show normal input (type text) for desktop, clicking a calendar icon will open a native date input overlay for selection (for calendar feel)
   const ref = useRef<HTMLInputElement | null>(null);
 
   return (
@@ -202,16 +202,112 @@ function CalendarInput({
   );
 }
 
+// ----------- FILTER & PAGINATION CONSTANTS -------------
+// const PAGE_SIZE_DEFAULT = 20;
+
+// ------------ MAIN PAGE -----------------
 export default function TherapistsPage() {
+  // Table state & filters
   const [therapists, setTherapists] = useState<TherapistProfile[]>([]);
   const [loading, setLoading] = useState(false);
-  const [editTherapist, setEditTherapist] = useState<TherapistProfile | null>(null);
-  const [editField, setEditField] = useState<{ [k: string]: any }>({});
   const [error, setError] = useState<string | null>(null);
 
-  // Keep the selected ID and data in sync when mutating
+  useEffect(()=>{
+console.log(error);
+  },[])
+
+  // Modal & Edit logic
+  const [editTherapist, setEditTherapist] = useState<TherapistProfile | null>(null);
+  const [editField, setEditField] = useState<{ [k: string]: any }>({});
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedProfile, setSelectedProfile] = useState<TherapistProfile | null>(null);
+
+  // Search and pagination state
+  const [searchText, setSearchText] = useState("");
+  const [searchCommitted, setSearchCommitted] = useState(""); // Actual text applied to data fetch
+  const [page, setPage] = useState(1);
+
+  // const [total, setTotal] = useState(0);
+  const [sortField, setSortField] = useState<null | string>(null);
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+  const [totalPages, setTotalPages] = useState(1);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+
+  // ------------- Table Fetch API Logic -----------
+  const fetchTherapists = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const params: any = {
+        page,
+      };
+      if (searchCommitted) params.search = searchCommitted;
+      if (sortField) params.sortField = sortField;
+      if (sortOrder) params.sortOrder = sortOrder;
+
+      const resp = await axios.get(
+        `${API_BASE_URL.replace(/\/$/, "")}/api/admin/therapist`,
+        { params }
+      );
+      let therapistsArr: TherapistProfile[] = [];
+      if (
+        resp &&
+        resp.data &&
+        Array.isArray(resp.data.therapists)
+      ) {
+        therapistsArr = resp.data.therapists;
+      }
+      setTherapists(therapistsArr);
+      // setTotal(resp.data.total || therapistsArr.length);
+      setTotalPages(resp.data.totalPages || 1);
+    } catch (err: any) {
+      setTherapists([]);
+      // setTotal(0);
+      setTotalPages(1);
+      setError(
+        err?.response?.data?.message ||
+        err?.message ||
+        "Error loading therapists."
+      );
+    } finally {
+      setLoading(false);
+    }
+    // eslint-disable-next-line
+  }, [page, searchCommitted, sortField, sortOrder]);
+
+  // Prevent search bar value reset on table ops. (see pattern in BookingRequests.tsx)
+  function handleSearchInputChange(e: React.ChangeEvent<HTMLInputElement>) {
+    setSearchText(e.target.value);
+  }
+  function handleSearchSubmit(e?: React.FormEvent) {
+    if (e) e.preventDefault();
+    setPage(1);
+    setSearchCommitted(searchText);
+  }
+  function resetFilters() {
+    setSearchText("");
+    setSearchCommitted("");
+    setPage(1);
+  }
+  function handleTableSort(col: string) {
+    if (sortField === col) {
+      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setSortField(col);
+      setSortOrder("asc");
+    }
+  }
+  function gotoPage(p: number) {
+    if (p < 1 || p > totalPages) return;
+    setPage(p);
+  }
+
+  useEffect(() => {
+    fetchTherapists();
+    // eslint-disable-next-line
+  }, [fetchTherapists]);
+
+  // ------------- MODALS & NON-Table functions (from original) -----------
 
   const fetchTherapistById = useCallback(async (id: string) => {
     setLoading(true);
@@ -237,37 +333,6 @@ export default function TherapistsPage() {
   const onTableViewClick = (id: string) => {
     fetchTherapistById(id);
   };
-
-  async function fetchTherapists() {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await axios.get(
-        `${API_BASE_URL.replace(/\/$/, "")}/api/admin/therapist`
-      );
-      let therapistsArr: TherapistProfile[] = [];
-      if (
-        res &&
-        res.data &&
-        (Array.isArray(res.data) || Array.isArray(res.data.therapists))
-      ) {
-        therapistsArr = Array.isArray(res.data) ? res.data : res.data.therapists;
-      } else if (res && res.data && res.data.therapists && typeof res.data.therapists === "object") {
-        therapistsArr = Object.values(res.data.therapists).filter(
-          v => typeof v === "object" && v !== null && "_id" in v
-        ) as TherapistProfile[];
-      }
-      setTherapists(therapistsArr);
-    } catch (err: any) {
-      setError(
-        err?.response?.data?.message ||
-        err?.message ||
-        "Error loading therapists."
-      );
-    } finally {
-      setLoading(false);
-    }
-  }
 
   async function handleToggleDisable(id: string, shouldDisable: boolean) {
     setLoading(true);
@@ -324,11 +389,8 @@ export default function TherapistsPage() {
         ...editTherapist,
         ...editField,
       };
-
-      // Convert all calendar-editable date fields (if any) to YYYY-MM-DD format
       for (const dfield of DATE_FIELDS) {
         if (payload[dfield] && typeof payload[dfield] === "object" && payload[dfield] instanceof Date) {
-          // not possible with native, but guard anyway
           payload[dfield] = payload[dfield].toISOString().slice(0, 10);
         }
       }
@@ -395,15 +457,9 @@ export default function TherapistsPage() {
     }
   }
 
-  useEffect(() => {
-    fetchTherapists();
-    // eslint-disable-next-line
-  }, []);
-
   function renderTherapistModal() {
     if (!selectedId || !selectedProfile) return null;
     const selected = selectedProfile;
-
     return (
       <div className="fixed inset-0 z-30 bg-white/70 flex items-center justify-center">
         <div className="bg-white rounded-xl shadow-lg max-w-2xl w-full p-6 relative">
@@ -738,6 +794,7 @@ export default function TherapistsPage() {
     { label: "Actions", key: "actions" },
   ];
 
+  // ----------- MAIN RENDER ---------------------
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -745,7 +802,44 @@ export default function TherapistsPage() {
       className="min-h-screen  p-8"
     >
       <h1 className="text-2xl font-bold text-slate-800 mb-6">Therapists</h1>
-      {error ? <div className="text-red-500 mb-4">{error}</div> : null}
+
+      {/* -- Search Control ONLY -- */}
+      <form
+        onSubmit={handleSearchSubmit}
+        autoComplete="off"
+        className="flex flex-wrap gap-3 mb-5 items-center"
+      >
+        <div className="relative">
+          <input
+            ref={searchInputRef}
+            type="text"
+            value={searchText}
+            onChange={handleSearchInputChange}
+            placeholder="Search therapists, mobiles, email..."
+            className="border rounded-md px-3 py-2 pl-9 text-sm focus:outline-none focus:border-blue-400 w-72"
+            name="search"
+            autoComplete="off"
+          />
+          <FiSearch className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+        </div>
+        <button
+          type="submit"
+          className="px-4 py-2 rounded-md bg-blue-500 text-white text-sm hover:bg-blue-600 transition"
+        >
+          Search
+        </button>
+        {(searchCommitted) && (
+          <button
+            type="button"
+            className="ml-2 px-3 py-2 rounded-md bg-gray-200 text-sm text-gray-700 hover:bg-gray-300 transition"
+            onClick={resetFilters}
+          >
+            Clear Search
+          </button>
+        )}
+      </form>
+
+      {/* -- Table -- */}
       <div className="bg-white border rounded-lg shadow overflow-x-auto">
         <table className="min-w-full divide-y divide-slate-200">
           <thead className="bg-slate-100">
@@ -753,9 +847,24 @@ export default function TherapistsPage() {
               {tableHeaders.map(th => (
                 <th
                   key={th.key}
-                  className="px-4 py-3 text-left text-xs font-medium text-slate-700 uppercase tracking-wider"
+                  className={`px-4 py-3 text-left text-xs font-medium text-slate-700 uppercase tracking-wider ${
+                    ["_id", "name", "email", "mobile1", "specializations", "experienceYears", "isDisabled", "panelAccess"].includes(th.key as string)
+                      ? "cursor-pointer select-none"
+                      : ""
+                  }`}
+                  onClick={
+                    typeof th.key === "string" &&
+                    ["_id", "name", "email", "mobile1", "specializations", "experienceYears", "isDisabled", "panelAccess"].includes(th.key)
+                      ? () => handleTableSort(th.key)
+                      : undefined
+                  }
                 >
                   {th.label}
+                  {sortField === th.key ? (
+                    <span className={sortOrder === "asc" ? "text-blue-600" : "text-blue-900"}>
+                      {sortOrder === "asc" ? " ▲" : " ▼"}
+                    </span>
+                  ) : null}
                 </th>
               ))}
             </tr>
@@ -827,6 +936,48 @@ export default function TherapistsPage() {
           </tbody>
         </table>
       </div>
+
+      {/* --- Pagination --- */}
+      <div className="flex items-center justify-between mt-4">
+        {/* <div className="text-sm text-slate-500">
+          Showing {(therapists.length > 0 ? (page - 1) * pageSize + 1 : 0)}-
+          {(page - 1) * pageSize + therapists.length} of {total}
+        </div> */}
+        <div className="flex gap-2 items-center">
+          <button
+            className="px-2 py-1 border rounded text-sm text-slate-600"
+            onClick={() => gotoPage(1)}
+            disabled={page === 1}
+          >
+            {"<<"}
+          </button>
+          <button
+            className="px-2 py-1 border rounded text-sm text-slate-600"
+            onClick={() => gotoPage(page - 1)}
+            disabled={page === 1}
+          >
+            {"<"}
+          </button>
+          <span className="text-sm text-slate-700">
+            Page {page} of {totalPages}
+          </span>
+          <button
+            className="px-2 py-1 border rounded text-sm text-slate-600"
+            onClick={() => gotoPage(page + 1)}
+            disabled={page === totalPages}
+          >
+            {">"}
+          </button>
+          <button
+            className="px-2 py-1 border rounded text-sm text-slate-600"
+            onClick={() => gotoPage(totalPages)}
+            disabled={page === totalPages}
+          >
+            {">>"}
+          </button>
+        </div>
+      </div>
+
       {selectedId && selectedProfile && renderTherapistModal()}
       {editTherapist && renderEditModal()}
     </motion.div>

@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { motion } from "framer-motion";
-import { FiUser, FiPhone, FiEye, FiEdit, FiTrash2 } from "react-icons/fi";
+import { FiUser, FiPhone, FiEye, FiEdit, FiTrash2, FiSearch } from "react-icons/fi";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "";
 
@@ -49,6 +49,9 @@ type Patient = {
   [key: string]: any;
 };
 
+// Pagination & search defaults
+const DEFAULT_LIMIT = 10;
+
 export default function PatientsPage() {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(false);
@@ -56,26 +59,53 @@ export default function PatientsPage() {
   const [editMode, setEditMode] = useState(false);
   const [editForm, setEditForm] = useState<{ [key: string]: any }>({});
   const [editLoading, setEditLoading] = useState(false);
+  // New for search and pagination
+  const [search, setSearch] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(DEFAULT_LIMIT);
+  const [total, setTotal] = useState(0);
 
-  // Fetch all patients
+  // Debounce search input
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      setSearch(searchInput.trim());
+      setPage(1);
+    }, 400);
+    // eslint-disable-next-line
+  }, [searchInput]);
+
+  // Fetch patients with search and pagination
   useEffect(() => {
     setLoading(true);
-    fetch(`${API_BASE_URL}/api/admin/patients`)
+    const url = new URL(`${API_BASE_URL}/api/admin/patients`);
+    // mimic patient.controller.js paginated endpoint style; expects ?search= &page= &limit=
+    if (search) url.searchParams.set("search", search);
+    url.searchParams.set("page", String(page));
+    url.searchParams.set("limit", String(limit));
+    fetch(url.toString())
       .then(async (res) => {
         if (!res.ok) throw new Error(await res.text());
         return res.json();
       })
       .then((data) => {
+        // `patients` (array), `total` (count of all that match), `page`, `limit` in response
         setPatients(data.patients || []);
+        setTotal(data.total || 0);
       })
       .catch((err) => {
         alert("Failed to fetch patients: " + err.message);
+        setPatients([]);
+        setTotal(0);
       })
       .finally(() => setLoading(false));
-  }, []);
+  }, [search, page, limit]);
 
   // Helper to get display name (either .name or .childFullName, both are same)
-  const getDisplayName = (patient: Patient) => patient.name || patient.childFullName || "";
+  const getDisplayName = (patient: Patient) =>
+    patient.name || patient.childFullName || "";
 
   // Start editing patient (inside view modal)
   const handleEditStart = (patient: Patient) => {
@@ -117,11 +147,14 @@ export default function PatientsPage() {
         name: editForm.name ?? editForm.childFullName ?? "",
         childFullName: editForm.name ?? editForm.childFullName ?? "",
       };
-      const res = await fetch(`${API_BASE_URL}/api/admin/patients/${viewPatient._id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(saveForm),
-      });
+      const res = await fetch(
+        `${API_BASE_URL}/api/admin/patients/${viewPatient._id}`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(saveForm),
+        }
+      );
       if (!res.ok) {
         const msg = await res.text();
         alert("Failed to update: " + msg);
@@ -144,19 +177,31 @@ export default function PatientsPage() {
 
   // Delete Patient (DELETE)
   const handleDelete = async (patient: Patient) => {
-    if (!window.confirm(`Delete patient "${getDisplayName(patient)}"? This cannot be undone.`)) return;
+    if (
+      !window.confirm(
+        `Delete patient "${getDisplayName(patient)}"? This cannot be undone.`
+      )
+    )
+      return;
     try {
-      const res = await fetch(`${API_BASE_URL}/api/admin/patients/${patient._id}`, {
-        method: "DELETE",
-      });
+      const res = await fetch(
+        `${API_BASE_URL}/api/admin/patients/${patient._id}`,
+        {
+          method: "DELETE",
+        }
+      );
       if (!res.ok) {
         const msg = await res.text();
         alert("Failed to delete: " + msg);
         return;
       }
+      // After delete, refetch current page
       setPatients((pats) => pats.filter((p) => p._id !== patient._id));
       setViewPatient(null);
       setEditMode(false);
+      // Optionally, refetch to update total etc.
+      // setLoading(true);
+      // (You can set page to 1? Or refetch full data here if required)
     } catch (err: any) {
       alert("Delete failed: " + (err?.message || err));
     }
@@ -207,6 +252,9 @@ export default function PatientsPage() {
     { label: "Updated At", key: "updatedAt" },
   ];
 
+  // Pagination helper calcs
+  const pageCount = Math.ceil(total / limit) || 1;
+
   // MAIN RENDER
   return (
     <motion.div
@@ -215,6 +263,53 @@ export default function PatientsPage() {
       className="min-h-screen p-8"
     >
       <h1 className="text-2xl font-bold text-slate-800 mb-6">Patients</h1>
+      {/* --- Search & limit controls --- */}
+      <div className="flex flex-wrap items-center gap-4 mb-6">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            setSearch(searchInput.trim());
+            setPage(1);
+          }}
+          className="flex gap-2 items-center"
+          role="search"
+        >
+          <span className="relative">
+            <input
+              type="text"
+              placeholder="Search name, phone, id, etc"
+              className="border rounded pl-9 pr-4 py-2 w-64 text-sm"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              aria-label="Search Patients"
+            />
+            <FiSearch className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" />
+          </span>
+        </form>
+        <label className="flex items-center text-sm gap-2">
+          Show
+          <select
+            className="border rounded px-2 py-1"
+            value={limit}
+            onChange={e => {
+              setLimit(Number(e.target.value));
+              setPage(1);
+            }}
+            aria-label="Number of rows per page"
+          >
+            {[5, 10, 15, 20, 50].map(n => (
+              <option key={n} value={n}>{n}</option>
+            ))}
+          </select>
+          per page
+        </label>
+        <span className="text-xs text-slate-400 ml-4">
+          Showing {patients.length > 0 ? (limit * (page - 1)) + 1 : 0}
+          -
+          {patients.length > 0 ? (limit * (page - 1)) + patients.length : 0}
+          {" "}of {total}
+        </span>
+      </div>
       {loading ? (
         <div className="text-center text-slate-400">Loading...</div>
       ) : (
@@ -242,7 +337,9 @@ export default function PatientsPage() {
                         <FiUser className="text-green-600" />
                       </div>
                       <div>
-                        <p className="font-medium text-slate-800">{getDisplayName(p)}</p>
+                        <p className="font-medium text-slate-800">
+                          {getDisplayName(p)}
+                        </p>
                         {p.childDOB && (
                           <p className="text-xs text-slate-500">
                             DOB: {new Date(p.childDOB).toLocaleDateString()}
@@ -252,10 +349,15 @@ export default function PatientsPage() {
                     </div>
                   </td>
                   <td className="px-4 py-4 text-slate-600">
-                    {p.diagnosisInfo || <span className="italic text-slate-400">N/A</span>}
+                    {p.diagnosisInfo || (
+                      <span className="italic text-slate-400">N/A</span>
+                    )}
                   </td>
                   <td className="px-4 py-4 text-slate-600 flex items-center gap-2">
-                    <FiPhone /> {p.mobile1 || <span className="italic text-slate-400">N/A</span>}
+                    <FiPhone />{" "}
+                    {p.mobile1 || (
+                      <span className="italic text-slate-400">N/A</span>
+                    )}
                   </td>
                   <td className="px-4 py-4">
                     <div className="flex flex-wrap gap-2">
@@ -284,6 +386,59 @@ export default function PatientsPage() {
         </div>
       )}
 
+      {/* Pagination controls */}
+      <div className="mt-4 flex gap-3 items-center justify-center select-none">
+        <button
+          className={`px-3 py-1 rounded border ${page <= 1 ? "bg-slate-100 cursor-not-allowed text-slate-400" : "bg-white hover:bg-slate-50"}`}
+          onClick={() => setPage(p => Math.max(1, p - 1))}
+          disabled={page <= 1}
+          aria-label="Previous Page"
+        >
+          {"<"}
+        </button>
+        {[...Array(pageCount).keys()]
+          .map(k => k + 1)
+          .filter(i =>
+            // Show first, last, and nearby pages
+            i === 1 || i === pageCount || Math.abs(i - page) <= 2
+          )
+          .reduce<number[]>((arr, i, idx, src) => {
+            // Add ellipsis if there is a gap
+            console.log(src);
+            if (idx > 0 && i - arr[arr.length - 1] > 1) arr.push(-1);
+            arr.push(i);
+            return arr;
+          }, [])
+          .map((i, idx) =>
+            i === -1 ? (
+              <span key={`ellipsis-${idx}`} className="px-2 text-slate-300">
+                ...
+              </span>
+            ) : (
+              <button
+                key={`page-${i}`}
+                className={`px-3 py-1 rounded border ${
+                  i === page
+                    ? "bg-blue-600 text-white border-blue-600"
+                    : "bg-white hover:bg-slate-50"
+                }`}
+                onClick={() => setPage(i)}
+                aria-current={i === page ? "page" : undefined}
+              >
+                {i}
+              </button>
+            )
+          )}
+        <button
+          className={`px-3 py-1 rounded border ${page >= pageCount ? "bg-slate-100 cursor-not-allowed text-slate-400" : "bg-white hover:bg-slate-50"}`}
+          onClick={() => setPage(p => Math.min(pageCount, p + 1))}
+          disabled={page >= pageCount}
+          aria-label="Next Page"
+        >
+          {">"}
+        </button>
+      </div>
+
       {/* View Modal (includes edit & delete) */}
       {viewPatient && (
         <div className="fixed z-50 inset-0 flex items-center justify-center bg-black/30">
@@ -305,13 +460,18 @@ export default function PatientsPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {patientFields.map((field) => (
                     <div key={field.key}>
-                      <span className="block text-xs text-slate-400 font-medium">{field.label}</span>
+                      <span className="block text-xs text-slate-400 font-medium">
+                        {field.label}
+                      </span>
                       <span className="block text-slate-800 font-semibold min-h-[24px]">
                         {/* For name "alias", always show the merged value */}
                         {field.key === "name"
                           ? getDisplayName(viewPatient)
                           : field.key === "gender"
-                          ? (viewPatient[field.key] || "").charAt(0).toUpperCase() + (viewPatient[field.key] || "").slice(1)
+                          ? (viewPatient[field.key] || "")
+                              .charAt(0)
+                              .toUpperCase() +
+                            (viewPatient[field.key] || "").slice(1)
                           : field.key === "childDOB" && viewPatient.childDOB
                           ? new Date(viewPatient.childDOB).toLocaleDateString()
                           : viewPatient[field.key] || (
@@ -328,15 +488,29 @@ export default function PatientsPage() {
                       </div>
                       {userIdFields.map((uf) => (
                         <div key={uf.key}>
-                          <span className="block text-xs text-slate-400 font-medium">{uf.label}</span>
+                          <span className="block text-xs text-slate-400 font-medium">
+                            {uf.label}
+                          </span>
                           <span className="block text-slate-800 min-h-[24px]">
                             {typeof viewPatient.userId?.[uf.key] === "boolean"
-                              ? (viewPatient.userId?.[uf.key] ? "Yes" : "No")
+                              ? viewPatient.userId?.[uf.key]
+                                ? "Yes"
+                                : "No"
                               : uf.key === "createdAt" || uf.key === "updatedAt"
-                              ? (viewPatient.userId?.[uf.key]
-                                  ? new Date(viewPatient.userId?.[uf.key] + "").toLocaleString()
-                                  : <span className="italic text-slate-400">N/A</span>)
-                              : viewPatient.userId?.[uf.key]?.toString() || <span className="italic text-slate-400">N/A</span>}
+                              ? viewPatient.userId?.[uf.key] ? (
+                                  new Date(
+                                    viewPatient.userId?.[uf.key] + ""
+                                  ).toLocaleString()
+                                ) : (
+                                  <span className="italic text-slate-400">
+                                    N/A
+                                  </span>
+                                )
+                              : viewPatient.userId?.[uf.key]?.toString() || (
+                                  <span className="italic text-slate-400">
+                                    N/A
+                                  </span>
+                                )}
                           </span>
                         </div>
                       ))}
@@ -363,7 +537,7 @@ export default function PatientsPage() {
             ) : (
               // Edit mode view in the same modal
               <form
-                onSubmit={e => {
+                onSubmit={(e) => {
                   e.preventDefault();
                   handleEditSave();
                 }}
@@ -375,7 +549,9 @@ export default function PatientsPage() {
                     if (!field.editable) {
                       return (
                         <div key={field.key}>
-                          <label className="block mb-1 text-sm font-medium">{field.label}</label>
+                          <label className="block mb-1 text-sm font-medium">
+                            {field.label}
+                          </label>
                           <input
                             type="text"
                             className="w-full border rounded px-3 py-2 bg-gray-100 text-gray-600 cursor-not-allowed"
@@ -392,17 +568,19 @@ export default function PatientsPage() {
                     if (field.key === "name") {
                       return (
                         <div key={field.key}>
-                          <label className="block mb-1 text-sm font-medium">Name</label>
+                          <label className="block mb-1 text-sm font-medium">
+                            Name
+                          </label>
                           <input
                             type="text"
                             className="w-full border rounded px-3 py-2"
                             value={editForm.name || ""}
-                            onChange={e => {
+                            onChange={(e) => {
                               const value = e.target.value;
-                              setEditForm(f => ({
+                              setEditForm((f) => ({
                                 ...f,
                                 name: value,
-                                childFullName: value // Keep them in sync
+                                childFullName: value, // Keep them in sync
                               }));
                             }}
                           />
@@ -412,12 +590,14 @@ export default function PatientsPage() {
                     if (field.key === "gender") {
                       return (
                         <div key={field.key}>
-                          <label className="block mb-1 text-sm font-medium">Gender</label>
+                          <label className="block mb-1 text-sm font-medium">
+                            Gender
+                          </label>
                           <select
                             className="w-full border rounded px-3 py-2"
                             value={editForm.gender}
-                            onChange={e =>
-                              setEditForm(f => ({
+                            onChange={(e) =>
+                              setEditForm((f) => ({
                                 ...f,
                                 gender: e.target.value,
                               }))
@@ -434,13 +614,15 @@ export default function PatientsPage() {
                     if (field.key === "childDOB") {
                       return (
                         <div key={field.key}>
-                          <label className="block mb-1 text-sm font-medium">DOB</label>
+                          <label className="block mb-1 text-sm font-medium">
+                            DOB
+                          </label>
                           <input
                             type="date"
                             className="w-full border rounded px-3 py-2"
                             value={editForm.childDOB?.slice?.(0, 10) || ""}
-                            onChange={e =>
-                              setEditForm(f => ({
+                            onChange={(e) =>
+                              setEditForm((f) => ({
                                 ...f,
                                 childDOB: e.target.value,
                               }))
@@ -452,13 +634,15 @@ export default function PatientsPage() {
                     if (field.key === "remarks") {
                       return (
                         <div key={field.key}>
-                          <label className="block mb-1 text-sm font-medium">Remarks</label>
+                          <label className="block mb-1 text-sm font-medium">
+                            Remarks
+                          </label>
                           <textarea
                             className="w-full border rounded px-3 py-2"
                             rows={2}
                             value={editForm.remarks}
-                            onChange={e =>
-                              setEditForm(f => ({
+                            onChange={(e) =>
+                              setEditForm((f) => ({
                                 ...f,
                                 remarks: e.target.value,
                               }))
@@ -470,14 +654,16 @@ export default function PatientsPage() {
                     if (field.key === "pincode") {
                       return (
                         <div key={field.key}>
-                          <label className="block mb-1 text-sm font-medium">Pincode</label>
+                          <label className="block mb-1 text-sm font-medium">
+                            Pincode
+                          </label>
                           <input
                             type="text"
                             pattern="[0-9]*"
                             className="w-full border rounded px-3 py-2"
                             value={editForm.pincode || ""}
-                            onChange={e =>
-                              setEditForm(f => ({
+                            onChange={(e) =>
+                              setEditForm((f) => ({
                                 ...f,
                                 pincode: e.target.value,
                               }))
@@ -488,13 +674,15 @@ export default function PatientsPage() {
                     }
                     return (
                       <div key={field.key}>
-                        <label className="block mb-1 text-sm font-medium">{field.label}</label>
+                        <label className="block mb-1 text-sm font-medium">
+                          {field.label}
+                        </label>
                         <input
                           type="text"
                           className="w-full border rounded px-3 py-2"
                           value={editForm[field.key] || ""}
-                          onChange={e =>
-                            setEditForm(f => ({
+                          onChange={(e) =>
+                            setEditForm((f) => ({
                               ...f,
                               [field.key]: e.target.value,
                             }))
@@ -515,7 +703,11 @@ export default function PatientsPage() {
                   </button>
                   <button
                     type="submit"
-                    className={`px-5 py-2 rounded text-white ${editLoading ? "bg-blue-300" : "bg-blue-600 hover:bg-blue-700"}`}
+                    className={`px-5 py-2 rounded text-white ${
+                      editLoading
+                        ? "bg-blue-300"
+                        : "bg-blue-600 hover:bg-blue-700"
+                    }`}
                     disabled={editLoading}
                   >
                     {editLoading ? "Saving..." : "Save"}

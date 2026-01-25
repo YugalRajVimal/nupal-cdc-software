@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import axios from "axios";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "";
@@ -22,35 +22,34 @@ const SESSION_TIME_OPTIONS = [
 ];
 
 type HolidaySlot = {
-  _id?: string;
-  slotId: string;
-  label: string;
+    _id?: string;
+    slotId: string;
+    label: string;
 };
 
 type TherapistHoliday = {
-  _id?: string;
-  date: string;
-  reason: string;
-  slots: HolidaySlot[];
-  isFullDay: boolean;
+    _id?: string;
+    date: string;
+    reason: string;
+    slots: HolidaySlot[];
+    isFullDay: boolean;
 };
 
 type TherapistProfile = {
-  _id: string;
-  therapistId?: string;
-  userId?: {
+    _id: string;
+    therapistId?: string;
+    userId?: {
+        name?: string;
+        email?: string;
+    };
     name?: string;
     email?: string;
-  };
-  name?: string;
-  email?: string;
-  mobile1?: string;
-  holidays?: TherapistHoliday[];
+    mobile1?: string;
+    holidays?: TherapistHoliday[];
 };
 
 type ModalMode = "none" | "full" | "partial";
 
-// Simple Calendar component for date picking (no package, native React)
 function CalendarPopup({
     value,
     onChange,
@@ -118,8 +117,8 @@ function CalendarPopup({
                     (dateStr === value
                         ? "bg-blue-600 text-white font-bold"
                         : isBeforeMin(dateStr)
-                            ? "text-gray-400 cursor-not-allowed"
-                            : "hover:bg-blue-100")
+                        ? "text-gray-400 cursor-not-allowed"
+                        : "hover:bg-blue-100")
                 }
                 onClick={() => {
                     if (!isBeforeMin(dateStr)) {
@@ -165,7 +164,7 @@ function CalendarPopup({
                 >{">"}</button>
             </div>
             <div className="grid grid-cols-7 text-xs mb-1">
-                {["S","M","T","W","T","F","S"].map((d) =>
+                {["S", "M", "T", "W", "T", "F", "S"].map((d) =>
                     <div
                         key={d}
                         className="text-center font-medium text-slate-500"
@@ -196,9 +195,6 @@ function DateInputWithPopup({
 }) {
     const [showCal, setShowCal] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
-    // function handleManualInput(e: React.ChangeEvent<HTMLInputElement>) {
-    //     onChange(e.target.value);
-    // }
     return (
         <div className="relative">
             <input
@@ -221,10 +217,10 @@ function DateInputWithPopup({
                 onClick={() => !disabled && setShowCal((v) => !v)}
             >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-                     stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-                     className="feather feather-calendar"><rect x="3" y="4" width="18" height="18"
-                     rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8"
-                     y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                    className="feather feather-calendar"><rect x="3" y="4" width="18" height="18"
+                        rx="2" ry="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8"
+                            y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>
             </button>
             {showCal && !disabled && (
                 <CalendarPopup
@@ -250,7 +246,7 @@ function HolidayList({
 
     // Sort holidays by date ascending
     const sortedHolidays = [...holidays].sort((a, b) =>
-      (a.date || '').localeCompare(b.date || '')
+        (a.date || '').localeCompare(b.date || '')
     );
 
     return (
@@ -283,7 +279,7 @@ function HolidayList({
                                         h.slots && h.slots.length > 0
                                             ? h.slots.map(s => s.label).join(", ")
                                             : <span className="text-gray-400 italic">-</span>
-                                      )
+                                    )
                                 }
                             </td>
                         </tr>
@@ -295,365 +291,476 @@ function HolidayList({
 }
 
 function HolidayModal({
-  open, 
-  therapist, 
-  onClose,
-  onHolidayAssigned
+    open,
+    therapist,
+    onClose,
+    onHolidayAssigned
 }: {
-  open: boolean;
-  therapist: TherapistProfile | null;
-  onClose: () => void;
-  onHolidayAssigned: () => void;
+    open: boolean;
+    therapist: TherapistProfile | null;
+    onClose: () => void;
+    onHolidayAssigned: () => void;
 }) {
-  const [mode, setMode] = useState<ModalMode>("full");
-  // For Full Day
-  const [fromDate, setFromDate] = useState("");
-  const [toDate, setToDate] = useState("");
-  // For Partial Day
-  const [partialDate, setPartialDate] = useState("");
-  const [selectedSlots, setSelectedSlots] = useState<string[]>([]);
-  // General state
-  const [submitting, setSubmitting] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+    const [mode, setMode] = useState<ModalMode>("full");
+    // For Full Day
+    const [fromDate, setFromDate] = useState("");
+    const [toDate, setToDate] = useState("");
+    // For Partial Day
+    const [partialDate, setPartialDate] = useState("");
+    const [selectedSlots, setSelectedSlots] = useState<string[]>([]);
+    // General state
+    const [submitting, setSubmitting] = useState(false);
+    const [err, setErr] = useState<string | null>(null);
+    const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  // Reset when therapist/modal changes
-  useEffect(() => {
-    setMode("full");
-    setFromDate("");
-    setToDate("");
-    setPartialDate("");
-    setSelectedSlots([]);
-    setErr(null);
-    setSuccessMsg(null);
-    setSubmitting(false);
-  }, [open, therapist?._id]);
+    // Reset when therapist/modal changes
+    useEffect(() => {
+        setMode("full");
+        setFromDate("");
+        setToDate("");
+        setPartialDate("");
+        setSelectedSlots([]);
+        setErr(null);
+        setSuccessMsg(null);
+        setSubmitting(false);
+    }, [open, therapist?._id]);
 
-  function handleSlotChange(slotId: string, checked: boolean) {
-    setSelectedSlots((prev) =>
-      checked ? [...prev, slotId] : prev.filter((s) => s !== slotId)
+    function handleSlotChange(slotId: string, checked: boolean) {
+        setSelectedSlots((prev) =>
+            checked ? [...prev, slotId] : prev.filter((s) => s !== slotId)
+        );
+    }
+
+    async function handleSubmit(e: React.FormEvent) {
+        e.preventDefault();
+        setSubmitting(true);
+        setErr(null);
+        setSuccessMsg(null);
+
+        if (!therapist || !therapist._id) {
+            setErr("Therapist not selected");
+            setSubmitting(false);
+            return;
+        }
+
+        const apiUrl = `${API_BASE_URL.replace(/\/$/, "")}/api/admin/therapist/${therapist._id}/holidays`;
+
+        if (mode === "full") {
+            if (!fromDate || !toDate) {
+                setErr("Please select From and To dates");
+                setSubmitting(false);
+                return;
+            }
+            try {
+                const res = await axios.post(
+                    apiUrl,
+                    {
+                        fromDate,
+                        toDate,
+                    }
+                );
+                setSuccessMsg(
+                    (res?.data?.message) ||
+                    "Full day holiday assigned successfully"
+                );
+                onHolidayAssigned();
+            } catch (error: any) {
+                setErr(error?.response?.data?.error || error?.response?.data?.message || "Error assigning holiday");
+            }
+        } else if (mode === "partial") {
+            if (!partialDate || selectedSlots.length === 0) {
+                setErr("Please select date and slots");
+                setSubmitting(false);
+                return;
+            }
+            try {
+                const res = await axios.post(
+                    apiUrl,
+                    {
+                        date: partialDate,
+                        slots: selectedSlots,
+                    }
+                );
+                setSuccessMsg(
+                    (res?.data?.message) ||
+                    "Partial day holiday assigned successfully"
+                );
+                onHolidayAssigned();
+            } catch (error: any) {
+                setErr(error?.response?.data?.error || error?.response?.data?.message || "Error assigning holiday");
+            }
+        }
+        setSubmitting(false);
+    }
+
+    if (!open) return null;
+
+    return (
+        <div className="fixed z-50 inset-0 bg-white/50 bg-opacity-30 flex items-center justify-center">
+            <div className="bg-white rounded-lg shadow-lg p-6 w-[90vw] max-w-xl relative animate-fadeIn overflow-y-auto max-h-[90vh]">
+                <button className="absolute top-2 right-2 text-gray-400 hover:text-red-600 text-xl" onClick={onClose}>&times;</button>
+                <h2 className="text-lg font-bold mb-3">
+                    Manage Holidays for<br />
+                    <span className="text-blue-700">{therapist?.userId?.name || therapist?.name || therapist?.therapistId}</span>
+                </h2>
+                {/* Assigned Holidays */}
+                <div className="mb-4 " >
+                    <label className="block mb-2 font-semibold text-slate-700">
+                        Assigned Holidays
+                    </label>
+                    <HolidayList holidays={therapist?.holidays} />
+                </div>
+                <div className="flex gap-3 mb-4">
+                    <button
+                        className={`px-3 py-1.5 rounded ${mode === "full" ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-700"} transition font-semibold`}
+                        onClick={() => setMode("full")}
+                        type="button"
+                    >
+                        Assign By Date Range
+                    </button>
+                    <button
+                        className={`px-3 py-1.5 rounded ${mode === "partial" ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-700"} transition font-semibold`}
+                        onClick={() => setMode("partial")}
+                        type="button"
+                    >
+                        Assign By Slots (Partial Day)
+                    </button>
+                </div>
+                <form onSubmit={handleSubmit}>
+                    {mode === "full" ? (
+                        <div className="mb-4">
+                            <label className="block mb-2 font-medium">Select Date Range:</label>
+                            <div className="flex gap-2">
+                                <div>
+                                    <label className="block text-xs text-slate-600 mb-1">From</label>
+                                    <DateInputWithPopup
+                                        value={fromDate}
+                                        onChange={setFromDate}
+                                        min={new Date().toISOString().slice(0, 10)}
+                                        className="border px-3 py-2 rounded w-full"
+                                        placeholder="Select date"
+                                        disabled={submitting}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs text-slate-600 mb-1">To</label>
+                                    <DateInputWithPopup
+                                        value={toDate}
+                                        onChange={setToDate}
+                                        min={fromDate || new Date().toISOString().slice(0, 10)}
+                                        className="border px-3 py-2 rounded w-full"
+                                        placeholder="Select date"
+                                        disabled={submitting}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="mb-4">
+                            <label className="block mb-2 font-medium">Select Date:</label>
+                            <DateInputWithPopup
+                                value={partialDate}
+                                onChange={setPartialDate}
+                                min={new Date().toISOString().slice(0, 10)}
+                                className="border px-3 py-2 rounded w-full mb-3"
+                                placeholder="Select date"
+                                disabled={submitting}
+                            />
+                            <label className="block mb-2 font-medium">Select Slots for Partial Holiday:</label>
+                            <div className="grid grid-cols-2 gap-2 max-h-[180px] overflow-y-auto border p-2 rounded bg-slate-50">
+                                {SESSION_TIME_OPTIONS.map((slot) => (
+                                    <label key={slot.id} className="flex items-center gap-2">
+                                        <input
+                                            type="checkbox"
+                                            checked={selectedSlots.includes(slot.id)}
+                                            onChange={e => handleSlotChange(slot.id, e.target.checked)}
+                                            disabled={submitting}
+                                        />
+                                        <span>{slot.label}{slot.limited ? " (Limited)" : ""}</span>
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                    {err && <div className="text-red-600 mb-2">{err}</div>}
+                    {successMsg && <div className="text-green-600 mb-2">{successMsg}</div>}
+                    <div className="mt-5 flex justify-end gap-3">
+                        <button
+                            className="px-4 py-2 bg-slate-200 rounded text-slate-700 hover:bg-slate-300"
+                            type="button"
+                            onClick={onClose}
+                            disabled={submitting}
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+                            disabled={submitting}
+                            type="submit"
+                        >
+                            {submitting ? "Submitting..." : "Assign Holiday"}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
     );
-  }
+}
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setSubmitting(true);
-    setErr(null);
-    setSuccessMsg(null);
-
-    // Log all data relevant to submission
-    console.log("Submitting Holiday", {
-      therapist,
-      mode,
-      fromDate,
-      toDate,
-      partialDate,
-      selectedSlots,
-    });
-
-    if (!therapist || !therapist._id) {
-      setErr("Therapist not selected");
-      setSubmitting(false);
-      return;
-    }
-
-    const apiUrl = `${API_BASE_URL.replace(/\/$/, "")}/api/admin/therapist/${therapist._id}/holidays`;
-
-    if (mode === "full") {
-      if (!fromDate || !toDate) {
-        setErr("Please select From and To dates");
-        setSubmitting(false);
-        return;
-      }
-      try {
-        console.log("Submitting FULL DAY holiday:", {
-          therapistId: therapist._id,
-          fromDate,
-          toDate,
-        });
-        const res = await axios.post(
-          apiUrl,
-          {
-            fromDate,
-            toDate,
-          }
-        );
-        setSuccessMsg(
-          (res?.data?.message) ||
-          "Full day holiday assigned successfully"
-        );
-        onHolidayAssigned();
-      } catch (error: any) {
-        setErr(error?.response?.data?.error || error?.response?.data?.message || "Error assigning holiday");
-      }
-    } else if (mode === "partial") {
-      if (!partialDate || selectedSlots.length === 0) {
-        setErr("Please select date and slots");
-        setSubmitting(false);
-        return;
-      }
-      try {
-        console.log("Submitting PARTIAL holiday:", {
-          therapistId: therapist._id,
-          date: partialDate,
-          slots: selectedSlots,
-        });
-        const res = await axios.post(
-          apiUrl,
-          {
-            date: partialDate,
-            slots: selectedSlots,
-          }
-        );
-        setSuccessMsg(
-          (res?.data?.message) ||
-          "Partial day holiday assigned successfully"
-        );
-        onHolidayAssigned();
-      } catch (error: any) {
-        setErr(error?.response?.data?.error || error?.response?.data?.message || "Error assigning holiday");
-      }
-    }
-    setSubmitting(false);
-  }
-
-  if (!open) return null;
-
-  return (
-    <div className="fixed z-50 inset-0 bg-white/50 bg-opacity-30 flex items-center justify-center">
-      <div className="bg-white rounded-lg shadow-lg p-6 w-[90vw] max-w-xl relative animate-fadeIn overflow-y-auto max-h-[90vh]">
-        <button className="absolute top-2 right-2 text-gray-400 hover:text-red-600 text-xl" onClick={onClose}>&times;</button>
-        <h2 className="text-lg font-bold mb-3">
-          Manage Holidays for<br />
-          <span className="text-blue-700">{therapist?.userId?.name || therapist?.name || therapist?.therapistId}</span>
-        </h2>
-        {/* Added: List assigned holidays */}
-        <div className="mb-4 " >
-          <label className="block mb-2 font-semibold text-slate-700">
-            Assigned Holidays
-          </label>
-          <HolidayList holidays={therapist?.holidays}/>
-        </div>
-        <div className="flex gap-3 mb-4">
-          <button
-            className={`px-3 py-1.5 rounded ${mode==="full" ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-700"} transition font-semibold`}
-            onClick={() => setMode("full")}
-            type="button"
-          >
-            Assign By Date Range
-          </button>
-          <button
-            className={`px-3 py-1.5 rounded ${mode==="partial" ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-700"} transition font-semibold`}
-            onClick={() => setMode("partial")}
-            type="button"
-          >
-            Assign By Slots (Partial Day)
-          </button>
-        </div>
-        <form onSubmit={handleSubmit}>
-          {mode === "full" ? (
-            <div className="mb-4">
-              <label className="block mb-2 font-medium">Select Date Range:</label>
-              <div className="flex gap-2">
-                <div>
-                  <label className="block text-xs text-slate-600 mb-1">From</label>
-                  <DateInputWithPopup
-                    value={fromDate}
-                    onChange={setFromDate}
-                    min={new Date().toISOString().slice(0, 10)}
-                    className="border px-3 py-2 rounded w-full"
-                    placeholder="Select date"
-                    disabled={submitting}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-slate-600 mb-1">To</label>
-                  <DateInputWithPopup
-                    value={toDate}
-                    onChange={setToDate}
-                    min={fromDate || new Date().toISOString().slice(0, 10)}
-                    className="border px-3 py-2 rounded w-full"
-                    placeholder="Select date"
-                    disabled={submitting}
-                  />
-                </div>
-              </div>
+// Search/Pagination controls are managed OUTSIDE table; state does not reset when data reloads.
+function TherapistSearchAndPagination({
+    searchValue,
+    onSearchValueChange,
+    page,
+    pageSize,
+    onChangePage,
+    onChangePageSize,
+    filteredCount,
+    totalCount
+}: {
+    searchValue: string;
+    onSearchValueChange: (v: string) => void;
+    page: number;
+    pageSize: number;
+    onChangePage: (v: number) => void;
+    onChangePageSize: (v: number) => void;
+    filteredCount: number;
+    totalCount: number;
+}) {
+    const numPages = Math.max(1, Math.ceil(filteredCount / pageSize));
+    return (
+        <div className="flex flex-col md:flex-row md:items-center gap-4 mb-6 justify-between">
+            {/* Search */}
+            <div className="flex gap-2 items-center">
+                <label htmlFor="therapist-search" className="font-medium text-slate-700">Search: </label>
+                <input
+                    id="therapist-search"
+                    type="text"
+                    className="border px-2 py-1 rounded"
+                    value={searchValue}
+                    onChange={e => onSearchValueChange(e.target.value)}
+                    placeholder="Name, Email, ID or Phone"
+                />
             </div>
-          ) : (
-            <div className="mb-4">
-              <label className="block mb-2 font-medium">Select Date:</label>
-              <DateInputWithPopup
-                value={partialDate}
-                onChange={setPartialDate}
-                min={new Date().toISOString().slice(0, 10)}
-                className="border px-3 py-2 rounded w-full mb-3"
-                placeholder="Select date"
-                disabled={submitting}
-              />
-              <label className="block mb-2 font-medium">Select Slots for Partial Holiday:</label>
-              <div className="grid grid-cols-2 gap-2 max-h-[180px] overflow-y-auto border p-2 rounded bg-slate-50">
-                {SESSION_TIME_OPTIONS.map((slot) => (
-                  <label key={slot.id} className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={selectedSlots.includes(slot.id)}
-                      onChange={e => handleSlotChange(slot.id, e.target.checked)}
-                      disabled={submitting}
-                    />
-                    <span>{slot.label}{slot.limited ? " (Limited)" : ""}</span>
-                  </label>
-                ))}
-              </div>
+            {/* Pagination Controls */}
+            <div className="flex gap-2 items-center flex-wrap">
+                <span className="text-xs text-slate-700">
+                    {filteredCount} of {totalCount} found
+                </span>
+                <select
+                    className="border px-2 py-1 rounded"
+                    value={pageSize}
+                    onChange={e => onChangePageSize(Number(e.target.value))}
+                >
+                    {[5, 10, 25, 50, 100].map(sz =>
+                        <option key={sz} value={sz}>{sz} / page</option>
+                    )}
+                </select>
+                <button
+                    type="button"
+                    className="px-3 py-1 rounded bg-slate-200 hover:bg-slate-300 disabled:opacity-40"
+                    onClick={() => onChangePage(page - 1)}
+                    disabled={page <= 1}
+                >Prev</button>
+                <span className="text-xs">
+                    Page {page} of {numPages}
+                </span>
+                <button
+                    type="button"
+                    className="px-3 py-1 rounded bg-slate-200 hover:bg-slate-300 disabled:opacity-40"
+                    onClick={() => onChangePage(page + 1)}
+                    disabled={page >= numPages}
+                >Next</button>
             </div>
-          )}
-          {err && <div className="text-red-600 mb-2">{err}</div>}
-          {successMsg && <div className="text-green-600 mb-2">{successMsg}</div>}
-          <div className="mt-5 flex justify-end gap-3">
-            <button 
-              className="px-4 py-2 bg-slate-200 rounded text-slate-700 hover:bg-slate-300"
-              type="button"
-              onClick={onClose}
-              disabled={submitting}
-            >
-              Cancel
-            </button>
-            <button
-              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
-              disabled={submitting}
-              type="submit"
-            >
-              {submitting ? "Submitting..." : "Assign Holiday"}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
+        </div>
+    );
 }
 
 export default function ManageHolidays() {
-  const [therapists, setTherapists] = useState<TherapistProfile[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  // Modal management
-  const [holidayModalOpen, setHolidayModalOpen] = useState(false);
-  const [selectedTherapist, setSelectedTherapist] = useState<TherapistProfile | null>(null);
-  const [refreshFlag, setRefreshFlag] = useState(0);
+    // Data state
+    const [therapists, setTherapists] = useState<TherapistProfile[]>([]);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    // Modal management
+    const [holidayModalOpen, setHolidayModalOpen] = useState(false);
+    const [selectedTherapist, setSelectedTherapist] = useState<TherapistProfile | null>(null);
+    const [refreshFlag, setRefreshFlag] = useState(0);
 
-  async function fetchTherapists() {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await axios.get(
-        `${API_BASE_URL.replace(/\/$/, "")}/api/admin/therapist`
-      );
-      let therapistsArr: TherapistProfile[] = [];
-      if (
-        res &&
-        res.data &&
-        (Array.isArray(res.data) || Array.isArray(res.data.therapists))
-      ) {
-        therapistsArr = Array.isArray(res.data) ? res.data : res.data.therapists;
-      } else if (res && res.data && res.data.therapists && typeof res.data.therapists === "object") {
-        therapistsArr = Object.values(res.data.therapists).filter(
-          v => typeof v === "object" && v !== null && "_id" in v
-        ) as TherapistProfile[];
-      }
-      setTherapists(therapistsArr);
-      console.log(therapistsArr);
-    } catch (err: any) {
-      setError(
-        err?.response?.data?.message ||
-        err?.message ||
-        "Error loading therapists."
-      );
-    } finally {
-      setLoading(false);
+    // Search/Pagination state (kept separate from data)
+    const [searchValue, setSearchValue] = useState("");
+    const [page, setPage] = useState(1);
+    const [pageSize, setPageSize] = useState(10);
+
+    // Fetch therapists (no API pagination for now - all are loaded and filtered client-side)
+    async function fetchTherapists() {
+        setLoading(true);
+        setError(null);
+        try {
+            const res = await axios.get(
+                `${API_BASE_URL.replace(/\/$/, "")}/api/admin/therapist`
+            );
+            let therapistsArr: TherapistProfile[] = [];
+            if (
+                res &&
+                res.data &&
+                (Array.isArray(res.data) || Array.isArray(res.data.therapists))
+            ) {
+                therapistsArr = Array.isArray(res.data) ? res.data : res.data.therapists;
+            } else if (res && res.data && res.data.therapists && typeof res.data.therapists === "object") {
+                therapistsArr = Object.values(res.data.therapists).filter(
+                    v => typeof v === "object" && v !== null && "_id" in v
+                ) as TherapistProfile[];
+            }
+            setTherapists(therapistsArr);
+        } catch (err: any) {
+            setError(
+                err?.response?.data?.message ||
+                err?.message ||
+                "Error loading therapists."
+            );
+        } finally {
+            setLoading(false);
+        }
     }
-  }
 
-  useEffect(() => {
-    fetchTherapists();
-    // eslint-disable-next-line
-  }, [refreshFlag]);
+    useEffect(() => {
+        fetchTherapists();
+    }, [refreshFlag]);
 
-  function openHolidayModal(therapist: TherapistProfile) {
-    setSelectedTherapist(therapist);
-    setHolidayModalOpen(true);
-  }
+    // Filtering (memoized for performance)
+    const filteredTherapists = useMemo(() => {
+        if (!searchValue.trim()) return therapists;
+        const v = searchValue.toLowerCase().trim();
+        return therapists.filter(t => {
+            return (
+                (t.userId?.name?.toLowerCase().includes(v) ?? false) ||
+                (t.userId?.email?.toLowerCase().includes(v) ?? false) ||
+                (t.name?.toLowerCase().includes(v) ?? false) ||
+                (t.email?.toLowerCase().includes(v) ?? false) ||
+                (t.therapistId?.toLowerCase().includes(v) ?? false) ||
+                (t.mobile1?.toLowerCase().includes(v) ?? false)
+            );
+        });
+    }, [therapists, searchValue]);
+    const totalFiltered = filteredTherapists.length;
+    const totalTherapists = therapists.length;
 
-  function closeHolidayModal() {
-    setHolidayModalOpen(false);
-    setSelectedTherapist(null);
-  }
+    // Pagination - page number clamp and slice logic
+    const numPages = Math.max(1, Math.ceil(totalFiltered / pageSize));
+    useEffect(() => {
+        // Clamp page to valid when filter/search/pagination changes
+        if (page > numPages) setPage(numPages);
+        if (page < 1 && numPages > 0) setPage(1);
+        // Do NOT reset search/page on data reload/refresh, per requirements
+        // eslint-disable-next-line
+    }, [numPages]);
+    const pagedTherapists = useMemo(() => {
+        const startIdx = (page - 1) * pageSize;
+        return filteredTherapists.slice(startIdx, startIdx + pageSize);
+    }, [filteredTherapists, page, pageSize]);
 
-  function handleHolidayAssigned() {
-    setRefreshFlag(r => r + 1);
-  }
+    // Table modal logic
+    function openHolidayModal(therapist: TherapistProfile) {
+        setSelectedTherapist(therapist);
+        setHolidayModalOpen(true);
+    }
 
-  return (
-    <div className="min-h-screen p-8">
-      <h1 className="text-2xl font-bold text-slate-800 mb-6">Therapists</h1>
-      {error ? <div className="text-red-500 mb-4">{error}</div> : null}
-      <div className="bg-white border rounded-lg shadow overflow-x-auto">
-        <table className="min-w-full divide-y divide-slate-200">
-          <thead className="bg-slate-100">
-            <tr>
-              <th className="px-4 py-3 text-left text-xs font-medium text-slate-700 uppercase tracking-wider">Therapist ID</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-slate-700 uppercase tracking-wider">Name</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-slate-700 uppercase tracking-wider">Email</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-slate-700 uppercase tracking-wider">Phone No</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-slate-700 uppercase tracking-wider">Action</th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-slate-200">
-            {loading ? (
-              <tr>
-                <td colSpan={5}>
-                  <div className="text-center py-8">Loading...</div>
-                </td>
-              </tr>
-            ) : therapists.length === 0 ? (
-              <tr>
-                <td colSpan={5}>
-                  <div className="text-center py-8">No therapists found.</div>
-                </td>
-              </tr>
-            ) : (
-              therapists.map((t) => (
-                <tr key={t._id} className="hover:bg-slate-50 transition">
-                  <td className="px-4 py-3 whitespace-nowrap text-slate-700 font-mono">{t.therapistId || "-"}</td>
-                  <td className="px-4 py-3 whitespace-nowrap font-medium text-slate-800">
-                    {t?.userId?.name || t.name || "-"}
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap">
-                    {t?.userId?.email || t.email || "-"}
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap">
-                    {t.mobile1 || "-"}
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap">
-                    <button
-                      className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
-                      onClick={() => openHolidayModal(t)}
-                      type="button"
-                    >
-                      Manage Holidays
-                    </button>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-        {/* Holiday Modal */}
-        <HolidayModal 
-          open={holidayModalOpen} 
-          therapist={selectedTherapist} 
-          onClose={closeHolidayModal}
-          onHolidayAssigned={handleHolidayAssigned}
-        />
-      </div>
-    </div>
-  );
+    function closeHolidayModal() {
+        setHolidayModalOpen(false);
+        setSelectedTherapist(null);
+    }
+
+    function handleHolidayAssigned() {
+        setRefreshFlag(r => r + 1);
+    }
+
+    // Handlers for pagination/search
+    function onSearchValueChange(v: string) {
+        setSearchValue(v);
+        setPage(1); // Reset page on new search
+    }
+    function onChangePageSize(sz: number) {
+        setPageSize(sz);
+        setPage(1); // Reset page on page size change
+    }
+    function onChangePage(p: number) {
+        setPage(Math.max(1, Math.min(numPages, p)));
+    }
+
+    return (
+        <div className="min-h-screen p-8">
+            <h1 className="text-2xl font-bold text-slate-800 mb-6">Therapists</h1>
+            {/* Search, Pagination controls (always outside table, invariant on data reloads) */}
+            <TherapistSearchAndPagination
+                searchValue={searchValue}
+                onSearchValueChange={onSearchValueChange}
+                page={page}
+                pageSize={pageSize}
+                onChangePage={onChangePage}
+                onChangePageSize={onChangePageSize}
+                filteredCount={totalFiltered}
+                totalCount={totalTherapists}
+            />
+            {error ? <div className="text-red-500 mb-4">{error}</div> : null}
+            <div className="bg-white border rounded-lg shadow overflow-x-auto">
+                <table className="min-w-full divide-y divide-slate-200">
+                    <thead className="bg-slate-100">
+                        <tr>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-slate-700 uppercase tracking-wider">Therapist ID</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-slate-700 uppercase tracking-wider">Name</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-slate-700 uppercase tracking-wider">Email</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-slate-700 uppercase tracking-wider">Phone No</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-slate-700 uppercase tracking-wider">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-slate-200">
+                        {loading ? (
+                            <tr>
+                                <td colSpan={5}>
+                                    <div className="text-center py-8">Loading...</div>
+                                </td>
+                            </tr>
+                        ) : pagedTherapists.length === 0 ? (
+                            <tr>
+                                <td colSpan={5}>
+                                    <div className="text-center py-8">No therapists found.</div>
+                                </td>
+                            </tr>
+                        ) : (
+                            pagedTherapists.map((t) => (
+                                <tr key={t._id} className="hover:bg-slate-50 transition">
+                                    <td className="px-4 py-3 whitespace-nowrap text-slate-700 font-mono">{t.therapistId || "-"}</td>
+                                    <td className="px-4 py-3 whitespace-nowrap font-medium text-slate-800">
+                                        {t?.userId?.name || t.name || "-"}
+                                    </td>
+                                    <td className="px-4 py-3 whitespace-nowrap">
+                                        {t?.userId?.email || t.email || "-"}
+                                    </td>
+                                    <td className="px-4 py-3 whitespace-nowrap">
+                                        {t.mobile1 || "-"}
+                                    </td>
+                                    <td className="px-4 py-3 whitespace-nowrap">
+                                        <button
+                                            className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+                                            onClick={() => openHolidayModal(t)}
+                                            type="button"
+                                        >
+                                            Manage Holidays
+                                        </button>
+                                    </td>
+                                </tr>
+                            ))
+                        )}
+                    </tbody>
+                </table>
+                {/* Holiday Modal */}
+                <HolidayModal
+                    open={holidayModalOpen}
+                    therapist={selectedTherapist}
+                    onClose={closeHolidayModal}
+                    onHolidayAssigned={handleHolidayAssigned}
+                />
+            </div>
+        </div>
+    );
 }

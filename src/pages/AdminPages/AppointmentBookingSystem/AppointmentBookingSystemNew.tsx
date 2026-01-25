@@ -5,6 +5,7 @@ import {
   FiChevronUp, FiChevronDown, FiList, FiPackage, FiEdit2, FiX, FiHash,
   FiCheckCircle, FiRepeat, FiCreditCard
 } from "react-icons/fi";
+
 import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { useLocation } from "react-router";
@@ -41,44 +42,40 @@ type Therapist = {
   bookedSlots?: { [date: string]: string[] };
   bookedSlotCount?: { [date: string]: number };
 };
-// Enhanced session type: additionally allow therapyTypeId per session
 type BookingSession = {
   date: string;
   slotId: string;
   therapistId?: string;
-  // Correct therapyTypeId structure according to API:
-  // API session may have 'therapyType' object instead, so include that here for typing.
-  therapyType?: string;
+  therapyType?: string; // from earlier API
   therapyTypeId?: {
     _id: string;
     name: string;
     [key: string]: any;
-  };
+  } | string;
   _id?: string;
-  // Therapist object may be full therapist or reference
   therapist?: {
     _id: string;
     therapistId: string;
     name: string;
     [key: string]: any;
   };
-  [key: string]: any; // Allow other fields if needed
+  [key: string]: any;
 };
 
-type Booking = { 
-  _id: string; 
-  appointmentId?: string; 
-  patient: Patient; 
-  therapy: Therapy; 
-  package: Package | null; 
-  therapist: Therapist | string; 
-  sessions: BookingSession[]; 
-  discountInfo?: { coupon: any; time?: string }; 
-  isPaid?: boolean; // for displaying payment status
-  payment?:{
-    status?:string
-  }
-  remark?: string; // Added optional remark for display
+type Booking = {
+  _id: string;
+  appointmentId?: string;
+  patient: Patient;
+  therapy: Therapy;
+  package: Package | null;
+  therapist: Therapist | string;
+  sessions: BookingSession[];
+  discountInfo?: { coupon: any; time?: string };
+  isPaid?: boolean;
+  payment?: {
+    status?: string;
+  };
+  remark?: string;
 };
 
 function pad2(n: number) { return n < 10 ? `0${n}` : `${n}`; }
@@ -88,7 +85,6 @@ function getStartDay(year: number, month: number) { return new Date(year, month,
 function getDayIndex(dayShort: string): number { const idx = DAYS.findIndex(d => d === dayShort.toUpperCase()); return idx >= 0 ? idx : 0; }
 
 export default function AppointmentBookingSystemNew() {
-
   const location = useLocation();
 
   const today = new Date();
@@ -97,7 +93,6 @@ export default function AppointmentBookingSystemNew() {
   const daysInMonth = getDaysInMonth(year, month);
   const startDay = getStartDay(year, month);
 
-  // API loaded data
   const [patients, setPatients] = useState<Patient[]>([]);
   const [therapists, setTherapists] = useState<Therapist[]>([]);
   const [therapies, setTherapies] = useState<Therapy[]>([]);
@@ -106,17 +101,11 @@ export default function AppointmentBookingSystemNew() {
   const [apiLoading, setApiLoading] = useState<boolean>(false);
   const [apiError, setApiError] = useState<string | null>(null);
 
-  // Bookings - SERVER BOOKINGS
-  const [bookings, setBookings] = useState<Booking[]>([]);
-  const [bookingsLoading, setBookingsLoading] = useState<boolean>(false);
-  const [bookingsError, setBookingsError] = useState<string | null>(null);
 
-  // Coupon state (text field for API, dropdown is hidden)
   const [couponInput, setCouponInput] = useState<string>("");
   const [appliedCoupon, setAppliedCoupon] = useState<any>(null);
   const [couponStatus, setCouponStatus] = useState<null | "valid" | "invalid">(null);
 
-  // Form state
   const [sessions, setSessions] = useState<BookingSession[]>([]);
   const [patientId, setPatientId] = useState<string>("");
   const [therapyId, setTherapyId] = useState<string>("");
@@ -126,29 +115,23 @@ export default function AppointmentBookingSystemNew() {
   const [bookingError, setBookingError] = useState<string | null>(null);
   const [bookingSuccess, setBookingSuccess] = useState<string | null>(null);
   const [editBookingId, setEditBookingId] = useState<string | null>(null);
-  // Remark state
   const [remark, setRemark] = useState<string>("");
 
-  // Payment tracking
   const [paymentLoadingBookingId, setPaymentLoadingBookingId] = useState<string | null>(null);
 
-  // Repeat/weekly
   const [repeatDay, setRepeatDay] = useState<string>("");
   const [repeatStartDate, setRepeatStartDate] = useState<string>("");
   const [repeatSlotId, setRepeatSlotId] = useState<string>("");
   const [repeatError, setRepeatError] = useState<string | null>(null);
   const [repeatConflictInfo, setRepeatConflictInfo] = useState<{ [date: string]: string }>({});
-
-  // Booked slot info per row
   const [bookedSlotsPerRow, setBookedSlotsPerRow] = useState<{ [rowKey: string]: string[] }>({});
 
-  // Request Types
   const [isBookingRequest, setIsBookingRequest] = useState<boolean>(false);
   const [bookingRequestId, setBookingRequestId] = useState<string>("");
   const [isSessionEditRequest, setIsSessionEditRequest] = useState<boolean>(false);
   const [sessionEditRequestId, setSessionEditRequestId] = useState<string>("");
 
-  useEffect(() => { 
+  useEffect(() => {
     if (location.state && (location.state as any).bookingRequest) {
       const req = (location.state as any).bookingRequest;
       setPatientId(req.patient?._id || "");
@@ -161,20 +144,38 @@ export default function AppointmentBookingSystemNew() {
           date: s.date || "",
           slotId: s.slotId || s.time || "",
           therapistId: req.therapist?._id || req.therapist || "",
-          therapyTypeId: req.therapy?._id || "",
+          therapyTypeId:
+            typeof s.therapyTypeId === "object"
+              ? s.therapyTypeId
+              : typeof s.therapyTypeId === "string"
+                ? (
+                    therapies.find((t: Therapy) => t._id === s.therapyTypeId)
+                      ? {
+                          _id: s.therapyTypeId,
+                          name: therapies.find((t: Therapy) => t._id === s.therapyTypeId)?.name || ""
+                        } : { _id: s.therapyTypeId, name: "" }
+                  )
+                : req.therapy?._id
+                  ? {
+                      _id: req.therapy._id,
+                      name: req.therapy.name || ""
+                    }
+                  : ""
         })));
         setTherapistId(req.therapist?._id || req.therapist || "");
       }
     }
-  }, [location.state]);
-  
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state, therapies]);
+
   useEffect(() => {
-      if (location.state && (location.state as any).sessionEditRequest) {
-        const req = (location.state as any).sessionEditRequest;
-        setIsSessionEditRequest(true);
-        setSessionEditRequestId(req._id || "");
-        handleEditBooking(req.appointmentId._id)
-      }
+    if (location.state && (location.state as any).sessionEditRequest) {
+      const req = (location.state as any).sessionEditRequest;
+      setIsSessionEditRequest(true);
+      setSessionEditRequestId(req._id || "");
+      handleEditBooking(req.appointmentId._id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.state]);
 
   type DaySlotSummary = {
@@ -189,11 +190,10 @@ export default function AppointmentBookingSystemNew() {
 
   const [guideOpen, setGuideOpen] = useState(false);
 
-  // --- LOAD API DATA ---
   useEffect(() => {
     setApiLoading(true);
     setApiError(null);
-    setPatients([]); setTherapists([]); setTherapies([]); setPackages([]); 
+    setPatients([]); setTherapists([]); setTherapies([]); setPackages([]);
     setCoupons([]);
     let endpoint = import.meta.env.VITE_API_URL || (window as any).VITE_API_URL;
     if (endpoint) endpoint = endpoint.replace(/\/$/, "");
@@ -215,31 +215,19 @@ export default function AppointmentBookingSystemNew() {
         setCoupons(couponArr);
         setApiLoading(false);
       })
-      .catch(() => { 
-        setApiError("Could not load booking data."); setApiLoading(false); });
+      .catch(() => {
+        setApiError("Could not load booking data."); setApiLoading(false);
+      });
   }, []);
 
-  function fetchAllBookings() {
-    setBookingsLoading(true);
-    setBookingsError(null);
-    let endpoint = import.meta.env.VITE_API_URL || (window as any).VITE_API_URL;
-    if (endpoint) endpoint = endpoint.replace(/\/$/, "");
-    fetch(`${endpoint}/api/admin/bookings`)
-      .then(async res => {
-        if (!res.ok) throw new Error("Could not fetch bookings.");
-        const data = await res.json();
-        console.log(data?.bookings);
-        setBookings(data?.bookings || []);
-        setBookingsLoading(false);
-      })
-      .catch(() => {
-        setBookingsError("Error loading bookings.");
-        setBookingsLoading(false);
-      })
-  }
-  useEffect(() => {
-    fetchAllBookings();
-  }, []);
+
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  // const [setFetchBooking, fetchBooking] = useState<boolean>(false);
+  const [bookingsLoading, setBookingsLoading] = useState<boolean>(false);
+  const [bookingsError, setBookingsError] = useState<string | null>(null);
+  
+
+
 
   // Build monthly slot summary
   useEffect(() => {
@@ -255,7 +243,7 @@ export default function AppointmentBookingSystemNew() {
       const therapistsBookedSlots: { [therapistId: string]: string[] } = {};
 
       for (const t of therapists) {
-        if (jsDate.getDay() === 0) { // SUNDAY: closed
+        if (jsDate.getDay() === 0) {
           therapistsBookedSlots[t._id] = [];
           continue;
         }
@@ -304,7 +292,6 @@ export default function AppointmentBookingSystemNew() {
     setMonthlySlotSummary(summary);
   }, [therapists, year, month, daysInMonth]);
 
-  // Booked slot info per row for table
   useEffect(() => {
     const mapping: { [key: string]: string[] } = {};
     for (const s of sessions) {
@@ -346,7 +333,6 @@ export default function AppointmentBookingSystemNew() {
     }
   }, [packageId, maxSelectableDates, sessions.length]);
 
-  // Calendar utils
   const changeMonth = (dir: "prev" | "next") => {
     if (dir === "prev") {
       if (month === 0) {
@@ -373,24 +359,25 @@ export default function AppointmentBookingSystemNew() {
       booked: daySummary.bookedSlots,
       limitedTotal: daySummary.totalLimitedAvailableSlots,
       limitedBooked: daySummary.limitedBookedSlots
-    }
+    };
   }
 
-  // --------------------------
-  // Toggle Date: allow multiple picking for the same date (as different session lines)
+  // Correctly create per-session therapyTypeId as a therapy object
   const toggleDate = (day: number) => {
     const dateKey = getDateKey(year, month + 1, day);
 
-    // Only limit if exceeding package session count
     if (
       typeof maxSelectableDates === "number" &&
       sessions.length >= maxSelectableDates
     ) return;
 
-    // Construct therapyTypeId following the BookingSession type, which expects an object if per-session types are allowed
     let therapyTypeObj: { _id: string; name: string } | undefined = undefined;
     if (therapyId) {
-      therapyTypeObj = { _id: therapyId, name: "" };
+      const therapyObj = therapies.find((t) => t._id === therapyId);
+      therapyTypeObj = {
+        _id: therapyId,
+        name: (therapyObj && therapyObj.name) || "",
+      };
     }
 
     setSessions((prev) => [
@@ -406,10 +393,9 @@ export default function AppointmentBookingSystemNew() {
 
   // Prevent duplicate time slot for a date
   const updateSlotId = (date: string, slotId: string, idx: number) => {
-    setSessions((prev) => {
-      return prev.map((s, i) => {
+    setSessions((prev) =>
+      prev.map((s, i) => {
         if (i === idx) {
-          // Check: this date's slotId should not match another ACTIVE for this date
           const isDuplicate = prev.some(
             (other, oi) => oi !== idx && other.date === date && other.slotId === slotId
           );
@@ -420,8 +406,8 @@ export default function AppointmentBookingSystemNew() {
           return { ...s, slotId };
         }
         return s;
-      });
-    });
+      })
+    );
   };
 
   // Per-row therapist selection
@@ -431,22 +417,24 @@ export default function AppointmentBookingSystemNew() {
     );
   };
 
-  // Per-row therapytype selection
+  // Per-row therapyType (session) selection: set full therapy object as .therapyTypeId
   const updateSessionTherapyType = (idx: number, newTherapyTypeId: string) => {
     setSessions((prev) =>
-      prev.map((s, i) =>
-        i === idx
-          ? {
-              ...s,
-              // Ensure therapyTypeId is full object matching BookingSession type
-              therapyTypeId: { _id: newTherapyTypeId, name: "" } as { _id: string; name: string },
-            }
-          : s as typeof s
-      ) as typeof prev
+      prev.map((s, i) => {
+        if (i === idx) {
+          let therapyObj = therapies.find((t) => t._id === newTherapyTypeId);
+          return {
+            ...s,
+            therapyTypeId: therapyObj
+              ? { _id: therapyObj._id, name: therapyObj.name }
+              : { _id: newTherapyTypeId, name: "" }
+          };
+        }
+        return s;
+      })
     );
   };
 
-  // NEW: For removing a session row from the table
   const removeSession = (removeIdx: number) => {
     setSessions((prev) => prev.filter((_, idx) => idx !== removeIdx));
   };
@@ -458,13 +446,17 @@ export default function AppointmentBookingSystemNew() {
   }
   const earliestSession = getFirstSessionEarliest(sessions);
 
-  // Now, time slot must be set for first session; no "same time" check, since allowed multi for date.
   const canBook = Boolean(selectedPatient) && Boolean(selectedPackage) &&
     sessions.length > 0 && Boolean(earliestSession && earliestSession.slotId) &&
     sessions.every((s, idx, arr) =>
       !arr.some((os, oidx) => oidx !== idx && s.date === os.date && s.slotId === os.slotId)
     ) &&
-    sessions.every((s) => s.therapyTypeId); // Must pick Therapy Type now per session
+    sessions.every((s) =>
+      !!(
+        (typeof s.therapyTypeId === "object" && s.therapyTypeId && (s.therapyTypeId as any)._id && (s.therapyTypeId as any).name) ||
+        (typeof s.therapyTypeId === "string" && s.therapyTypeId)
+      )
+    );
 
   function getPatientDisplayName(patient: Patient | undefined | null) {
     if (!patient) return "";
@@ -514,25 +506,42 @@ export default function AppointmentBookingSystemNew() {
         patient: selectedPatient?.id,
         therapy: selectedTherapy?._id,
         package: selectedPackage?._id,
-        therapist: selectedTherapist?._id, // for reference top-level
-        sessions: sessions.map(sess => ({
-          date: sess.date,
-          slotId: sess.slotId,
-          therapistId: sess.therapistId || selectedTherapist?._id,
-          therapyTypeId: sess.therapyTypeId || therapyId
-        })),
+        therapist: selectedTherapist?._id,
+        sessions: sessions.map(sess => {
+          let therapyTypeIdValue;
+          if (typeof sess.therapyTypeId === "object" && sess.therapyTypeId && (sess.therapyTypeId as any)._id) {
+            therapyTypeIdValue = sess.therapyTypeId;
+          } else if (typeof sess.therapyTypeId === "string") {
+            const therapyObj = therapies.find((t) => t._id === sess.therapyTypeId);
+            therapyTypeIdValue = therapyObj
+              ? { _id: therapyObj._id, name: therapyObj.name }
+              : { _id: sess.therapyTypeId, name: "" };
+          } else {
+            therapyTypeIdValue = therapyId
+              ? (() => {
+                const therapyObj = therapies.find((t) => t._id === therapyId);
+                return therapyObj
+                  ? { _id: therapyObj._id, name: therapyObj.name }
+                  : { _id: therapyId, name: "" };
+              })()
+              : "";
+          }
+          return {
+            date: sess.date,
+            slotId: sess.slotId,
+            therapistId: sess.therapistId || selectedTherapist?._id,
+            therapyTypeId: therapyTypeIdValue,
+          };
+        }),
         coupon: appliedCoupon?._id ?? null,
         bookingRequestId,
         isBookingRequest,
         isSessionEditRequest,
         sessionEditRequestId,
-        remark: remark, // ADD REMARK TO BODY
+        remark: remark,
       };
 
-      console.log(body);
-
       if (!editBookingId) {
-        // CREATE NEW BOOKING
         const resp = await fetch(`${endpoint}/api/admin/bookings`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -556,7 +565,7 @@ export default function AppointmentBookingSystemNew() {
         setBookingSuccess("Booking successfully updated.");
       }
       resetForm();
-      fetchAllBookings();
+      setBookingLoading(!bookingLoading);
     } catch (error: any) {
       setBookingError(error?.message || "Failed to submit booking.");
     } finally {
@@ -566,12 +575,15 @@ export default function AppointmentBookingSystemNew() {
   };
 
   function handleEditBooking(bookingId: string) {
+    // Scroll to top when editing a booking
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
     setEditBookingId(bookingId);
     setBookingError(null);
     setBookingSuccess(null);
     const booking = bookings.find(b => b._id === bookingId);
     if (booking) {
-      // Determine the correct therapist id (string)
       const mainTherapistId =
         (typeof booking.therapist === "string" && booking.therapist) ||
         ((booking.therapist as any)?._id) || "";
@@ -587,16 +599,33 @@ export default function AppointmentBookingSystemNew() {
       setPackageId((booking.package as any)?._id || "");
       setSessions(
         Array.isArray(booking.sessions)
-          ? booking.sessions.map((s) => ({
-              date: s.date,
-              slotId: s.slotId ?? "",
-              therapistId:
-                s.therapistId ||
-                (s.therapist && typeof s.therapist === "object" && s.therapist._id) ||
-                (s.therapist && typeof s.therapist === "string" ? s.therapist : "") ||
-                mainTherapistId,
-              therapyTypeId: s.therapyTypeId?._id || (booking.therapy as any)?._id || "" // fallback
-            }))
+          ? booking.sessions.map((s) => {
+              // Set therapyTypeId as a proper object
+              let therapyTypeObj;
+              if (typeof s.therapyTypeId === "object") {
+                therapyTypeObj = s.therapyTypeId && s.therapyTypeId._id
+                  ? { _id: s.therapyTypeId._id, name: s.therapyTypeId.name || "" }
+                  : { _id: "", name: "" };
+              } else if (typeof s.therapyTypeId === "string") {
+                const foundTherapy = therapies.find((tt) => tt._id === s.therapyTypeId);
+                therapyTypeObj = foundTherapy
+                  ? { _id: foundTherapy._id, name: foundTherapy.name }
+                  : { _id: s.therapyTypeId, name: "" };
+              } else {
+                const bTherapy = typeof booking.therapy === "object" && booking.therapy._id ? booking.therapy : undefined;
+                therapyTypeObj = bTherapy ? { _id: bTherapy._id, name: bTherapy.name || "" } : { _id: "", name: "" };
+              }
+              return {
+                date: s.date,
+                slotId: s.slotId ?? "",
+                therapistId:
+                  s.therapistId ||
+                  (s.therapist && typeof s.therapist === "object" && s.therapist._id) ||
+                  (s.therapist && typeof s.therapist === "string" ? s.therapist : "") ||
+                  mainTherapistId,
+                therapyTypeId: therapyTypeObj,
+              };
+            })
           : []
       );
       let couponObj: any = null;
@@ -611,7 +640,6 @@ export default function AppointmentBookingSystemNew() {
       setCouponInput(couponObj?.couponCode || "");
       setCouponStatus(couponObj ? "valid" : null);
 
-      // ADD: Load remark into form when editing
       setRemark(booking.remark || "");
     }
     setRepeatDay(""); setRepeatStartDate(""); setRepeatSlotId("");
@@ -637,7 +665,9 @@ export default function AppointmentBookingSystemNew() {
       }
       toast.success("Booking deleted.");
       if (editBookingId === id) resetForm();
-      fetchAllBookings();
+      setBookingLoading(!bookingLoading);
+
+
     } catch (e: any) {
       toast.error(e?.message || "Failed to delete booking.");
     } finally {
@@ -653,10 +683,9 @@ export default function AppointmentBookingSystemNew() {
     setRepeatError(null); setRepeatConflictInfo({});
     setBookedSlotsPerRow({});
     setCouponInput(""); setAppliedCoupon(null); setCouponStatus(null);
-    setRemark(""); // clear remark on reset
+    setRemark("");
   }
 
-  // Coupon logic
   function handleCouponApply() {
     if (!couponInput.trim()) {
       setCouponStatus(null);
@@ -680,7 +709,6 @@ export default function AppointmentBookingSystemNew() {
     setCouponInput(""); setAppliedCoupon(null); setCouponStatus(null);
   }
 
-  // Session slot logic (unchanged)
   function getAvailableSlotsForDate(
     date: string,
     selectedSessions: { date: string; slotId: string; therapistId?: string }[],
@@ -688,9 +716,7 @@ export default function AppointmentBookingSystemNew() {
     currRowTherapistId?: string,
     currRowIsEdit?: boolean
   ) {
-    console.log( selectedSessions,
-      currSelectedSlotId,currRowIsEdit)
-    // Defensive fix: if therapists array is empty, return all slots disabled
+    console.log(selectedSessions,currSelectedSlotId,currRowIsEdit);
     if (!therapists || therapists.length === 0) {
       const disabledAll: { [slotId: string]: { disabled: boolean; reason: string } } = {};
       SESSION_TIME_OPTIONS.forEach(opt => {
@@ -698,7 +724,6 @@ export default function AppointmentBookingSystemNew() {
       });
       return disabledAll;
     }
-    // Find the therapist
     let therapist: Therapist | undefined = undefined;
     if (currRowTherapistId) {
       therapist = therapists.find(t => t._id === currRowTherapistId);
@@ -729,7 +754,7 @@ export default function AppointmentBookingSystemNew() {
     );
     if (isFullDayHoliday) {
       SESSION_TIME_OPTIONS.forEach(opt => {
-        slotInfo[opt.id] = { disabled: true, reason: "Holiday" };
+        slotInfo[opt.id] = { disabled: true, reason: "Unavailable Slot" };
       });
       return slotInfo;
     }
@@ -761,7 +786,7 @@ export default function AppointmentBookingSystemNew() {
     }
     for (const slot of SESSION_TIME_OPTIONS) {
       if (slotsOut.includes(slot.id)) {
-        slotInfo[slot.id] = { disabled: true, reason: "Holiday slot" };
+        slotInfo[slot.id] = { disabled: true, reason: "Unavailable slot" };
       } else if (booked.includes(slot.id)) {
         slotInfo[slot.id] = { disabled: true, reason: "Already booked" };
       } else if (slot.limited && limitedSlotsLeft <= 0) {
@@ -831,7 +856,19 @@ export default function AppointmentBookingSystemNew() {
       if (slotInfo[repeatSlotId].disabled) {
         conflicts[date] = slotInfo[repeatSlotId].reason || "Slot unavailable";
       } else {
-        validSessions.push({ date, slotId: repeatSlotId, therapistId: selectedTherapist._id });
+        let therapyTypeObj: { _id: string; name: string } | undefined = undefined;
+        if (therapyId) {
+          const th = therapies.find((t) => t._id === therapyId);
+          therapyTypeObj = th
+            ? { _id: th._id, name: th.name }
+            : { _id: therapyId, name: "" };
+        }
+        validSessions.push({
+          date,
+          slotId: repeatSlotId,
+          therapistId: selectedTherapist._id,
+          ...(therapyTypeObj ? { therapyTypeId: therapyTypeObj } : {}),
+        });
       }
     }
     setRepeatConflictInfo(conflicts);
@@ -842,6 +879,7 @@ export default function AppointmentBookingSystemNew() {
       setRepeatError(null);
     }
   }
+
   function handleRepeatClear() {
     setRepeatDay(""); setRepeatStartDate(""); setRepeatSlotId(""); setRepeatError(null); setRepeatConflictInfo({}); setSessions([]);
   }
@@ -860,7 +898,6 @@ export default function AppointmentBookingSystemNew() {
     resetForm();
   }
 
-  // --- PAYMENT HANDLER
   async function handleCollectPayment(booking: Booking) {
     if (!booking || !booking._id) return;
     if (!window.confirm("Confirm collect payment for this booking?")) return;
@@ -877,7 +914,9 @@ export default function AppointmentBookingSystemNew() {
         throw new Error(err?.message || "Payment collection failed.");
       }
       toast.success("Payment marked as collected.");
-      fetchAllBookings();
+      setBookingLoading(!bookingLoading);
+
+
     } catch (err: any) {
       toast.error(err?.message || "Payment collection failed.");
     } finally {
@@ -946,7 +985,7 @@ export default function AppointmentBookingSystemNew() {
             if (currentBooking && currentBooking.appointmentId) {
               return (
                 <div className="mb-3">
-                  <label className="block text-sm mb-1 flex items-center gap-1 text-gray-700 font-semibold"><FiHash /> Appointment ID</label>
+                  <label className="block text-sm mb-1 flex items-center gap-1 text-gray-700 font-semibold"><FiHash />Booking ID</label>
                   <input
                     type="text"
                     value={currentBooking.appointmentId}
@@ -1076,8 +1115,8 @@ export default function AppointmentBookingSystemNew() {
               getAvailableSlotsForDate={getAvailableSlotsForDate}
               bookedSlotsPerRow={bookedSlotsPerRow}
               selectedTherapist={selectedTherapist}
-              repeatConflictInfo={repeatConflictInfo}
-              removeSession={removeSession} 
+              // repeatConflictInfo={repeatConflictInfo}
+              removeSession={removeSession}
             />
           )}
           {selectedPackage && (
@@ -1136,6 +1175,9 @@ export default function AppointmentBookingSystemNew() {
       </div>
       <BookingSummary
         bookings={bookings}
+        setBookings={setBookings}
+        setBookingsLoading={setBookingsLoading}
+        setBookingsError={setBookingsError}
         getTherapistObject={getTherapistObject}
         editBookingId={editBookingId}
         getPatientDisplayName={getPatientDisplayName}
@@ -1236,7 +1278,6 @@ function CalendarPanel({
   year, month, changeMonth, startDay, daysInMonth,
   sessions, toggleDate, getDaySlotSummary, maxSelectableDates
 }: any) {
-  // Highlight if multiple sessions present for a date
   const getSessionCountForDate = (dateKey: string) =>
     sessions.filter((s: any) => s.date === dateKey).length;
 
@@ -1425,13 +1466,12 @@ function RepeatWeeklyPanel({ repeatDay, setRepeatDay, repeatStartDate, setRepeat
   );
 }
 
-// --- The core new Session Table ---
-// ADDED: removeSession prop, X icon & logic for row removal
 function SessionDatesTimesTable({
   sessions, updateSlotId, updateSessionTherapist, updateSessionTherapyType, editBookingId,
   therapists, therapistId, therapies, therapyId, SESSION_TIME_OPTIONS,
   getAvailableSlotsForDate, bookedSlotsPerRow,
-   removeSession
+  // repeatConflictInfo,
+  removeSession
 }: any) {
   return (
     <div className="space-y-3 mb-4">
@@ -1440,13 +1480,10 @@ function SessionDatesTimesTable({
         <table className="min-w-[680px] w-fit border-collapse text-xs">
           <thead>
             <tr>
-              {/* Add extra header for X (remove) column */}
-              
               <th className="px-2 py-1 border border-slate-200 bg-slate-100 font-semibold text-left">Date</th>
               <th className="px-2 py-1 border border-slate-200 bg-slate-100 font-semibold text-left"><FiClock className="inline mr-1" />Time Slot</th>
               <th className="px-2 py-1 border border-slate-200 bg-slate-100 font-semibold text-left"><FiUser className="inline mr-1" />Therapist</th>
               <th className="px-2 py-1 border border-slate-200 bg-slate-100 font-semibold text-left"><FiTag className="inline mr-1" />Therapy Type</th>
-              {/* <th className="px-2 py-1 border border-slate-200 bg-slate-100"></th> */}
               <th className="px-2 py-1 border border-slate-200 bg-slate-100"></th>
             </tr>
           </thead>
@@ -1470,12 +1507,24 @@ function SessionDatesTimesTable({
                   }
                 }
                 const bookedSlotsForRow = (bookedSlotsPerRow && bookedSlotsPerRow[`${s.date}:${rowTherapistId}`]) ? bookedSlotsPerRow[`${s.date}:${rowTherapistId}`] : [];
-                // For time slot duplicate highlight
                 const duplicateSlot = arr.some((other, otherIdx) => otherIdx !== idx && s.date === other.date && s.slotId && s.slotId === other.slotId);
+
+                // For therapyTypeId, support both object or string for backward compatibility
+                let therapyTypeIdVal: string = "";
+                // let therapyNameVal: string = "";
+                if (s.therapyTypeId && typeof s.therapyTypeId === "object" && (s.therapyTypeId as any)._id) {
+                  therapyTypeIdVal = (s.therapyTypeId as any)._id;
+                  // therapyNameVal = (s.therapyTypeId as any).name;
+                } else if (typeof s.therapyTypeId === "string") {
+                  therapyTypeIdVal = s.therapyTypeId;
+                  // therapyNameVal = therapies.find((t: Therapy) => t._id === therapyTypeIdVal)?.name || "";
+                } else {
+                  therapyTypeIdVal = therapyId;
+                  // therapyNameVal = therapies.find((t: Therapy) => t._id === therapyId)?.name || "";
+                }
+
                 return (
                   <tr key={s.date + ':' + idx} className="text-sm">
-                    {/* Add remove (X) icon button column */}
-               
                     <td className="px-2 py-1 border border-slate-200 font-mono">{s.date}</td>
                     <td className="px-2 py-1 border border-slate-200 whitespace-nowrap">
                       <select
@@ -1495,7 +1544,6 @@ function SessionDatesTimesTable({
                             labelContent += " - Already Booked";
                           else if (i.disabled && i.reason)
                             labelContent += `  - ${i.reason}`;
-                          // Prevent choosing a slot that would duplicate in another session for this date
                           const slotTakenBySelf = arr.some((other, otherIdx) => otherIdx !== idx && other.date === s.date && other.slotId === slot.id);
                           return (
                             <option
@@ -1540,7 +1588,7 @@ function SessionDatesTimesTable({
                     </td>
                     <td className="px-2 py-1 border border-slate-200 whitespace-nowrap">
                       <select
-                        value={s.therapyTypeId || therapyId}
+                        value={therapyTypeIdVal}
                         onChange={e => updateSessionTherapyType(idx, e.target.value)}
                         className="border rounded px-2 py-1 min-w-[150px]"
                         required
@@ -1553,13 +1601,6 @@ function SessionDatesTimesTable({
                         ))}
                       </select>
                     </td>
-                    {/* <td className="px-2 py-1 border border-slate-200 whitespace-nowrap">
-                      {repeatConflictInfo && repeatConflictInfo[s.date] && (
-                        <span className="inline-block text-xs text-red-600">
-                          {repeatConflictInfo[s.date]}
-                        </span>
-                      )}
-                    </td> */}
                     <td className="px-2 py-1 border border-slate-200 whitespace-nowrap text-center">
                       <button
                         type="button"
@@ -1640,18 +1681,136 @@ function PricingSummary({ selectedPackage, getTotalSessionsForPackage, appliedCo
   );
 }
 
-function BookingSummary({ bookings, getTherapistObject, editBookingId, getPatientDisplayName, getPackageDisplay, SESSION_TIME_OPTIONS, handleEditBooking, handleDeleteBooking, handleCollectPayment, paymentLoadingBookingId }: any) {
+
+// --- Enhanced BookingSummary Component with Search, Filter, Pagination ---
+// (Does NOT update parent booking state. Internal UI/query state only.)
+
+
+
+// -- Utility (can pull from constants elsewhere if needed) --
+const PAGE_SIZE_OPTIONS = [5, 15, 25, 50];
+
+/**
+ * BookingSummary with ALL available booking query filters
+ * Filters implemented according to booking.controller.js (536-849)
+ *
+ * Supported filters:
+ * - search (multi-field fuzzy, backend handles this)
+ * - status (pending/paid/cancelled/completed)
+ * - therapist (id, Therapist ID/Name)
+ * - patient (id, Patient ID/Name/Phone)
+ * - package (id, Package ID/Name)
+ * - therapy (id, Therapy ID/Name)
+ * - sessionDate (session scheduled on this yyyy-mm-dd)
+ * - paymentStatus (paid/unpaid)
+ * - hasDiscount (yes/no)
+ * - discountCode (coupon code, exact)
+ * - minTotal / maxTotal (price range)
+ * - createdFrom / createdTo (Date ISO, for creation date)
+ */
+function BookingSummary({
+  getTherapistObject,
+  editBookingId,
+  getPatientDisplayName,
+  getPackageDisplay,
+  SESSION_TIME_OPTIONS,
+  handleEditBooking,
+  handleDeleteBooking,
+  handleCollectPayment,
+  paymentLoadingBookingId,
+}: any) {
+  const [bookings, setBookings] = useState<any[]>([]);
+  const [bookingsLoading, setBookingsLoading] = useState(false);
+  const [bookingsError, setBookingsError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
+  const [total, setTotal] = useState(0);
+
+  // Table pagination logic
+  const totalPages = Math.ceil(total / pageSize);
+
+  function fetchBookings() {
+    setBookingsLoading(true);
+    setBookingsError(null);
+    let endpoint = import.meta.env.VITE_API_URL || (window as any).VITE_API_URL;
+    if (endpoint) endpoint = endpoint.replace(/\/$/, "");
+    // No search or filters in this version; fetch all with paging only
+    const params = new URLSearchParams();
+    params.append("page", String(page));
+    params.append("pageSize", String(pageSize));
+
+    fetch(`${endpoint}/api/admin/bookings?${params.toString()}`)
+      .then(async (res) => {
+        if (!res.ok) throw new Error("Could not fetch bookings.");
+        const data = await res.json();
+        setBookings(data?.bookings || []);
+        setTotal(data?.total || 0);
+        setBookingsLoading(false);
+      })
+      .catch(() => {
+        setBookingsError("Error loading bookings.");
+        setBookingsLoading(false);
+      });
+  }
+
+  // Auto-fetch on page/pageSize change
+  useEffect(() => {
+    fetchBookings();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, pageSize]);
+
+  // Render: No search/filter UI, just pagination and booking list
   return (
     <div className="mt-6">
       <div className="bg-white border rounded-lg p-4 text-sm">
-        <p className="font-medium mb-2">Booking Summary</p>
-        {bookings && bookings.length === 0 ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+          <p className="font-medium">Booking Summary</p>
+        </div>
+
+        {/* Pagination Controls */}
+        <div className="flex flex-wrap items-center justify-between py-2">
+          <span className="text-xs text-slate-500">
+            Total: <b>{total}</b>
+          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-slate-400">Rows:</span>
+            <select
+              value={pageSize}
+              onChange={e => {
+                setPageSize(Number(e.target.value));
+                setPage(1);
+              }}
+              className="border text-xs px-1 py-0.5 rounded"
+            >
+              {PAGE_SIZE_OPTIONS.map(opt => (
+                <option value={opt} key={opt}>{opt}</option>
+              ))}
+            </select>
+            <button
+              className="px-2 py-1 text-xs border rounded border-slate-300"
+              disabled={page === 1 || bookingsLoading}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+            >Prev</button>
+            <span className="text-xs">{page} / {Math.max(totalPages, 1)}</span>
+            <button
+              className="px-2 py-1 text-xs border rounded border-slate-300"
+              disabled={page >= totalPages || bookingsLoading}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            >Next</button>
+          </div>
+        </div>
+        {/* Booking Results */}
+        {bookingsLoading ? (
+          <div className="text-center py-12 text-slate-400 text-base">Loading bookings…</div>
+        ) : bookingsError ? (
+          <div className="text-red-600 p-3">{bookingsError}</div>
+        ) : bookings && bookings.length === 0 ? (
           <div>
             <p className="text-slate-500 mb-3">No bookings found.</p>
           </div>
         ) : (
           <div className="flex flex-col gap-4">
-            {bookings.map((booking: Booking) => {
+            {bookings.map((booking: any) => {
               const therapistObj = getTherapistObject(booking);
               const isPaid = booking.payment?.status === "paid";
               return (
@@ -1665,7 +1824,7 @@ function BookingSummary({ bookings, getTherapistObject, editBookingId, getPatien
                 >
                   {booking.appointmentId && (
                     <div className="mb-1 flex items-center gap-2 text-xs font-mono text-gray-700">
-                      <FiHash className="text-blue-500" /> <span>Appointment ID: {booking.appointmentId}</span>
+                      <FiHash className="text-blue-500" /> <span>Booking ID: {booking.appointmentId}</span>
                     </div>
                   )}
                   {therapistObj && (
@@ -1741,16 +1900,15 @@ function BookingSummary({ bookings, getTherapistObject, editBookingId, getPatien
                             </tr>
                           </thead>
                           <tbody>
-                            {booking.sessions.map((s: BookingSession, idx: number) => {
+                            {booking.sessions.map((s: any, idx: number) => {
                               const slot = SESSION_TIME_OPTIONS.find((opt: any) => opt.id === s.slotId);
+
                               const tObj = s.therapist;
-                              // Extract the therapy type (prefer s.therapyType.name, fallback to s.therapyTypeId)
                               const therapy =
                                 (s && typeof s.therapyTypeId === "object" && s.therapyTypeId)
                                   ? s.therapyTypeId
                                   : (typeof s.therapyType === "string" ? s.therapyType : undefined);
 
-                                  console.log(s);
                               return (
                                 <tr key={s._id || s.date + "-" + idx}>
                                   <td className="px-2 py-1 border border-slate-200 text-slate-400">{idx + 1}</td>
@@ -1766,17 +1924,18 @@ function BookingSummary({ bookings, getTherapistObject, editBookingId, getPatien
                                   <td className="px-2 py-1 border border-slate-200 whitespace-nowrap">
                                     {tObj
                                       ? <>
-                                          {tObj && tObj.userId.name}
+                                          {/* Try tObj.userId.name if present, otherwise name */}
+                                          {tObj.userId?.name || tObj.name}
                                           {tObj.therapistId ? ` (${tObj.therapistId})` : ""}
                                         </>
                                       : <span className="text-gray-400">—</span>}
                                   </td>
                                   <td className="px-2 py-1 border border-slate-200 whitespace-nowrap">
-                                  {typeof therapy === "object" && therapy && "name" in therapy
-                                    ? therapy.name
-                                    : typeof therapy === "string"
-                                      ? therapy
-                                      : <span className="text-gray-400">—</span>}
+                                    {typeof therapy === "object" && therapy && "name" in therapy
+                                      ? therapy.name
+                                      : typeof therapy === "string"
+                                        ? therapy
+                                        : <span className="text-gray-400">—</span>}
                                   </td>
                                 </tr>
                               );
@@ -1786,21 +1945,7 @@ function BookingSummary({ bookings, getTherapistObject, editBookingId, getPatien
                       </div>
                     </details>
                   )}
-                  {booking.discountInfo && booking.discountInfo.coupon && booking.discountInfo.coupon.discountEnabled && (
-                    <div className="mb-1 text-xs text-blue-700">
-                      Discount: <span className="font-semibold">
-                        {booking.discountInfo.coupon.discount}%
-                      </span>
-                      {" "}
-                      (Coupon: <span className="font-mono">
-                        {booking.discountInfo.coupon.couponCode}
-                      </span>
-                        {booking.discountInfo.coupon.validityDays && (
-                          <> {` - valid ${booking.discountInfo.coupon.validityDays}d`}</>
-                        )}
-                      )
-                    </div>
-                  )}
+                  {/* Removed discountInfo.coupon.discountEnabled UI */}
                   <div className="flex gap-2 mt-2">
                     <button
                       className="text-xs rounded px-2 py-1 border border-blue-400 text-blue-700 hover:bg-blue-50 flex items-center gap-1"
