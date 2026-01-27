@@ -5,7 +5,6 @@ import "react-toastify/dist/ReactToastify.css";
 // import SignIn from "./pages/SuperAdminPages/AuthPages/SignIn";
 
 import NotFound from "./pages/SuperAdminPages/OtherPage/NotFound";
-import UserProfiles from "./pages/SuperAdminPages/UserProfiles";
 import Videos from "./pages/SuperAdminPages/UiElements/Videos";
 import Images from "./pages/SuperAdminPages/UiElements/Images";
 import Alerts from "./pages/SuperAdminPages/UiElements/Alerts";
@@ -83,6 +82,8 @@ import CompleteProfilePage from "./pages/TherapistPages/IncompleteProfile/Comple
 import ApprovalPending from "./pages/TherapistPages/IncompleteProfile/ApprovalPending";
 import ParentSignUp from "./pages/ParentPages/ParentSignUp/ParentSignUpp";
 import ParentCompleteProfile from "./pages/ParentPages/ParentSignUp/ParentCompleteProfile";
+import SuperAdminProfile from "./pages/SuperAdminPages/ProfilePage/SuperAdminProfile";
+import LogOutSuperAdmin from "./pages/SuperAdminPages/LogOutSuperAdmin";
 
 
 export default function App() {
@@ -133,8 +134,10 @@ export default function App() {
             <Route path="/super-admin/children" element={<PatientsPage/>} />
 
 
+
             {/* Others Page */}
-            <Route path="/super-admin/profile" element={<UserProfiles />} />
+            <Route path="/super-admin/profile" element={<SuperAdminProfile />} />
+            <Route path="/super-admin/logout" element={<LogOutSuperAdmin />} />
             <Route path="/calendar" element={<Calendar />} />
             <Route path="/blank" element={<Blank />} />
 

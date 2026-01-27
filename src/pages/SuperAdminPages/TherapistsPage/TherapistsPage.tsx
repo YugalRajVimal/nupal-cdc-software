@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import {
   FiUser,
-  FiTrash2,
+  // FiTrash2, // Remove unused icon
   FiEye,
   FiChevronLeft,
   FiChevronRight,
@@ -420,31 +420,7 @@ export default function SuperAdminTherapistsPage() {
     }
   }
 
-  async function handleDeleteTherapist(id: string) {
-    if (!window.confirm("Are you sure you want to delete this therapist?")) return;
-    setLoading(true);
-    setError(null);
-    try {
-      await axios.delete(
-        `${API_BASE_URL.replace(/\/$/, "")}/api/admin/therapist/${id}`
-      );
-      await fetchTherapists(search, page, limit);
-      if (selectedId === id) {
-        setSelectedId(null);
-        setSelectedProfile(null);
-      }
-    } catch (err: any) {
-      let msg = "Error removing therapist.";
-      if (err?.response?.data?.message) {
-        msg = err.response.data.message;
-      } else if (err?.message) {
-        msg = err.message;
-      }
-      setError(msg);
-    } finally {
-      setLoading(false);
-    }
-  }
+  // Delete feature removed
 
   // --- Therapist Pay Feature functions ---
   function openPayModal() {
@@ -712,12 +688,7 @@ export default function SuperAdminTherapistsPage() {
             >
               {selected.isPanelAccessible ? "Revoke Panel Access" : "Grant Panel Access"}
             </button>
-            <button
-              className="px-4 py-1 bg-red-100 text-red-700 rounded flex items-center gap-1"
-              onClick={() => handleDeleteTherapist(selected._id)}
-            >
-              <FiTrash2 /> Delete
-            </button>
+            {/* Delete button removed */}
             <button
               className="px-4 py-1 bg-blue-100 text-blue-700 rounded "
               onClick={() => {

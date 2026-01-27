@@ -1,17 +1,19 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import {
   FiUser,
-  FiTrash2,
   FiEye,
   FiSearch,
 } from "react-icons/fi";
 import { motion } from "framer-motion";
 import axios from "axios";
 
-// The schema fields from @user.schema.js, expanded exhaustively as per fields in the original file.
+// New: for reading query params
+// function useQuery() {
+//   return new URLSearchParams(window.location.search);
+// }
+
 const API_BASE_URL = import.meta.env.VITE_API_URL || "";
 
-// Full data shape reflecting @user.schema.js (1-134) as inferred from given context and typical sources.
 type TherapistProfile = {
   _id: string;
   userId?: {
@@ -202,9 +204,6 @@ function CalendarInput({
   );
 }
 
-// ----------- FILTER & PAGINATION CONSTANTS -------------
-// const PAGE_SIZE_DEFAULT = 20;
-
 // ------------ MAIN PAGE -----------------
 export default function TherapistsPage() {
   // Table state & filters
@@ -212,9 +211,9 @@ export default function TherapistsPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(()=>{
-console.log(error);
-  },[])
+  useEffect(() => {
+    console.log(error);
+  }, []);
 
   // Modal & Edit logic
   const [editTherapist, setEditTherapist] = useState<TherapistProfile | null>(null);
@@ -227,11 +226,15 @@ console.log(error);
   const [searchCommitted, setSearchCommitted] = useState(""); // Actual text applied to data fetch
   const [page, setPage] = useState(1);
 
-  // const [total, setTotal] = useState(0);
   const [sortField, setSortField] = useState<null | string>(null);
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [totalPages, setTotalPages] = useState(1);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+
+  // --- Query param checking for therapistId
+  // This ensures the effect for auto-view fires once on mount if the param is present,
+  // but doesn't re-trigger on state changes.
+  const firstViewRef = useRef(false);
 
   // ------------- Table Fetch API Logic -----------
   const fetchTherapists = useCallback(async () => {
@@ -258,21 +261,18 @@ console.log(error);
         therapistsArr = resp.data.therapists;
       }
       setTherapists(therapistsArr);
-      // setTotal(resp.data.total || therapistsArr.length);
       setTotalPages(resp.data.totalPages || 1);
     } catch (err: any) {
       setTherapists([]);
-      // setTotal(0);
       setTotalPages(1);
       setError(
         err?.response?.data?.message ||
-        err?.message ||
-        "Error loading therapists."
+          err?.message ||
+          "Error loading therapists."
       );
     } finally {
       setLoading(false);
     }
-    // eslint-disable-next-line
   }, [page, searchCommitted, sortField, sortOrder]);
 
   // Prevent search bar value reset on table ops. (see pattern in BookingRequests.tsx)
@@ -307,6 +307,22 @@ console.log(error);
     // eslint-disable-next-line
   }, [fetchTherapists]);
 
+  // --- On mount, check for `therapistId` in query param and open that modal if possible
+  useEffect(() => {
+    if (firstViewRef.current) return;
+    const searchParams = new URLSearchParams(window.location.search);
+    const therapistId = searchParams.get("therapistId");
+    if (therapistId) {
+      firstViewRef.current = true;
+      // therapistId might be database _id or therapistId, so try both.
+      // Try to fetch therapist by that _id ("api/admin/therapist/:id") endpoint only.
+      // Let backend support both _id and therapistId for admin.
+      fetchTherapistById(therapistId);
+    }
+  // Only ever run once on mount
+  // eslint-disable-next-line
+  }, []);
+
   // ------------- MODALS & NON-Table functions (from original) -----------
 
   const fetchTherapistById = useCallback(async (id: string) => {
@@ -322,8 +338,8 @@ console.log(error);
     } catch (err: any) {
       setError(
         err?.response?.data?.message ||
-        err?.message ||
-        "Error"
+          err?.message ||
+          "Error"
       );
     } finally {
       setLoading(false);
@@ -349,8 +365,8 @@ console.log(error);
     } catch (err: any) {
       setError(
         err?.response?.data?.message ||
-        err?.message ||
-        "Failed to change disable status."
+          err?.message ||
+          "Failed to change disable status."
       );
     } finally {
       setLoading(false);
@@ -372,8 +388,8 @@ console.log(error);
     } catch (err: any) {
       setError(
         err?.response?.data?.message ||
-        err?.message ||
-        "Failed to change panel access."
+          err?.message ||
+          "Failed to change panel access."
       );
     } finally {
       setLoading(false);
@@ -390,23 +406,39 @@ console.log(error);
         ...editField,
       };
       for (const dfield of DATE_FIELDS) {
-        if (payload[dfield] && typeof payload[dfield] === "object" && payload[dfield] instanceof Date) {
+        if (
+          payload[dfield] &&
+          typeof payload[dfield] === "object" &&
+          payload[dfield] instanceof Date
+        ) {
           payload[dfield] = payload[dfield].toISOString().slice(0, 10);
         }
       }
       delete payload._id;
       delete payload.userId;
       for (const field of FIELD_LIST) {
-        if (payload[field.key] === undefined || payload[field.key] === null) {
+        if (
+          payload[field.key] === undefined ||
+          payload[field.key] === null
+        ) {
           payload[field.key] = "";
         }
-        if (field.key === "experienceYears" && payload.experienceYears !== "") {
+        if (
+          field.key === "experienceYears" &&
+          payload.experienceYears !== ""
+        ) {
           payload.experienceYears = Number(payload.experienceYears) || 0;
         }
-        if (field.key === "specializations" && Array.isArray(payload.specializations)) {
+        if (
+          field.key === "specializations" &&
+          Array.isArray(payload.specializations)
+        ) {
           payload.specializations = payload.specializations.join(", ");
         }
-        if (field.key === "specializations" && typeof payload.specializations !== "string") {
+        if (
+          field.key === "specializations" &&
+          typeof payload.specializations !== "string"
+        ) {
           payload.specializations = "";
         }
       }
@@ -422,32 +454,6 @@ console.log(error);
       let msg = "Error";
       if (err?.response?.data?.error) {
         msg = err.response.data.error;
-      } else if (err?.message) {
-        msg = err.message;
-      }
-      setError(msg);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleDeleteTherapist(id: string) {
-    if (!window.confirm("Are you sure you want to delete this therapist?")) return;
-    setLoading(true);
-    setError(null);
-    try {
-      await axios.delete(
-        `${API_BASE_URL.replace(/\/$/, "")}/api/admin/therapist/${id}`
-      );
-      await fetchTherapists();
-      if (selectedId === id) {
-        setSelectedId(null);
-        setSelectedProfile(null);
-      }
-    } catch (err: any) {
-      let msg = "Error removing therapist.";
-      if (err?.response?.data?.message) {
-        msg = err.response.data.message;
       } else if (err?.message) {
         msg = err.message;
       }
@@ -474,41 +480,70 @@ console.log(error);
           </button>
           <h2 className="text-xl font-bold mb-2">Therapist Details</h2>
           <div className="overflow-y-auto max-h-[70vh]">
-            {/* Show therapistId at the top */}
             <div className="mb-2">
-              <span className="text-xs text-slate-500 font-semibold">Therapist ID: </span>
-              <span className="text-sm text-slate-700">{selected.therapistId}</span>
+              <span className="text-xs text-slate-500 font-semibold">
+                Therapist ID:{" "}
+              </span>
+              <span className="text-sm text-slate-700">
+                {selected.therapistId}
+              </span>
             </div>
             {selected.userId && (
               <div className="mb-4 border-b pb-2 text-md">
-                <div className="font-semibold mb-1 text-slate-800">User Account</div>
+                <div className="font-semibold mb-1 text-slate-800">
+                  User Account
+                </div>
                 {Object.entries(selected.userId)
-                  .filter(([key]) =>
-                    !["_id", "authProvider", "otpAttempts", "__v"].includes(key)
+                  .filter(
+                    ([key]) =>
+                      !["_id", "authProvider", "otpAttempts", "__v"].includes(
+                        key
+                      )
                   )
                   .map(([key, val]) => (
-                    <div key={key} className="flex gap-2 text-sm text-slate-600 py-0.5">
+                    <div
+                      key={key}
+                      className="flex gap-2 text-sm text-slate-600 py-0.5"
+                    >
                       <span className="font-medium">{key}:</span>
                       <span>
-                        {typeof val === "boolean" ? (val ? "Yes" : "No") : (val ?? "-")}
+                        {typeof val === "boolean"
+                          ? val
+                            ? "Yes"
+                            : "No"
+                          : val ?? "-"}
                       </span>
                     </div>
                   ))}
-                {/* New: Display isDisabled and panelAccess states, with toggle buttons */}
                 <div className="flex gap-4 mt-3">
                   <div>
-                    <span className="font-medium text-xs text-slate-500">Status: </span>
-                    <span className="px-2 py-0.5 inline-block rounded-full text-xs font-bold"
+                    <span className="font-medium text-xs text-slate-500">
+                      Status:{" "}
+                    </span>
+                    <span
+                      className="px-2 py-0.5 inline-block rounded-full text-xs font-bold"
                       style={{
-                        backgroundColor: selected.userId.isDisabled ? "#fecaca" : "#bbf7d0",
-                        color: selected.userId.isDisabled ? "#b91c1c" : "#15803d"
-                      }}>
+                        backgroundColor: selected.userId.isDisabled
+                          ? "#fecaca"
+                          : "#bbf7d0",
+                        color: selected.userId.isDisabled
+                          ? "#b91c1c"
+                          : "#15803d",
+                      }}
+                    >
                       {selected.userId.isDisabled ? "Disabled" : "Enabled"}
                     </span>
                     <button
-                      className={`ml-2 text-xs rounded px-2 py-1 ${selected.userId.isDisabled ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'} border`}
+                      className={`ml-2 text-xs rounded px-2 py-1 ${
+                        selected.userId.isDisabled
+                          ? "bg-green-100 text-green-700"
+                          : "bg-red-100 text-red-700"
+                      } border`}
                       onClick={() =>
-                        handleToggleDisable(selected._id, !selected?.userId?.isDisabled)
+                        handleToggleDisable(
+                          selected._id,
+                          !selected?.userId?.isDisabled
+                        )
                       }
                       disabled={loading}
                     >
@@ -516,18 +551,33 @@ console.log(error);
                     </button>
                   </div>
                   <div>
-                    <span className="font-medium text-xs text-slate-500">Panel Access: </span>
-                    <span className="px-2 py-0.5 inline-block rounded-full text-xs font-bold"
+                    <span className="font-medium text-xs text-slate-500">
+                      Panel Access:{" "}
+                    </span>
+                    <span
+                      className="px-2 py-0.5 inline-block rounded-full text-xs font-bold"
                       style={{
-                        backgroundColor: selected.isPanelAccessible ? "#bbf7d0" : "#fecaca",
-                        color: selected.isPanelAccessible ? "#15803d" : "#b91c1c"
-                      }}>
+                        backgroundColor: selected.isPanelAccessible
+                          ? "#bbf7d0"
+                          : "#fecaca",
+                        color: selected.isPanelAccessible
+                          ? "#15803d"
+                          : "#b91c1c",
+                      }}
+                    >
                       {selected.isPanelAccessible ? "Granted" : "Revoked"}
                     </span>
                     <button
-                      className={`ml-2 text-xs rounded px-2 py-1 ${selected.isPanelAccessible ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'} border`}
+                      className={`ml-2 text-xs rounded px-2 py-1 ${
+                        selected.isPanelAccessible
+                          ? "bg-red-100 text-red-700"
+                          : "bg-green-100 text-green-700"
+                      } border`}
                       onClick={() =>
-                        handleTogglePanelAccess(selected._id, !selected.isPanelAccessible)
+                        handleTogglePanelAccess(
+                          selected._id,
+                          !selected.isPanelAccessible
+                        )
                       }
                       disabled={loading}
                     >
@@ -538,10 +588,13 @@ console.log(error);
               </div>
             )}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
-              {FIELD_LIST.map(f => {
+              {FIELD_LIST.map((f) => {
                 if (f.key === "therapistId") return null;
                 const value = f.render
-                  ? f.render(selected[f.key as keyof typeof selected], selected)
+                  ? f.render(
+                      selected[f.key as keyof typeof selected],
+                      selected
+                    )
                   : selected[f.key as keyof typeof selected];
                 return (
                   <div key={f.key} className="flex flex-col">
@@ -549,8 +602,9 @@ console.log(error);
                     <span className="text-base font-medium text-slate-800">
                       {value !== undefined && value !== null && value !== ""
                         ? value
-                        : (f.type === "file" ? "-" : "-")
-                      }
+                        : f.type === "file"
+                        ? "-"
+                        : "-"}
                     </span>
                   </div>
                 );
@@ -559,28 +613,44 @@ console.log(error);
           </div>
           <div className="mt-4 text-right flex justify-end gap-2">
             <button
-              className={`ml-2 text-xs px-2 py-1 rounded border ${selected.userId?.isDisabled  ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}
-              onClick={() => handleToggleDisable(selected._id, !selected.userId?.isDisabled )}
+              className={`ml-2 text-xs px-2 py-1 rounded border ${
+                selected.userId?.isDisabled
+                  ? "bg-green-100 text-green-700"
+                  : "bg-red-100 text-red-700"
+              }`}
+              onClick={() =>
+                handleToggleDisable(
+                  selected._id,
+                  !selected.userId?.isDisabled
+                )
+              }
               disabled={loading}
-              title={selected.userId?.isDisabled  ? "Enable" : "Disable"}
-              style={{marginLeft: 6}}
+              title={selected.userId?.isDisabled ? "Enable" : "Disable"}
+              style={{ marginLeft: 6 }}
             >
-              {selected.userId?.isDisabled  ? "Enable Therapist" : "Disable Therapist"}
+              {selected.userId?.isDisabled
+                ? "Enable Therapist"
+                : "Disable Therapist"}
             </button>
             <button
-              className={`ml-2 text-xs px-2 py-1 rounded border ${selected.isPanelAccessible ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}
-              onClick={() => handleTogglePanelAccess(selected._id, !selected.isPanelAccessible)}
+              className={`ml-2 text-xs px-2 py-1 rounded border ${
+                selected.isPanelAccessible
+                  ? "bg-red-100 text-red-700"
+                  : "bg-green-100 text-green-700"
+              }`}
+              onClick={() =>
+                handleTogglePanelAccess(
+                  selected._id,
+                  !selected.isPanelAccessible
+                )
+              }
               disabled={loading}
               title={selected.isPanelAccessible ? "Revoke" : "Grant"}
-              style={{marginLeft: 6}}
+              style={{ marginLeft: 6 }}
             >
-              {selected.isPanelAccessible ? "Revoke Panel Access" : "Grant Panel Access"}
-            </button>
-            <button
-              className="px-4 py-1 bg-red-100 text-red-700 rounded flex items-center gap-1"
-              onClick={() => handleDeleteTherapist(selected._id)}
-            >
-              <FiTrash2 /> Delete
+              {selected.isPanelAccessible
+                ? "Revoke Panel Access"
+                : "Grant Panel Access"}
             </button>
             <button
               className="px-4 py-1 bg-blue-100 text-blue-700 rounded "
@@ -622,13 +692,17 @@ console.log(error);
   function renderEditModal() {
     if (!editTherapist) return null;
     const isDisabled =
-      (editTherapist.userId && typeof editTherapist.userId.isDisabled === "boolean")
+      editTherapist.userId && typeof editTherapist.userId.isDisabled === "boolean"
         ? editTherapist.userId.isDisabled
-        : (typeof editTherapist.isDisabled === "boolean" ? editTherapist.isDisabled : false);
+        : typeof editTherapist.isDisabled === "boolean"
+        ? editTherapist.isDisabled
+        : false;
     const panelAccess =
-      (editTherapist.userId && typeof editTherapist.isPanelAccessible === "boolean")
+      editTherapist.userId && typeof editTherapist.isPanelAccessible === "boolean"
         ? editTherapist.isPanelAccessible
-        : (typeof editTherapist.panelAccess === "boolean" ? editTherapist.panelAccess : false);
+        : typeof editTherapist.panelAccess === "boolean"
+        ? editTherapist.panelAccess
+        : false;
     return (
       <div className="fixed inset-0 z-40 bg-white/70 flex items-center justify-center">
         <div className="relative w-full max-w-2xl mx-auto h-full flex items-center justify-center">
@@ -639,26 +713,39 @@ console.log(error);
             >
               ×
             </button>
-            <h2 className="text-lg font-bold mb-3 text-center">Edit Therapist</h2>
+            <h2 className="text-lg font-bold mb-3 text-center">
+              Edit Therapist
+            </h2>
             <div className="mb-3">
-              <label className="block text-sm mb-1 font-semibold text-slate-600">Therapist ID</label>
+              <label className="block text-sm mb-1 font-semibold text-slate-600">
+                Therapist ID
+              </label>
               <input
                 className="w-full border px-2 py-1 rounded bg-slate-100 text-slate-600"
                 value={editTherapist.therapistId}
                 readOnly
               />
             </div>
-            {/* New: Disable/Enable and Panel Access toggles */}
             <div className="mb-3 flex gap-6">
               <div className="flex items-center gap-2">
-                <span className="font-medium text-xs text-slate-500">Status: </span>
+                <span className="font-medium text-xs text-slate-500">
+                  Status:{" "}
+                </span>
                 <span
-                  className={`px-2 py-0.5 inline-block rounded-full text-xs font-bold ${isDisabled ? "bg-red-200 text-red-800" : "bg-green-200 text-green-800"}`}
+                  className={`px-2 py-0.5 inline-block rounded-full text-xs font-bold ${
+                    isDisabled
+                      ? "bg-red-200 text-red-800"
+                      : "bg-green-200 text-green-800"
+                  }`}
                 >
                   {isDisabled ? "Disabled" : "Enabled"}
                 </span>
                 <button
-                  className={`ml-2 text-xs rounded px-2 py-1 border ${isDisabled ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}
+                  className={`ml-2 text-xs rounded px-2 py-1 border ${
+                    isDisabled
+                      ? "bg-green-100 text-green-700"
+                      : "bg-red-100 text-red-700"
+                  }`}
                   type="button"
                   onClick={() =>
                     handleToggleDisable(editTherapist._id, !isDisabled)
@@ -669,14 +756,24 @@ console.log(error);
                 </button>
               </div>
               <div className="flex items-center gap-2">
-                <span className="font-medium text-xs text-slate-500">Panel Access: </span>
+                <span className="font-medium text-xs text-slate-500">
+                  Panel Access:{" "}
+                </span>
                 <span
-                  className={`px-2 py-0.5 inline-block rounded-full text-xs font-bold ${panelAccess ? "bg-green-200 text-green-800" : "bg-red-200 text-red-800"}`}
+                  className={`px-2 py-0.5 inline-block rounded-full text-xs font-bold ${
+                    panelAccess
+                      ? "bg-green-200 text-green-800"
+                      : "bg-red-200 text-red-800"
+                  }`}
                 >
                   {panelAccess ? "Granted" : "Revoked"}
                 </span>
                 <button
-                  className={`ml-2 text-xs rounded px-2 py-1 border ${panelAccess ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}
+                  className={`ml-2 text-xs rounded px-2 py-1 border ${
+                    panelAccess
+                      ? "bg-red-100 text-red-700"
+                      : "bg-green-100 text-green-700"
+                  }`}
                   type="button"
                   onClick={() =>
                     handleTogglePanelAccess(editTherapist._id, !panelAccess)
@@ -694,15 +791,16 @@ console.log(error);
               }}
               className="grid grid-cols-1 md:grid-cols-2 gap-4"
             >
-              {FIELD_LIST.map(f => {
+              {FIELD_LIST.map((f) => {
                 if (f.key === "therapistId") return null;
 
-                // Show calendar for date fields (based on common field names, e.g. createdAt, updatedAt, fromDate, toDate, paidOn)
-                const isDateField = DATE_FIELDS.includes(f.key) || f.type === "date";
+                const isDateField =
+                  DATE_FIELDS.includes(f.key) || f.type === "date";
                 const initialValue =
                   editField[f.key] !== undefined
                     ? editField[f.key]
-                    : editTherapist[f.key as keyof typeof editTherapist] ?? "";
+                    : editTherapist[f.key as keyof typeof editTherapist] ??
+                      "";
 
                 return (
                   <div key={f.key}>
@@ -715,20 +813,35 @@ console.log(error);
                           onChange={e => handleFileChange(e, f.key)}
                           accept="image/*,.pdf"
                         />
-                        {editTherapist[f.key as keyof typeof editTherapist] && typeof editTherapist[f.key as keyof typeof editTherapist] === "string" && (
-                          <div className="mt-1 text-xs text-blue-700">
-                            <a href={editTherapist[f.key as keyof typeof editTherapist] as any} target="_blank" rel="noopener noreferrer">Current: View</a>
-                          </div>
-                        )}
+                        {editTherapist[
+                          f.key as keyof typeof editTherapist
+                        ] &&
+                          typeof editTherapist[
+                            f.key as keyof typeof editTherapist
+                          ] === "string" && (
+                            <div className="mt-1 text-xs text-blue-700">
+                              <a
+                                href={
+                                  editTherapist[
+                                    f.key as keyof typeof editTherapist
+                                  ] as any
+                                }
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                Current: View
+                              </a>
+                            </div>
+                          )}
                       </>
                     ) : isDateField ? (
                       <CalendarInput
                         value={
                           typeof initialValue === "string"
                             ? initialValue
-                            : (initialValue && initialValue instanceof Date
-                                ? initialValue.toISOString().slice(0, 10)
-                                : "")
+                            : initialValue && initialValue instanceof Date
+                            ? initialValue.toISOString().slice(0, 10)
+                            : ""
                         }
                         onChange={val =>
                           setEditField(prev => ({
@@ -828,7 +941,7 @@ console.log(error);
         >
           Search
         </button>
-        {(searchCommitted) && (
+        {searchCommitted && (
           <button
             type="button"
             className="ml-2 px-3 py-2 rounded-md bg-gray-200 text-sm text-gray-700 hover:bg-gray-300 transition"
@@ -848,20 +961,44 @@ console.log(error);
                 <th
                   key={th.key}
                   className={`px-4 py-3 text-left text-xs font-medium text-slate-700 uppercase tracking-wider ${
-                    ["_id", "name", "email", "mobile1", "specializations", "experienceYears", "isDisabled", "panelAccess"].includes(th.key as string)
+                    [
+                      "_id",
+                      "name",
+                      "email",
+                      "mobile1",
+                      "specializations",
+                      "experienceYears",
+                      "isDisabled",
+                      "panelAccess",
+                    ].includes(th.key as string)
                       ? "cursor-pointer select-none"
                       : ""
                   }`}
                   onClick={
                     typeof th.key === "string" &&
-                    ["_id", "name", "email", "mobile1", "specializations", "experienceYears", "isDisabled", "panelAccess"].includes(th.key)
+                    [
+                      "_id",
+                      "name",
+                      "email",
+                      "mobile1",
+                      "specializations",
+                      "experienceYears",
+                      "isDisabled",
+                      "panelAccess",
+                    ].includes(th.key)
                       ? () => handleTableSort(th.key)
                       : undefined
                   }
                 >
                   {th.label}
                   {sortField === th.key ? (
-                    <span className={sortOrder === "asc" ? "text-blue-600" : "text-blue-900"}>
+                    <span
+                      className={
+                        sortOrder === "asc"
+                          ? "text-blue-600"
+                          : "text-blue-900"
+                      }
+                    >
                       {sortOrder === "asc" ? " ▲" : " ▼"}
                     </span>
                   ) : null}
@@ -879,41 +1016,67 @@ console.log(error);
             ) : therapists.length === 0 ? (
               <tr>
                 <td colSpan={tableHeaders.length}>
-                  <div className="text-center py-8">No therapists found.</div>
+                  <div className="text-center py-8">
+                    No therapists found.
+                  </div>
                 </td>
               </tr>
             ) : (
               therapists.map((t) => {
                 const isDisabled =
-                  (t.userId && typeof t.userId.isDisabled === "boolean") && t.userId.isDisabled ;
+                  t.userId &&
+                  typeof t.userId.isDisabled === "boolean" &&
+                  t.userId.isDisabled;
                 const panelAccess =
-                  (t.userId && typeof t.isPanelAccessible === "boolean") ? t.isPanelAccessible :
-                  (typeof t.panelAccess === "boolean" ? t.panelAccess : false);
+                  t.userId && typeof t.isPanelAccessible === "boolean"
+                    ? t.isPanelAccessible
+                    : typeof t.panelAccess === "boolean"
+                    ? t.panelAccess
+                    : false;
                 return (
                   <tr key={t._id} className="hover:bg-slate-50 transition">
-                    <td className="px-4 py-3 whitespace-nowrap text-slate-700 font-mono">{t.therapistId}</td>
+                    <td className="px-4 py-3 whitespace-nowrap text-slate-700 font-mono">
+                      {t.therapistId}
+                    </td>
                     <td className="px-4 py-3 whitespace-nowrap font-medium text-slate-800 flex items-center gap-2">
                       <FiUser className="text-slate-400" />
                       {t?.userId?.name || t.name || t.email || "-"}
                     </td>
-                    <td className="px-4 py-3 whitespace-nowrap">{(t?.userId?.email || t.email) || "-"}</td>
-                    <td className="px-4 py-3 whitespace-nowrap">{t.mobile1 || "-"}</td>
-                    <td className="px-4 py-3 whitespace-nowrap">{t.specializations?.trim() ? t.specializations : "-"}</td>
                     <td className="px-4 py-3 whitespace-nowrap">
-                      {typeof t.experienceYears === "number" && !isNaN(t.experienceYears)
+                      {(t?.userId?.email || t.email) || "-"}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      {t.mobile1 || "-"}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      {t.specializations?.trim()
+                        ? t.specializations
+                        : "-"}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      {typeof t.experienceYears === "number" &&
+                      !isNaN(t.experienceYears)
                         ? `${t.experienceYears} yrs`
                         : "-"}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       <span
-                        className={`px-2 py-0.5 rounded-full text-xs font-bold ${isDisabled ? "bg-red-200 text-red-800" : "bg-green-200 text-green-800"}`}
+                        className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                          isDisabled
+                            ? "bg-red-200 text-red-800"
+                            : "bg-green-200 text-green-800"
+                        }`}
                       >
                         {isDisabled ? "Disabled" : "Enabled"}
                       </span>
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       <span
-                        className={`px-2 py-0.5 rounded-full text-xs font-bold ${panelAccess ? "bg-green-200 text-green-800" : "bg-red-200 text-red-800"}`}
+                        className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                          panelAccess
+                            ? "bg-green-200 text-green-800"
+                            : "bg-red-200 text-red-800"
+                        }`}
                       >
                         {panelAccess ? "Granted" : "Revoked"}
                       </span>
@@ -939,10 +1102,6 @@ console.log(error);
 
       {/* --- Pagination --- */}
       <div className="flex items-center justify-between mt-4">
-        {/* <div className="text-sm text-slate-500">
-          Showing {(therapists.length > 0 ? (page - 1) * pageSize + 1 : 0)}-
-          {(page - 1) * pageSize + therapists.length} of {total}
-        </div> */}
         <div className="flex gap-2 items-center">
           <button
             className="px-2 py-1 border rounded text-sm text-slate-600"

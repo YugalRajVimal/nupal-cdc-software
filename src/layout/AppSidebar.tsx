@@ -7,6 +7,8 @@ import {
   GridIcon,
   HorizontaLDots,
   UserCircleIcon,
+  // You may add a logout icon below if desired
+  // Example: LogoutIcon,
 } from "../icons";
 import { useSidebar } from "../context/SidebarContext";
 
@@ -85,6 +87,12 @@ const navItems: NavItem[] = [
     name: "Audit Logs",
     path: "/super-admin/audit-logs",
   },
+  {
+    icon: <ArrowDownIcon />,
+    name: "Profile",
+    path: "/super-admin/profile",
+  },
+  // Note: logout button will be added to the sidebar bottom, not in navItems list
 ];
 
 const othersItems: NavItem[] = [
@@ -322,7 +330,7 @@ const AppSidebar: React.FC = () => {
           )}
         </Link>
       </div>
-      <div className="flex flex-col overflow-y-auto duration-300 ease-linear no-scrollbar">
+      <div className="flex flex-col overflow-y-auto duration-300 ease-linear no-scrollbar flex-1">
         <nav className="mb-6">
           <div className="flex flex-col gap-4">
             <div>
@@ -345,6 +353,46 @@ const AppSidebar: React.FC = () => {
           </div>
         </nav>
         {/* {isExpanded || isHovered || isMobileOpen ? <SidebarWidget /> : null} */}
+      </div>
+
+      {/* Logout button at the bottom */}
+      <div className="mt-auto mb-8">
+        <Link
+          to="/super-admin/logout"
+          className={`menu-item group ${
+            isActive("/super-admin/logout")
+              ? "menu-item-active"
+              : "menu-item-inactive"
+          } flex items-center w-full`}
+        >
+          <span
+            className={`menu-item-icon-size ${
+              isActive("/super-admin/logout")
+                ? "menu-item-icon-active"
+                : "menu-item-icon-inactive"
+            }`}
+          >
+            {/* Optional: Add a logout icon below */}
+            {/* <LogoutIcon /> */}
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-6 w-6"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a2 2 0 002 2h3a2 2 0 002-2V7a2 2 0 00-2-2h-3a2 2 0 00-2 2v1"
+              />
+            </svg>
+          </span>
+          {(isExpanded || isHovered || isMobileOpen) && (
+            <span className="menu-item-text">Logout</span>
+          )}
+        </Link>
       </div>
     </aside>
   );

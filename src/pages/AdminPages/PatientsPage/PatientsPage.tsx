@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { motion } from "framer-motion";
-import { FiUser, FiPhone, FiEye, FiEdit, FiTrash2, FiSearch } from "react-icons/fi";
+import { FiUser, FiPhone, FiEye, FiEdit, FiSearch } from "react-icons/fi"; // Removed FiTrash2
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "";
 
@@ -51,6 +51,13 @@ type Patient = {
 
 // Pagination & search defaults
 const DEFAULT_LIMIT = 10;
+
+function getQueryParam(param: string): string | null {
+  if (typeof window === "undefined") return null;
+  const search = window.location.search || "";
+  const params = new URLSearchParams(search);
+  return params.get(param);
+}
 
 export default function PatientsPage() {
   const [patients, setPatients] = useState<Patient[]>([]);
@@ -175,37 +182,57 @@ export default function PatientsPage() {
     setEditLoading(false);
   };
 
-  // Delete Patient (DELETE)
-  const handleDelete = async (patient: Patient) => {
-    if (
-      !window.confirm(
-        `Delete patient "${getDisplayName(patient)}"? This cannot be undone.`
-      )
-    )
-      return;
-    try {
-      const res = await fetch(
-        `${API_BASE_URL}/api/admin/patients/${patient._id}`,
-        {
-          method: "DELETE",
-        }
-      );
-      if (!res.ok) {
-        const msg = await res.text();
-        alert("Failed to delete: " + msg);
+  // Auto-open modal if patientId in query and available in patients list (or fetch individually if not in list)
+  useEffect(() => {
+    const queryPatientId = getQueryParam("patientId");
+    if (!queryPatientId) return;
+
+    // Check if the patient is already in the list
+    if (patients && patients.length > 0) {
+      const match = patients.find((p) => p.patientId === queryPatientId || p._id === queryPatientId);
+      if (match) {
+        setViewPatient(match);
+        setEditMode(false);
         return;
       }
-      // After delete, refetch current page
-      setPatients((pats) => pats.filter((p) => p._id !== patient._id));
-      setViewPatient(null);
-      setEditMode(false);
-      // Optionally, refetch to update total etc.
-      // setLoading(true);
-      // (You can set page to 1? Or refetch full data here if required)
-    } catch (err: any) {
-      alert("Delete failed: " + (err?.message || err));
     }
-  };
+    // If not in the current list, try to fetch the specific patient by patientId
+    // PatientId is typically NOT _id, so fetch by patientId; but if not found, fallback to _id.
+    let controller = new AbortController();
+
+    // Only run this if patients have loaded (at least initial has finished), otherwise wait
+    if (!loading && patients.length === 0) {
+      // Try fetching by patientId (custom endpoint, fallback to fetching all and searching _id)
+      (async () => {
+        try {
+          const url = new URL(`${API_BASE_URL}/api/admin/patients/findByPatientId`);
+          url.searchParams.set("patientId", queryPatientId);
+          const res = await fetch(url.toString(), { signal: controller.signal });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.patient) {
+              setViewPatient(data.patient);
+              setEditMode(false);
+              return;
+            }
+          }
+          // If not found by patientId, try _id (rare, but some ID linkers might use it)
+          const fallbackRes = await fetch(`${API_BASE_URL}/api/admin/patients/${queryPatientId}`, { signal: controller.signal });
+          if (fallbackRes.ok) {
+            const data = await fallbackRes.json();
+            if (data.patient) {
+              setViewPatient(data.patient);
+              setEditMode(false);
+              return;
+            }
+          }
+        } catch (e) {
+          // Ignore errors, especially AbortError
+        }
+      })();
+    }
+    return () => controller.abort();
+  }, [patients, loading]);
 
   // Define "Name" field only once (merge name and childFullName into one field)
   const patientFields: Array<{
@@ -262,7 +289,7 @@ export default function PatientsPage() {
       animate={{ opacity: 1, y: 0 }}
       className="min-h-screen p-8"
     >
-      <h1 className="text-2xl font-bold text-slate-800 mb-6">Patients</h1>
+      <h1 className="text-2xl font-bold text-slate-800 mb-6">Childrens</h1>
       {/* --- Search & limit controls --- */}
       <div className="flex flex-wrap items-center gap-4 mb-6">
         <form
@@ -317,8 +344,8 @@ export default function PatientsPage() {
           <table className="w-full text-sm">
             <thead className="bg-slate-100 text-slate-600">
               <tr>
-                <th className="px-4 py-3 text-left">PatientID</th>
-                <th className="px-4 py-3 text-left">Patient</th>
+                <th className="px-4 py-3 text-left">ChildrenID</th>
+                <th className="px-4 py-3 text-left">Children</th>
                 <th className="px-4 py-3 text-left">Diagnosis/Concern</th>
                 <th className="px-4 py-3 text-left">Contact</th>
                 <th className="px-4 py-3 text-left">Actions</th>
@@ -439,7 +466,7 @@ export default function PatientsPage() {
         </button>
       </div>
 
-      {/* View Modal (includes edit & delete) */}
+      {/* View Modal (includes edit) */}
       {viewPatient && (
         <div className="fixed z-50 inset-0 flex items-center justify-center bg-black/30">
           <div className="bg-white rounded-lg shadow-lg p-8 max-w-2xl w-full relative overflow-y-auto max-h-[95vh]">
@@ -452,7 +479,7 @@ export default function PatientsPage() {
             >
               &times;
             </button>
-            <h2 className="text-lg font-bold mb-4">Patient Details</h2>
+            <h2 className="text-lg font-bold mb-4">Children Details</h2>
 
             {/* Patient fields table */}
             {!editMode ? (
@@ -518,19 +545,13 @@ export default function PatientsPage() {
                   )}
                 </div>
 
-                {/* Buttons for Edit & Delete */}
+                {/* Button for Edit only */}
                 <div className="flex justify-end gap-4 mt-8">
                   <button
                     className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100"
                     onClick={() => handleEditStart(viewPatient)}
                   >
                     <FiEdit /> Edit
-                  </button>
-                  <button
-                    className="inline-flex items-center gap-1 rounded-md border border-red-200 px-4 py-2 text-sm text-red-600 hover:bg-red-50"
-                    onClick={() => handleDelete(viewPatient)}
-                  >
-                    <FiTrash2 /> Delete
                   </button>
                 </div>
               </>

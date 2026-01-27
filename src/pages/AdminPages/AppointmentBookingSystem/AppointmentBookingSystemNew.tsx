@@ -650,30 +650,30 @@ export default function AppointmentBookingSystemNew() {
     resetForm();
   }
 
-  async function handleDeleteBooking(id: string) {
-    if (!window.confirm("Delete this booking?")) return;
-    let endpoint = import.meta.env.VITE_API_URL || (window as any).VITE_API_URL;
-    if (endpoint) endpoint = endpoint.replace(/\/$/, "");
-    setBookingLoading(true);
-    try {
-      const resp = await fetch(`${endpoint}/api/admin/bookings/${id}`, {
-        method: "DELETE"
-      });
-      if (!resp.ok) {
-        const err = await resp.json();
-        throw new Error(err?.message || "Failed to delete booking.");
-      }
-      toast.success("Booking deleted.");
-      if (editBookingId === id) resetForm();
-      setBookingLoading(!bookingLoading);
+  // async function handleDeleteBooking(id: string) {
+  //   if (!window.confirm("Delete this booking?")) return;
+  //   let endpoint = import.meta.env.VITE_API_URL || (window as any).VITE_API_URL;
+  //   if (endpoint) endpoint = endpoint.replace(/\/$/, "");
+  //   setBookingLoading(true);
+  //   try {
+  //     const resp = await fetch(`${endpoint}/api/admin/bookings/${id}`, {
+  //       method: "DELETE"
+  //     });
+  //     if (!resp.ok) {
+  //       const err = await resp.json();
+  //       throw new Error(err?.message || "Failed to delete booking.");
+  //     }
+  //     toast.success("Booking deleted.");
+  //     if (editBookingId === id) resetForm();
+  //     setBookingLoading(!bookingLoading);
 
 
-    } catch (e: any) {
-      toast.error(e?.message || "Failed to delete booking.");
-    } finally {
-      setBookingLoading(false);
-    }
-  }
+  //   } catch (e: any) {
+  //     toast.error(e?.message || "Failed to delete booking.");
+  //   } finally {
+  //     setBookingLoading(false);
+  //   }
+  // }
 
   function resetForm() {
     setPatientId(""); setTherapyId(""); setPackageId(""); setTherapistId("");
@@ -1184,7 +1184,7 @@ export default function AppointmentBookingSystemNew() {
         getPackageDisplay={getPackageDisplay}
         SESSION_TIME_OPTIONS={SESSION_TIME_OPTIONS}
         handleEditBooking={handleEditBooking}
-        handleDeleteBooking={handleDeleteBooking}
+        // handleDeleteBooking={handleDeleteBooking}
         handleCollectPayment={handleCollectPayment}
         paymentLoadingBookingId={paymentLoadingBookingId}
       />
@@ -1715,7 +1715,7 @@ function BookingSummary({
   getPackageDisplay,
   SESSION_TIME_OPTIONS,
   handleEditBooking,
-  handleDeleteBooking,
+  // handleDeleteBooking,
   handleCollectPayment,
   paymentLoadingBookingId,
 }: any) {
@@ -1832,13 +1832,46 @@ function BookingSummary({
                       <FiUser className="text-slate-500" />
                       <span className="text-slate-700">
                         Therapist: {therapistObj.name}
-                        {therapistObj.therapistId ? ` (${therapistObj.therapistId})` : ""}
+                        {therapistObj.therapistId ? (
+                          <>
+                            {" ("}
+                            <a
+                              href={`/admin/therapists?therapistId=${encodeURIComponent(therapistObj._id)}`}
+                              className="text-blue-600 hover:underline"
+                              title="View therapist details"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => {
+                                // Optionally: if you want to open in same tab, just remove target/_blank
+                                e.stopPropagation();
+                              }}
+                            >
+                              {therapistObj.therapistId}
+                            </a>
+                            {")"}
+                          </>
+                        ) : ""}
                       </span>
                     </div>
                   )}
                   <div className="mb-1 font-semibold text-blue-900 flex items-center gap-2">
                     <FiUser className="text-blue-600" />
-                    {getPatientDisplayName(booking.patient)}
+                    {booking.patient && booking.patient._id ? (
+                      <a
+                        href={`/admin/children?patientId=${encodeURIComponent(booking.patient._id)}`}
+                        className="text-blue-700 hover:underline"
+                        title="View patient details"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                        }}
+                      >
+                        {getPatientDisplayName(booking.patient)}
+                      </a>
+                    ) : (
+                      getPatientDisplayName(booking.patient)
+                    )}
                   </div>
                   <div className="mb-2 flex items-center gap-2">
                     <FiTag className="text-slate-500" />
@@ -1955,14 +1988,14 @@ function BookingSummary({
                     >
                       <FiEdit2 />Edit
                     </button>
-                    <button
+                    {/* <button
                       className="text-xs rounded px-2 py-1 border border-red-400 text-red-600 hover:bg-red-50"
                       onClick={() => handleDeleteBooking(booking._id)}
                       title="Delete booking"
                       disabled={!!editBookingId && editBookingId === booking._id}
                     >
                       Delete
-                    </button>
+                    </button> */}
                   </div>
                   {editBookingId === booking._id && (
                     <div className="absolute -top-2 right-2">

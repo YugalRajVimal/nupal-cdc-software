@@ -1,63 +1,16 @@
-import { useEffect, useState } from "react";
+import  { useEffect, useState } from "react";
 import PageMeta from "../../../components/common/PageMeta";
-
-// Add the CircularProgress helper/stat component as per @file_context_0
-function CircularProgress({
-  value,
-  total,
-  color,
-  label,
-}: {
-  value: number;
-  total: number;
-  color?: string;
-  label?: string;
-}) {
-  const percent = total > 0 ? Math.round((value / total) * 100) : 0;
-  const colorClass =
-    color === "violet"
-      ? "stroke-violet-500 text-violet-600"
-      : color === "red"
-      ? "stroke-red-500 text-red-600"
-      : color === "gray"
-      ? "stroke-gray-400 text-gray-600"
-      : "stroke-blue-500 text-blue-600";
-  return (
-    <div className="relative flex flex-col items-center h-24 w-24">
-      <svg className="h-24 w-24" viewBox="0 0 36 36">
-        <circle
-          className="text-gray-200"
-          strokeWidth="3"
-          stroke="currentColor"
-          fill="transparent"
-          r="16"
-          cx="18"
-          cy="18"
-        />
-        <circle
-          className={colorClass + " transition-all duration-500"}
-          strokeWidth="3"
-          strokeDasharray="100, 100"
-          strokeDashoffset={100 - percent}
-          strokeLinecap="round"
-          stroke="currentColor"
-          fill="transparent"
-          r="16"
-          cx="18"
-          cy="18"
-        />
-      </svg>
-      <span className="absolute inset-0 flex justify-center items-center text-base font-bold text-slate-700 select-none">
-        {percent}%
-      </span>
-      {label && (
-        <span className={`mt-1 text-xs font-medium ${colorClass.split(" ")[1]}`}>
-          {label}
-        </span>
-      )}
-    </div>
-  );
-}
+import {
+  LineChart,
+  Line,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
 
 interface DashboardData {
   activeChildren: number;
@@ -70,24 +23,70 @@ interface DashboardData {
   pendingTasks: number;
   pendingBookingRequests: number;
   pendingSessionEditRequests: number;
+  // Add additional dashboard API fields if needed
 }
 
 const API_URL = import.meta.env.VITE_API_URL;
+
+const statCardConfig = [
+  {
+    getTitle: (_d: DashboardData | null): string => "TO-DO NOTIFICATIONS OF TASKS",
+    getValue: (d: DashboardData | null) => (d ? d.pendingTasks : "--"),
+    color: "border-green-400",
+  },
+  {
+    getTitle: (_d: DashboardData | null): string => "PENDING PAYMENTS OF ALL-TIME",
+    getValue: (d: DashboardData | null) => (d ? d.pendingPayments : "--"),
+    sub: (d: DashboardData | null) =>
+      d ? `${d.pendingPayments} pending` : "",
+    color: "border-blue-400",
+  },
+  {
+    getTitle: () => "PENDING BOOKING REQUESTS",
+    getValue: (d: DashboardData | null) => (d ? d.pendingBookingRequests : "--"),
+    sub: (d: DashboardData | null) =>
+      d ? `Session edit: ${d.pendingSessionEditRequests}` : "",
+    color: "border-purple-400",
+  },
+  {
+    getTitle: () => "TODAY'S APPOINTMENTS",
+    getValue: (d: DashboardData | null) => (d ? d.todaysTotalAppointments : "--"),
+    sub: (d: DashboardData | null) =>
+      d
+        ? `${d.todaysPendingAppointments} pending, ${d.todaysDoneAppointments} done`
+        : "",
+    color: "border-yellow-400",
+  },
+];
 
 export default function AdminDashboardHome() {
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Example/demo chart data (replace with real data if available)
+  const barData = [
+    { day: "Mon", value: dashboardData?.todaysTotalAppointments ?? 0 },
+    { day: "Tue", value: 5 },
+    { day: "Wed", value: 6 },
+    { day: "Thu", value: 7 },
+    { day: "Fri", value: 4 },
+    { day: "Sat", value: 8 },
+    { day: "Sun", value: 2 },
+  ];
+  const lineData = [
+    { week: "Week 1", value: dashboardData?.todaysDoneAppointments ?? 0 },
+    { week: "Week 2", value: 10 },
+    { week: "Week 3", value: 15 },
+    { week: "Week 4", value: 18 },
+  ];
+
   useEffect(() => {
     setLoading(true);
     setError(null);
-
-    // Always ensure a single trailing slash between API_URL and path
     const url =
       (API_URL ? API_URL.replace(/\/+$/, "") : "") +
       "/api/admin/bookings/overview";
-
     fetch(url)
       .then(async (res) => {
         if (!res.ok) {
@@ -113,17 +112,7 @@ export default function AdminDashboardHome() {
         title="Nupal CDC"
         description="Admin and Sub-Admin Panel for Nupal CDC"
       />
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-semibold text-brand-700 tracking-tight mb-1">
-            Welcome, Admin!
-          </h1>
-          <p className="text-slate-500 text-sm">
-            Get a quick overview and manage daily operations at Nupal CDC.
-          </p>
-        </div>
-      </div>
-      <div className="max-w-6xl mx-auto mt-8">
+      <div className="p-6 min-h-screen">
         {loading ? (
           <div className="flex items-center justify-center min-h-[200px]">
             <div className="w-10 h-10 border-4 border-t-brand-500 border-gray-200 rounded-full animate-spin"></div>
@@ -133,127 +122,116 @@ export default function AdminDashboardHome() {
             {error}
           </div>
         ) : (
-          dashboardData && (
-            <>
-              {/* Overview Cards using CircularProgress */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-10">
-              <div className="flex flex-col items-center rounded-xl border border-blue-50 bg-blue-50 shadow-lg p-6">
-              <span className="text-3xl font-bold text-cyan-700 drop-shadow">
-                    {dashboardData.activeChildren}</span>
-                  <span className="text-sm text-gray-500">Active Children</span>
-                </div>
+          <>
+            {/* Top Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-5 mb-8">
+              {statCardConfig.map((card, i) => (
+                <div
+                  key={i}
+                  className={`bg-white rounded-xl border-l-4 ${card.color} p-5 shadow-sm`}
+                >
+                  <h3 className="text-xs font-bold text-red-600 mb-2">
+                    {card.getTitle(dashboardData)}
+                  </h3>
 
-                
-                <div className="flex flex-col items-center rounded-xl border border-cyan-200 bg-pink-50 shadow-lg p-6">
-                <span className="text-3xl font-bold text-cyan-700 drop-shadow">{dashboardData.activeTherapists}</span>
-                  <span className="text-sm text-gray-500">Active Therapists</span>
+                  <div className="text-2xl font-bold text-gray-800">
+                    {card.getValue(dashboardData)}
+                  </div>
+
+                  {"sub" in card && !!card.sub && card.sub(dashboardData) && (
+                    <p className="text-sm text-gray-500 mt-1">{card.sub(dashboardData)}</p>
+                  )}
+
+                  <div className="mt-3 text-green-600 text-xs font-semibold">
+                    ✔ No Pending Tasks
+                  </div>
                 </div>
-                {/* <div className="flex flex-col items-center bg-yellow-50 rounded-xl shadow border p-6">
-                  <CircularProgress value={dashboardData.totalPendingAppointments} total={dashboardData.todaysTotalAppointments} color="gray" label="Pending Appts" />
-                  <span className="mt-3 text-yellow-700 text-xl font-semibold">{dashboardData.totalPendingAppointments}</span>
-                  <span className="text-sm text-gray-500">Pending Appts</span>
-                </div> */}
-               <div className="flex flex-col items-center rounded-xl border border-cyan-200 bg-red-50 shadow-lg p-6">
-               <span className="text-3xl font-bold text-cyan-700 drop-shadow">{dashboardData.pendingPayments}</span>
-                  <span className="text-sm text-gray-500">Pending Payments</span>
+              ))}
+            </div>
+
+            {/* Charts Section */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+              {/* Revenue Trends */}
+              <div className="bg-white rounded-xl border shadow p-5">
+                <h2 className="font-semibold text-lg mb-1">Revenue Trends</h2>
+                <p className="text-xs text-red-600 mb-3">FOR SUPER-ADMIN</p>
+
+                <p className="text-sm text-red-600 mb-2">
+                  ADMIN GRAPH: CANCELLED SESSIONS VS COMPLETED SESSIONS
+                </p>
+
+                <div className="h-64">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={barData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="day" />
+                      <YAxis />
+                      <Tooltip />
+                      <Bar dataKey="value" />
+                    </BarChart>
+                  </ResponsiveContainer>
                 </div>
               </div>
-            
-              {/* Other pending items */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-                <div className="flex flex-col items-center rounded-xl border border-gray-200 bg-gray-100/90 shadow-lg p-6">
-                  <span className="text-3xl font-bold text-gray-700 drop-shadow">
-                    {dashboardData.pendingTasks}
-                  </span>
-                  <span className="text-gray-700 font-medium">Pending Tasks</span>
 
-                </div>
-                <div className="flex flex-col items-center rounded-xl border border-fuchsia-200 bg-fuchsia-100/90 shadow-lg p-6">
-                  <span className="text-3xl font-bold text-fuchsia-700 drop-shadow">
-                    {dashboardData.pendingBookingRequests}
-                  </span>
-                  <span className="text-gray-700 font-medium">Pending Booking Requests</span>
+              {/* Appointment Activity */}
+              <div className="bg-white rounded-xl border shadow p-5">
+                <h2 className="font-semibold text-lg mb-4">Appointment Activity</h2>
 
-                </div>
-                <div className="flex flex-col items-center rounded-xl border border-cyan-200 bg-cyan-100/90 shadow-lg p-6">
-                  <span className="text-3xl font-bold text-cyan-700 drop-shadow">
-                    {dashboardData.pendingSessionEditRequests}
-                  </span>
-                  <span className="text-gray-700 font-medium">Pending Session Edit Requests</span>
-
+                <div className="h-64">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={lineData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="week" />
+                      <YAxis />
+                      <Tooltip />
+                      <Line dataKey="value" strokeWidth={3} />
+                    </LineChart>
+                  </ResponsiveContainer>
                 </div>
               </div>
-                {/* Today's Appointments breakdown */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mt-10">
-                {/* Today's Total Appointments */}
-                <div className="flex flex-col items-center rounded-xl border border-violet-200 bg-violet-100/90 shadow-lg p-6">
-                  <CircularProgress
-                    value={dashboardData.todaysTotalAppointments}
-                    total={dashboardData.todaysTotalAppointments}
-                    color="violet"
-                  />
-                  <span className="mt-3 text-violet-700 font-bold text-2xl">
-                    {dashboardData.todaysTotalAppointments}
-                  </span>
-                  <span className="text-gray-700 text-sm font-medium mt-1">Today's Total Appointments</span>
-                </div>
-                {/* Today's Pending Appointments */}
-                <div className="flex flex-col items-center rounded-xl border border-orange-200 bg-red-100/90 shadow-lg p-6">
-                  <CircularProgress
-                    value={dashboardData.todaysPendingAppointments}
-                    total={dashboardData.todaysTotalAppointments}
-                    color="gray"
-                  />
-                  <span className="mt-3 text-orange-700 font-bold text-2xl">
-                    {dashboardData.todaysPendingAppointments}
-                  </span>
-                  <span className="text-gray-700 text-sm font-medium mt-1">Today's Pending</span>
-                </div>
-                {/* Today's Done Appointments */}
-                <div className="flex flex-col items-center rounded-xl border border-green-200 bg-pink-100/90 shadow-lg p-6">
-                  <CircularProgress
-                    value={dashboardData.todaysDoneAppointments}
-                    total={dashboardData.todaysTotalAppointments}
-                    color="green"
-                  />
-                  <span className="mt-3 text-green-700 font-bold text-2xl">
-                    {dashboardData.todaysDoneAppointments}
-                  </span>
-                  <span className="text-gray-700 text-sm font-medium mt-1">Today's Done</span>
+            </div>
+
+            {/* Bottom Section */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Quick Stats */}
+              <div className="bg-white rounded-xl border shadow p-5">
+                <h2 className="font-semibold text-lg mb-4">Quick Stats</h2>
+
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
+                    <span>Active Therapists</span>
+                    <span className="font-bold text-blue-600">
+                      {dashboardData?.activeTherapists ?? "--"}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between items-center p-3 bg-purple-50 rounded-lg">
+                    <span>Active Parents</span>
+                    <span className="font-bold text-purple-600">
+                      {dashboardData?.activeChildren ?? "--"}
+                    </span>
+                  </div>
                 </div>
               </div>
-            </>
-          )
+
+              {/* System Alerts */}
+              <div className="bg-white rounded-xl border shadow p-5">
+                <h2 className="font-semibold text-lg mb-4">System Alerts</h2>
+
+                <div className="space-y-3">
+                  <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+                    ⚠ {dashboardData?.pendingPayments ?? "3"} Invoices are overdue by more than 7 days.
+                  </div>
+
+                  <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-700">
+                    ⏱ Therapist Sarah Smith has pending availability updates.
+                  </div>
+                </div>
+              </div>
+            </div>
+          </>
         )}
       </div>
     </>
   );
 }
-
-// interface StatCardProps {
-//   label: string;
-//   value: number;
-//   color: string;
-//   icon?: React.ReactNode;
-// }
-
-// function StatCard({ label, value, color, icon }: StatCardProps) {
-//   return (
-//     <div
-//       className="
-//         bg-white rounded-xl border shadow-sm p-5
-//         hover:shadow-md hover:-translate-y-0.5
-//         transition-all cursor-pointer
-//       "
-//     >
-//       <div className="flex items-center justify-between mb-3">
-//         <span className="text-sm text-gray-500 font-medium">{label}</span>
-//         {icon}
-//       </div>
-
-//       <div className={`text-3xl font-bold ${color}`}>
-//         {value}
-//       </div>
-//     </div>
-//   );
-// }

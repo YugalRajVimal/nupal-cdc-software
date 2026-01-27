@@ -69,7 +69,7 @@ const navItems: NavItem[] = [
   },
   {
     icon: <UserIcon />,
-    name: "Patient",
+    name: "Childrens",
     path: "/admin/children",
   },
   {
