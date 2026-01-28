@@ -50,6 +50,49 @@ type TherapistProfile = {
 
 type ModalMode = "none" | "full" | "partial";
 
+// Util for therapistId link
+function TherapistIdLink({ therapist }: { therapist: TherapistProfile }) {
+    // FullCalendar.tsx 174-183 logic reference:
+    // therapistId is shown if present, link is opened with therapistUserId
+    // therapistUserId = therapist._id
+    // display = name
+
+    if (!therapist.therapistId) return <span>-</span>;
+    const therapistUserId = therapist._id;
+    return (
+        <a
+            href={`/admin/therapists?therapistId=${encodeURIComponent(therapistUserId)}`}
+            className="text-blue-600 hover:underline"
+            title="View therapist details"
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={e => e.stopPropagation()}
+        >
+            {therapist.therapistId}
+        </a>
+    );
+}
+
+// Util for therapist name link
+function TherapistNameLink({ therapist }: { therapist: TherapistProfile }) {
+    // If there is no name, show "-"
+    const display = therapist?.userId?.name || therapist.name || "-";
+    if (display === "-") return <span>-</span>;
+    const therapistUserId = therapist._id;
+    return (
+        <a
+            href={`/admin/therapists?therapistId=${encodeURIComponent(therapistUserId)}`}
+            className="text-blue-600 hover:underline"
+            title="View therapist details"
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={e => e.stopPropagation()}
+        >
+            {display}
+        </a>
+    );
+}
+
 function CalendarPopup({
     value,
     onChange,
@@ -401,7 +444,9 @@ function HolidayModal({
                 <button className="absolute top-2 right-2 text-gray-400 hover:text-red-600 text-xl" onClick={onClose}>&times;</button>
                 <h2 className="text-lg font-bold mb-3">
                     Manage Holidays for<br />
-                    <span className="text-blue-700">{therapist?.userId?.name || therapist?.name || therapist?.therapistId}</span>
+                    <span className="text-blue-700">
+                        {therapist ? <TherapistNameLink therapist={therapist} /> : "-"}
+                    </span>
                 </h2>
                 {/* Assigned Holidays */}
                 <div className="mb-4 " >
@@ -729,9 +774,11 @@ export default function ManageHolidays() {
                         ) : (
                             pagedTherapists.map((t) => (
                                 <tr key={t._id} className="hover:bg-slate-50 transition">
-                                    <td className="px-4 py-3 whitespace-nowrap text-slate-700 font-mono">{t.therapistId || "-"}</td>
+                                    <td className="px-4 py-3 whitespace-nowrap text-slate-700 font-mono">
+                                        <TherapistIdLink therapist={t} />
+                                    </td>
                                     <td className="px-4 py-3 whitespace-nowrap font-medium text-slate-800">
-                                        {t?.userId?.name || t.name || "-"}
+                                        <TherapistNameLink therapist={t} />
                                     </td>
                                     <td className="px-4 py-3 whitespace-nowrap">
                                         {t?.userId?.email || t.email || "-"}

@@ -898,8 +898,7 @@ export default function TherapistsPage() {
   const tableHeaders: { label: string; key: keyof TherapistProfile | "actions" }[] = [
     { label: "Therapist ID", key: "_id" },
     { label: "Name", key: "name" },
-    { label: "Email", key: "email" },
-    { label: "Mobile1", key: "mobile1" },
+    { label: "Email | Mobile1", key: "email" },
     { label: "Specializations", key: "specializations" },
     { label: "Experience", key: "experienceYears" },
     { label: "Enabled", key: "isDisabled" },
@@ -912,7 +911,7 @@ export default function TherapistsPage() {
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="min-h-screen  p-8"
+      className="flex flex-col h-full "
     >
       <h1 className="text-2xl font-bold text-slate-800 mb-6">Therapists</h1>
 
@@ -953,8 +952,8 @@ export default function TherapistsPage() {
       </form>
 
       {/* -- Table -- */}
-      <div className="bg-white border rounded-lg shadow overflow-x-auto">
-        <table className="min-w-full divide-y divide-slate-200">
+      <div className="bg-white border rounded-lg shadow overflow-x-scroll">
+        <table className="w-full divide-y divide-slate-200">
           <thead className="bg-slate-100">
             <tr>
               {tableHeaders.map(th => (
@@ -964,8 +963,7 @@ export default function TherapistsPage() {
                     [
                       "_id",
                       "name",
-                      "email",
-                      "mobile1",
+                      "email | mobile1",
                       "specializations",
                       "experienceYears",
                       "isDisabled",
@@ -979,8 +977,7 @@ export default function TherapistsPage() {
                     [
                       "_id",
                       "name",
-                      "email",
-                      "mobile1",
+                      "email | mobile1",
                       "specializations",
                       "experienceYears",
                       "isDisabled",
@@ -1044,10 +1041,12 @@ export default function TherapistsPage() {
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       {(t?.userId?.email || t.email) || "-"}
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap">
+                      <br/>
                       {t.mobile1 || "-"}
                     </td>
+                    {/* <td className="px-4 py-3 whitespace-nowrap">
+                      
+                    </td> */}
                     <td className="px-4 py-3 whitespace-nowrap">
                       {t.specializations?.trim()
                         ? t.specializations

@@ -19,6 +19,7 @@ type SessionType = {
   notes?: string;
   slotId?: string;
   therapist?: TherapistType;
+  isCheckedIn?: boolean; // <-- added
   [key: string]: any;
 };
 type PackageType = {
@@ -693,15 +694,18 @@ export default function MyChildrenAppointmentsPage() {
               <table className="w-full text-xs border mb-2">
                 <thead className="bg-slate-50 border-b">
                   <tr>
+                    <th className="px-3 py-2 text-left">#</th>
                     <th className="px-3 py-2 text-left">Date</th>
                     <th className="px-3 py-2 text-left">Slot</th>
                     <th className="px-3 py-2 text-left">Therapist</th>
+                    <th className="px-3 py-2 text-left">Checked In</th>
                   </tr>
                 </thead>
                 <tbody>
                   {(Array.isArray(viewAppointment.sessions) && viewAppointment.sessions.length > 0) ? (
                     viewAppointment.sessions.map((s, idx) => (
                       <tr key={s._id || idx} className="border-t">
+                        <td className="px-3 py-2">{idx + 1}</td>
                         <td className="px-3 py-2">{s.date ? dayjs(s.date).format("YYYY-MM-DD") : "-"}</td>
                         <td className="px-3 py-2">
                           {SESSION_TIME_OPTIONS.find(opt => opt.id === s.slotId)?.label || s.slotId || "--"}
@@ -716,11 +720,26 @@ export default function MyChildrenAppointmentsPage() {
                             </>
                           ) : "-"}
                         </td>
+                        <td className="px-3 py-2">
+                          {s.isCheckedIn === true ? (
+                            <span className="inline-block rounded bg-green-50 text-green-700 px-2 py-1 font-semibold">
+                              Yes
+                            </span>
+                          ) : s.isCheckedIn === false ? (
+                            <span className="inline-block rounded bg-red-50 text-red-700 px-2 py-1 font-semibold">
+                              No
+                            </span>
+                          ) : (
+                            <span className="inline-block rounded bg-gray-50 text-gray-500 px-2 py-1">
+                              -
+                            </span>
+                          )}
+                        </td>
                       </tr>
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={3} className="px-3 py-5 text-center text-slate-400">No session data</td>
+                      <td colSpan={5} className="px-3 py-5 text-center text-slate-400">No session data</td>
                     </tr>
                   )}
                 </tbody>

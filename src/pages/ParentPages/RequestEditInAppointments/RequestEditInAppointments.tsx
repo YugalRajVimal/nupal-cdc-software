@@ -759,6 +759,10 @@ export default function RequestEditInAppointment() {
                         const isExpanded =
                           expandedEditRequests[editReq._id] ??
                           (idx === 0 || editReq.status === "pending");
+
+                        // Serial number starts from 1 for most recent at top
+                        const serialNo = idx + 1;
+
                         return (
                           <div
                             key={editReq._id}
@@ -783,10 +787,8 @@ export default function RequestEditInAppointment() {
                                 }`}
                               />
                               <span>
-                                Request #
-                                {Array.isArray(viewAppointment.editRequests)
-                                  ? viewAppointment.editRequests.length - idx
-                                  : "-"}
+                                {/* Show "Request #1", "Request #2", etc. (topmost is 1) */}
+                                Request #{serialNo}
                               </span>
                               <span className="ml-2 px-2 py-1 rounded text-xs capitalize font-bold border"
                                 style={{
@@ -817,7 +819,8 @@ export default function RequestEditInAppointment() {
                                 <table className="w-full text-xs border mb-1 mt-2">
                                   <thead>
                                     <tr>
-                                      <th className="py-1 px-2 text-left">Session ID</th>
+                                      <th className="py-1 px-2 text-left">S. No.</th>
+                                      {/* <th className="py-1 px-2 text-left">Session ID</th> */}
                                       <th className="py-1 px-2 text-left">New Date</th>
                                       <th className="py-1 px-2 text-left">New Slot</th>
                                       <th className="py-1 px-2 text-left">Old Date</th>
@@ -845,9 +848,10 @@ export default function RequestEditInAppointment() {
 
                                       return (
                                         <tr key={sess.sessionId || sidx}>
-                                          <td className="py-1 px-2 font-mono">
+                                          <td className="py-1 px-2">{sidx + 1}</td>
+                                          {/* <td className="py-1 px-2 font-mono">
                                             {sess.sessionId}
-                                          </td>
+                                          </td> */}
                                           <td className="py-1 px-2">
                                             {sess.newDate}
                                           </td>
@@ -891,6 +895,7 @@ export default function RequestEditInAppointment() {
               <table className="w-full text-xs border mb-2">
                 <thead className="bg-slate-50 border-b">
                   <tr>
+                    <th className="px-3 py-2 text-left">#</th>
                     <th className="px-3 py-2 text-left">Date</th>
                     <th className="px-3 py-2 text-left">Slot</th>
                     <th className="px-3 py-2 text-left">Therapist</th>
@@ -943,6 +948,8 @@ export default function RequestEditInAppointment() {
 
                       return (
                         <tr key={key} className="border-t">
+                          {/* Serial No. cell */}
+                          <td className="px-3 py-2">{idx + 1}</td>
                           {/* Date cell */}
                           <td className="px-3 py-2">
                             {editAllMode && !alreadyRequested ? (
@@ -1094,7 +1101,7 @@ export default function RequestEditInAppointment() {
                   ) : (
                     <tr>
                       <td
-                        colSpan={4}
+                        colSpan={5}
                         className="px-3 py-5 text-center text-slate-400"
                       >
                         No session data

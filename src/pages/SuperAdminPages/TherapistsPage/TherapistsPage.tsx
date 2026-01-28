@@ -9,6 +9,13 @@ import {
 import { motion } from "framer-motion";
 import axios from "axios";
 
+// ---- Added for search params ----
+function getQueryParam(name: string): string | null {
+  if (typeof window === "undefined") return null;
+  const params = new URLSearchParams(window.location.search);
+  return params.get(name);
+}
+
 // The schema fields from @user.schema.js, expanded exhaustively as per fields in the original file.
 const API_BASE_URL = import.meta.env.VITE_API_URL || "";
 
@@ -266,6 +273,19 @@ export default function SuperAdminTherapistsPage() {
   const onTableViewClick = (id: string) => {
     fetchTherapistById(id);
   };
+
+  // ---- Effect for therapist query param ----
+  useEffect(() => {
+    const therapistParam = getQueryParam("therapist");
+    if (
+      therapistParam &&
+      (!selectedId || therapistParam !== selectedId)
+    ) {
+      fetchTherapistById(therapistParam);
+    }
+    // don't depend on fetchTherapistById! (it is stable)
+    // eslint-disable-next-line
+  }, [window.location.search]);
 
   // Search & Pagination implementation
   async function fetchTherapists(searchVal = search, pageVal = page, limitVal = limit) {
@@ -534,6 +554,12 @@ export default function SuperAdminTherapistsPage() {
             onClick={() => {
               setSelectedId(null);
               setSelectedProfile(null);
+              // Remove ?therapist=xxx from URL when closing modal for cleaner UX
+              if (typeof window !== "undefined" && window.history && window.location) {
+                const url = new URL(window.location.href);
+                url.searchParams.delete("therapist");
+                window.history.replaceState({}, document.title, url.pathname + url.search);
+              }
             }}
           >
             ×
@@ -696,6 +722,12 @@ export default function SuperAdminTherapistsPage() {
                 setEditField({});
                 setSelectedId(null);
                 setSelectedProfile(null);
+                // Optionally, remove any view param from URL when switching to edit
+                if (typeof window !== "undefined" && window.history && window.location) {
+                  const url = new URL(window.location.href);
+                  url.searchParams.delete("therapist");
+                  window.history.replaceState({}, document.title, url.pathname + url.search);
+                }
               }}
             >
               Edit
@@ -705,6 +737,12 @@ export default function SuperAdminTherapistsPage() {
               onClick={() => {
                 setSelectedId(null);
                 setSelectedProfile(null);
+                // Remove ?therapist=xxx from URL when closing modal
+                if (typeof window !== "undefined" && window.history && window.location) {
+                  const url = new URL(window.location.href);
+                  url.searchParams.delete("therapist");
+                  window.history.replaceState({}, document.title, url.pathname + url.search);
+                }
               }}
             >
               Close
@@ -1153,7 +1191,15 @@ export default function SuperAdminTherapistsPage() {
                       <div className="flex items-center gap-3">
                         <button
                           className="rounded border border-blue-500 p-1 text-blue-600 hover:bg-blue-100 transition"
-                          onClick={() => onTableViewClick(t._id)}
+                          onClick={() => {
+                            onTableViewClick(t._id);
+                            // Update URL to /?therapist=ID for deep-link/view
+                            if (typeof window !== "undefined" && window.history && window.location) {
+                              const url = new URL(window.location.href);
+                              url.searchParams.set("therapist", t._id);
+                              window.history.replaceState({}, document.title, url.pathname + url.search);
+                            }
+                          }}
                           title="View Details"
                         >
                           <FiEye />

@@ -98,7 +98,14 @@ const groupPatientsByParentEmail = (patients: any[]): FamilyGroupPatient[] => {
   }
 
   Object.values(familyGroups).forEach(family => {
-    family.displayNames = family.familyPatients.map(p => `${p.name} (${p.patientId || '-'})`).join(', ');
+    // REPLACE displayNames WITH linked children names/id
+    family.displayNames = family.familyPatients.map(p => {
+      const name = p.name || '-';
+      const pid = p.patientId || '-';
+      return (
+        `<a href="/super-admin/children?patientId=${encodeURIComponent(pid)}" target="_blank" rel="noopener noreferrer" class="text-blue-600 underline hover:text-blue-800">${name} (${pid})</a>`
+      );
+    }).join(', ');
   });
   Object.values(familyGroups).forEach(family => {
     family.shortId =
@@ -126,6 +133,7 @@ const extractUsersFromResponse = (data: any): FlattenedUser[] => {
           role: therapist.userId.role || 'therapist',
           fromCollection: 'therapists',
           phone: therapist.userId.phone || therapist.mobile1 || '',
+          therapistRaw: therapist, // Pass full therapist object for linking
         });
       }
     });
@@ -214,7 +222,104 @@ const UserRow = ({
   onLoginAsUser,
   loggingInUserId,
 }: UserRowProps) => {
+  // Determines if family children should be shown
   const showFamilyChildren = user.fromCollection === 'patients' && user.displayNames;
+
+  // Generate links for patient family children
+  function renderChildrenDisplayNames(htmlString: string) {
+    // Return <span dangerouslySetInnerHTML ...> to interpret string as html links
+    return (
+      <span dangerouslySetInnerHTML={{ __html: htmlString }} />
+    );
+  }
+
+  // For therapists, if available, link name/id
+  function renderTherapistName(name: string, user: FlattenedUser) {
+    // Try to find therapistId and therapist _id
+    // const therapistId = user.shortId || '';
+    // therapistRaw._id most reliable for therapist document id
+    const therapistRaw = user.therapistRaw || {};
+    const therapistObjId = therapistRaw._id || user._id || '';
+
+    if (therapistObjId) {
+      return (
+        <a
+          href={`/super-admin/therapists?therapist=${encodeURIComponent(therapistObjId)}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-blue-700 underline hover:text-blue-900"
+          style={{ textDecoration: 'underline' }}
+        >
+          {name}
+        </a>
+      );
+    }
+    return name;
+  }
+
+  // For therapists, link id
+  function renderTherapistShortId(shortId: string, user: FlattenedUser) {
+    const therapistRaw = user.therapistRaw || {};
+    const therapistObjId = therapistRaw._id || user._id || '';
+
+    if (therapistObjId && shortId) {
+      return (
+        <a
+          href={`/super-admin/therapists?therapist=${encodeURIComponent(therapistObjId)}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-blue-700 underline hover:text-blue-900"
+          style={{ textDecoration: 'underline' }}
+        >
+          {shortId}
+        </a>
+      );
+    }
+    return shortId;
+  }
+
+  // For patients (families), link children id
+  function renderPatientShortId(shortId: string, user: FlattenedUser) {
+    // Maybe multiple IDs, comma separated
+    if (!shortId) return null;
+    if (user.fromCollection !== "patients") return shortId;
+    // familyPatients: [{ patientId }]
+    const ids = shortId.split(/\s*,\s*/);
+    const familyPatients = Array.isArray(user.familyPatients) ? user.familyPatients : [];
+
+    return (
+      <>
+        {ids.map((id, idx) => {
+          // Find actual patient object for this id, fallback just link with id
+          let patientObj = familyPatients.find((p: any) => ('' + p.patientId) === ('' + id));
+          if (!patientObj && familyPatients.length === 1) patientObj = familyPatients[0];
+          // Could be "-" if missing id
+          if (!id || id === "-") {
+            return <span key={id + idx}>-</span>;
+          }
+          return (
+            <a
+              key={id + idx}
+              href={`/super-admin/children?patientId=${encodeURIComponent(id)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-700 underline hover:text-blue-900"
+              style={{ textDecoration: 'underline', marginRight: '0.25em' }}
+            >
+              {id}
+            </a>
+          );
+        }).reduce<React.ReactNode[]>((acc, curr, i) => {
+          if (acc.length > 0) {
+            acc.push(<span key={`comma-${i}`}>, </span>);
+          }
+          acc.push(curr);
+          return acc;
+        }, [])}
+      </>
+    );
+  }
+
   return (
     <tr
       className="hover:bg-blue-50 transition"
@@ -223,18 +328,31 @@ const UserRow = ({
       <TableCell className="font-mono text-blue-900 font-bold">
         <div className="flex items-center gap-2">
           <FiHash className="text-blue-400" />
-          <span>{user.shortId || user._id}</span>
+          {/* User ID - LINK if patient/therapist */}
+          {user.fromCollection === "patients"
+            ? renderPatientShortId(user.shortId, user)
+            : user.fromCollection === "therapists"
+            ? renderTherapistShortId(user.shortId, user)
+            : <span>{user.shortId || user._id}</span>
+          }
         </div>
       </TableCell>
       <TableCell className="font-semibold text-slate-700">
         <div className="flex flex-col">
           <div className="flex items-center gap-2">
             <FiUser className="text-blue-600" />
-            {user.name}
+            {/* Name - link if therapist, for family just text */}
+            {user.fromCollection === "therapists"
+              ? renderTherapistName(user.name, user)
+              : user.name
+            }
           </div>
           {showFamilyChildren && (
             <div className="text-xs mt-1 text-blue-500 font-mono">
-              <span>Children:&nbsp;{user.displayNames}</span>
+              <span>
+                Children:&nbsp;
+                {renderChildrenDisplayNames(user.displayNames)}
+              </span>
             </div>
           )}
         </div>
@@ -463,6 +581,8 @@ const AllUsers: React.FC<AllUsersProps> = () => {
         }
       );
       const { token, role, user: userData } = res.data;
+
+      localStorage.setItem("isLogInViaSuperAdmin", "true");
 
       if (role === "patient") {
         localStorage.setItem("patient-token", token);

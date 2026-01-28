@@ -5,7 +5,11 @@ import SubAdminBackdrop from "./Backdrop";
 import { useEffect, useState } from "react";
 import AdminHeader from "../../pages/AdminPages/AdminHeader/AdminHeader";
 
-const LayoutContent: React.FC = () => {
+const LayoutContent: React.FC<{
+  superAdminName?: string;
+  superAdminEmail?: string;
+  isLoggedInViaSuperAdmin?: boolean;
+}> = ({ superAdminName, superAdminEmail, isLoggedInViaSuperAdmin }) => {
   const { isExpanded, isHovered, isMobileOpen } = useSidebar();
 
   return (
@@ -20,14 +24,29 @@ const LayoutContent: React.FC = () => {
         <SubAdminBackdrop />
       </div>
       <div
-        className={`flex-1 transition-all duration-300 ease-in-out ${
+        className={`transition-all duration-300 ease-in-out ${
           isExpanded || isHovered ? "lg:ml-[290px]" : "lg:ml-[90px]"
         } ${isMobileOpen ? "ml-0" : ""}`}
+        style={{ width: "100%" }}
       >
-        {/* <SubAdminAppHeader /> */}
+        {isLoggedInViaSuperAdmin && (
+          <div className="bg-yellow-100 text-yellow-900 text-xs px-3 py-2 rounded-b shadow mb-2 flex items-center gap-2 border-b border-yellow-200">
+            <span className="font-semibold mr-2">
+              You are logged in as Admin
+            </span>
+            {superAdminName && (
+              <span>
+                (<span className="font-medium">{superAdminName}</span>
+                {superAdminEmail && (
+                  <span className="text-gray-600 ml-1">| {superAdminEmail}</span>
+                )}
+                )
+              </span>
+            )}
+          </div>
+        )}
         <AdminHeader />
-
-        <div className="p-4 mx-auto max-w-(--breakpoint-2xl) md:p-6">
+        <div className="p-4 mx-auto w-full md:p-6">
           <Outlet />
         </div>
       </div>
@@ -37,11 +56,13 @@ const LayoutContent: React.FC = () => {
 
 const SubAdminAppLayout: React.FC = () => {
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean | null>(null);
+  const [superAdminName, setSuperAdminName] = useState<string | undefined>();
+  const [superAdminEmail, setSuperAdminEmail] = useState<string | undefined>();
+  const [isLoggedInViaSuperAdmin, setIsLoggedInViaSuperAdmin] = useState<boolean>(false);
 
   useEffect(() => {
     const checkAdminAuth = async () => {
       try {
-        // Get token and email from localStorage (admin-token & admin-email)
         const token = localStorage.getItem("admin-token");
         if (!token) {
           setIsAdminAuthenticated(false);
@@ -51,7 +72,10 @@ const SubAdminAppLayout: React.FC = () => {
           return;
         }
 
-        // Call the check-auth endpoint (as per auth.routes.js /auth/check-auth)
+        // Check if login is via super admin
+        const isViaSuperAdmin = localStorage.getItem("isLogInViaSuperAdmin") === "true";
+        setIsLoggedInViaSuperAdmin(isViaSuperAdmin);
+
         const res = await fetch(
           `${import.meta.env.VITE_API_URL}/api/auth/`,
           {
@@ -66,7 +90,12 @@ const SubAdminAppLayout: React.FC = () => {
 
         if (res.ok) {
           setIsAdminAuthenticated(true);
-          // If already logged in but on /signin, redirect to /admin
+          const data = await res.json();
+          // API returns { message, name, email } according to backend
+          if (isViaSuperAdmin && data && data.name && data.email) {
+            setSuperAdminName(data.name);
+            setSuperAdminEmail(data.email);
+          }
           if (window.location.pathname === "/signin") {
             window.location.href = "/admin";
           }
@@ -75,7 +104,6 @@ const SubAdminAppLayout: React.FC = () => {
           window.location.href = "/signin";
         }
       } catch (err) {
-        // In case of error, force re-login
         setIsAdminAuthenticated(false);
         window.location.href = "/signin";
       }
@@ -94,7 +122,11 @@ const SubAdminAppLayout: React.FC = () => {
 
   return (
     <SidebarProvider>
-      <LayoutContent />
+      <LayoutContent
+        superAdminName={superAdminName}
+        superAdminEmail={superAdminEmail}
+        isLoggedInViaSuperAdmin={isLoggedInViaSuperAdmin}
+      />
     </SidebarProvider>
   );
 };

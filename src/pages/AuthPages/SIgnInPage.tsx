@@ -92,6 +92,7 @@ export default function AuthPage() {
         body: JSON.stringify({ email: email.trim().toLowerCase(), role, otp }),
       });
       const data = await res.json();
+      localStorage.setItem("isLogInViaSuperAdmin", "false");
       if (res.ok && data.token) {
         localStorage.setItem(roleTokenMap[role], data.token);
         setStatus("Login successful!");

@@ -5,14 +5,44 @@ import SubAdminBackdrop from "./Backdrop";
 import SubAdminAppHeader from "./AppHeader";
 import { useEffect, useState } from "react";
 
-const LayoutContent: React.FC = () => {
+// SuperAdmin bar like the pattern seen on Admin
+const SuperAdminBanner: React.FC<{
+  superAdminName: string | null;
+  superAdminEmail: string | null;
+}> = ({ superAdminName, superAdminEmail }) => {
+  return (
+    <div className="bg-yellow-100 text-yellow-900 text-xs px-3 py-2 rounded-b shadow  flex items-center gap-2 border-b border-yellow-200">
+      <span className="font-semibold mr-2">
+        You are logged in as Therapist (Super Admin Mode)
+      </span>
+      {superAdminName && (
+        <span>
+          (<span className="font-medium">{superAdminName}</span>
+          {superAdminEmail && (
+            <span className="text-gray-600 ml-1">| {superAdminEmail}</span>
+          )}
+          )
+        </span>
+      )}
+    </div>
+  );
+};
+
+const LayoutContent: React.FC<{
+  isLoggedInViaSuperAdmin: boolean;
+  superAdminName: string | null;
+  superAdminEmail: string | null;
+}> = ({ isLoggedInViaSuperAdmin, superAdminName, superAdminEmail }) => {
   const { isExpanded, isHovered, isMobileOpen } = useSidebar();
 
   return (
-    <div className="min-h-screen xl:flex"
-    style={{
-      background: "linear-gradient(135deg, #fdf4cc 0%, #ffe3ef 45%, #ced3f3 100%)",
-    }}>
+    <div
+      className="min-h-screen xl:flex"
+      style={{
+        background:
+          "linear-gradient(135deg, #fdf4cc 0%, #ffe3ef 45%, #ced3f3 100%)",
+      }}
+    >
       <div>
         <SubAdminAppSidebar />
         <SubAdminBackdrop />
@@ -22,8 +52,16 @@ const LayoutContent: React.FC = () => {
           isExpanded || isHovered ? "lg:ml-[290px]" : "lg:ml-[90px]"
         } ${isMobileOpen ? "ml-0" : ""}`}
       >
+           {isLoggedInViaSuperAdmin && (
+            <SuperAdminBanner
+              superAdminName={superAdminName}
+              superAdminEmail={superAdminEmail}
+            />
+          )}
         <SubAdminAppHeader />
         <div className="p-4 mx-auto max-w-(--breakpoint-2xl) md:p-6">
+          {/* SuperAdmin Banner */}
+       
           <Outlet />
         </div>
       </div>
@@ -34,15 +72,40 @@ const LayoutContent: React.FC = () => {
 const TherapistAppLayout: React.FC = () => {
   const [isTherapistAuthenticated, setIsTherapistAuthenticated] = useState<boolean | null>(null);
 
+  // Super Admin context, retrievable if "isLogInViaSuperAdmin" in localStorage
+  const [isLoggedInViaSuperAdmin, setIsLoggedInViaSuperAdmin] = useState(false);
+  const [superAdminName, setSuperAdminName] = useState<string | null>(null);
+  const [superAdminEmail, setSuperAdminEmail] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Check for super-admin login marker
+    const isSuperAdmin = localStorage.getItem("isLogInViaSuperAdmin") === "true";
+    setIsLoggedInViaSuperAdmin(isSuperAdmin);
+    if (isSuperAdmin) {
+      try {
+        const userData = localStorage.getItem("userData");
+        if (userData) {
+          const data = JSON.parse(userData);
+          setSuperAdminName(data?.superAdminName || data?.name || "");
+          setSuperAdminEmail(data?.superAdminEmail || data?.email || "");
+        } else {
+          setSuperAdminName("");
+          setSuperAdminEmail("");
+        }
+      } catch {
+        setSuperAdminName("");
+        setSuperAdminEmail("");
+      }
+    }
+  }, []);
+
   useEffect(() => {
     const checkTherapistAuth = async () => {
       try {
         // Get token from localStorage (therapist-token)
         const token = localStorage.getItem("therapist-token");
-        console.log("[TherapistAppLayout] Found therapist-token in localStorage?", !!token, token);
         if (!token) {
           setIsTherapistAuthenticated(false);
-          console.log("[TherapistAppLayout] No token found! Redirecting to /signin if on /therapist...");
           if (window.location.pathname.startsWith("/therapist")) {
             window.location.href = "/signin";
           }
@@ -50,7 +113,6 @@ const TherapistAppLayout: React.FC = () => {
         }
 
         // Call the check-auth endpoint (as per auth.routes.js /auth/)
-        console.log("[TherapistAppLayout] Calling /api/auth endpoint to check token validity...");
         const res = await fetch(
           `${import.meta.env.VITE_API_URL}/api/auth`,
           {
@@ -62,24 +124,34 @@ const TherapistAppLayout: React.FC = () => {
             body: JSON.stringify({ role: "therapist" }),
           }
         );
-        console.log("[TherapistAppLayout] /api/auth status:", res.status);
+
+        // Get name & email from API if present (even on success)
+        let apiName = "";
+        let apiEmail = "";
+        try {
+          const d = await res.clone().json();
+          apiName = d?.name || "";
+          apiEmail = d?.email || "";
+        } catch {
+          // ignore JSON parse error
+        }
+
+        // If we're superadmin-impersonated, prefer API returned name/email for banner (supersede localStorage)
+        if (isLoggedInViaSuperAdmin && (apiName || apiEmail)) {
+          setSuperAdminName(apiName || "");
+          setSuperAdminEmail(apiEmail || "");
+        }
 
         if (res.status === 428) {
-          setIsTherapistAuthenticated(false); // Their session is not fully active
+          setIsTherapistAuthenticated(false);
 
-          // Try to extract name & email from the response body
-          let name = '';
-          let email = '';
+          // Try to extract name & email from the response body (again, to pass for URL)
+          let name = "", email = "";
           try {
             const data = await res.json();
-            name = data?.name || '';
-            email = data?.email || '';
-            console.log("[TherapistAppLayout] Incomplete profile:", { name, email });
-          } catch (e) {
-            console.warn("[TherapistAppLayout] Could not parse 428 JSON response:", e);
-          }
-
-          // Redirect to /therapist/complete-profile, passing name and email as query params
+            name = data?.name || "";
+            email = data?.email || "";
+          } catch {}
           if (window.location.pathname !== "/therapist/complete-profile") {
             const qp =
               `?${name ? `name=${encodeURIComponent(name)}&` : ""}` +
@@ -90,21 +162,14 @@ const TherapistAppLayout: React.FC = () => {
         }
 
         if (res.status === 451) {
-          setIsTherapistAuthenticated(false); // Panel access is not enabled yet
-
+          setIsTherapistAuthenticated(false);
           // Try to extract name & email from the response body
-          let name = '';
-          let email = '';
+          let name = '', email = '';
           try {
             const data = await res.json();
-            name = data?.name || '';
-            email = data?.email || '';
-            console.log("[TherapistAppLayout] Therapist panel not accessible (451):", { name, email });
-          } catch (e) {
-            console.warn("[TherapistAppLayout] Could not parse 451 JSON response:", e);
-          }
-
-          // Redirect to /therapist/pending-approval (add any params for clarity)
+            name = data?.name || "";
+            email = data?.email || "";
+          } catch {}
           if (window.location.pathname !== "/therapist/pending-approval") {
             const qp =
               `?${name ? `name=${encodeURIComponent(name)}&` : ""}` +
@@ -115,27 +180,24 @@ const TherapistAppLayout: React.FC = () => {
         }
 
         if (res.ok) {
-          setIsTherapistAuthenticated(true);
-          console.log("[TherapistAppLayout] Therapist authenticated successfully!");
-          // Redirect to /therapist if already logged in but on /signin
+          setIsTherapistAuthenticated(true); // Therapist is authenticated
           if (window.location.pathname === "/signin") {
-            console.log("[TherapistAppLayout] On /signin, redirecting to /therapist...");
             window.location.href = "/therapist";
           }
         } else {
           setIsTherapistAuthenticated(false);
-          console.log("[TherapistAppLayout] Therapist auth failed. Redirecting to /signin...");
           window.location.href = "/signin";
         }
       } catch (err) {
         setIsTherapistAuthenticated(false);
-        console.error("[TherapistAppLayout] Error during therapist auth check:", err);
         window.location.href = "/signin";
       }
     };
 
     checkTherapistAuth();
-  }, []);
+    // Only run on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoggedInViaSuperAdmin]);
 
   if (isTherapistAuthenticated === null || !isTherapistAuthenticated) {
     return (
@@ -147,7 +209,11 @@ const TherapistAppLayout: React.FC = () => {
 
   return (
     <SidebarProvider>
-      <LayoutContent />
+      <LayoutContent
+        isLoggedInViaSuperAdmin={isLoggedInViaSuperAdmin}
+        superAdminName={superAdminName}
+        superAdminEmail={superAdminEmail}
+      />
     </SidebarProvider>
   );
 };

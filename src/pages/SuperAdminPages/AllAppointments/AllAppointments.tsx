@@ -67,6 +67,18 @@ const AppointmentCard = ({
   // Therapist name & id
   const therapistName = booking.therapist?.userId?.name || "-";
   const therapistId = booking.therapist?.therapistId || "-";
+  const therapist_ObjId = booking.therapist?._id || booking.therapist?.userId?._id || booking.therapist?.therapistId || "";
+
+  // Patient "href"
+  const patientHref =
+    patientId && patientId !== "-"
+      ? `/super-admin/children?patientId=${encodeURIComponent(patientId)}`
+      : undefined;
+  // Therapist "href"
+  const therapistHref =
+    therapist_ObjId && therapist_ObjId !== "-"
+      ? `/super-admin/therapists?therapist=${encodeURIComponent(therapist_ObjId)}`
+      : undefined;
 
   return (
     <div
@@ -99,14 +111,64 @@ const AppointmentCard = ({
             {/* Patient quick info */}
             <span className="flex items-center gap-1 bg-yellow-50 rounded px-2 py-1 text-slate-800 text-base">
               <FiUserCheck className="text-orange-500" />
-              <span className="font-semibold">{patientName}</span>
-              <span className="text-sm font-mono text-blue-700">[{patientId}]</span>
+              {patientHref ? (
+                <>
+                  <a
+                    href={patientHref}
+                    className="font-semibold text-blue-700 underline hover:text-blue-900 transition"
+                    title={patientName}
+                    tabIndex={0}
+                    onClick={e => e.stopPropagation()}
+                  >
+                    {patientName}
+                  </a>
+                  <a
+                    href={patientHref}
+                    className="text-sm font-mono text-blue-700 underline hover:text-blue-900 transition"
+                    title={patientId}
+                    tabIndex={0}
+                    onClick={e => e.stopPropagation()}
+                  >
+                    [{patientId}]
+                  </a>
+                </>
+              ) : (
+                <>
+                  <span className="font-semibold">{patientName}</span>
+                  <span className="text-sm font-mono text-blue-700">[{patientId}]</span>
+                </>
+              )}
             </span>
             {/* Therapist quick info */}
             <span className="flex items-center gap-1 bg-purple-50 rounded px-2 py-1 text-purple-900 text-base">
               <FiUser className="text-sky-600" />
-              <span className="font-semibold">{therapistName}</span>
-              <span className="text-sm font-mono text-blue-700">[{therapistId}]</span>
+              {therapistHref ? (
+                <>
+                  <a
+                    href={therapistHref}
+                    className="font-semibold text-blue-700 underline hover:text-blue-900 transition"
+                    title={therapistName}
+                    tabIndex={0}
+                    onClick={e => e.stopPropagation()}
+                  >
+                    {therapistName}
+                  </a>
+                  <a
+                    href={therapistHref}
+                    className="text-sm font-mono text-blue-700 underline hover:text-blue-900 transition"
+                    title={therapistId}
+                    tabIndex={0}
+                    onClick={e => e.stopPropagation()}
+                  >
+                    [{therapistId}]
+                  </a>
+                </>
+              ) : (
+                <>
+                  <span className="font-semibold">{therapistName}</span>
+                  <span className="text-sm font-mono text-blue-700">[{therapistId}]</span>
+                </>
+              )}
             </span>
           </div>
           <div className="flex flex-wrap items-center gap-3 md:gap-6 mt-1 md:mt-0"></div>
@@ -158,11 +220,34 @@ const AppointmentCard = ({
               {/* Patient name & id PROMINENT */}
               <div className="flex gap-2 mb-1 flex-wrap items-center">
                 <span className="font-medium text-slate-700 text-base">
-                  Name: <span className="font-semibold">{patientName}</span>
+                  Name:{" "}
+                  {patientHref ? (
+                    <a
+                      href={patientHref}
+                      className="font-semibold text-blue-700 underline hover:text-blue-900 transition"
+                      title={patientName}
+                      tabIndex={0}
+                    >
+                      {patientName}
+                    </a>
+                  ) : (
+                    <span className="font-semibold">{patientName}</span>
+                  )}
                 </span>
-                <span className="text-xs px-2 py-1 rounded bg-slate-100 font-mono text-blue-700">
-                  ID: {patientId}
-                </span>
+                {patientHref ? (
+                  <a
+                    href={patientHref}
+                    className="text-xs px-2 py-1 rounded bg-slate-100 font-mono text-blue-700 underline hover:text-blue-900 transition"
+                    title={patientId}
+                    tabIndex={0}
+                  >
+                    ID: {patientId}
+                  </a>
+                ) : (
+                  <span className="text-xs px-2 py-1 rounded bg-slate-100 font-mono text-blue-700">
+                    ID: {patientId}
+                  </span>
+                )}
                 <span className="text-xs px-2 py-1 rounded bg-yellow-50 text-yellow-700">
                   {yearsFromDOB(booking.patient?.childDOB)} old
                 </span>
@@ -283,10 +368,33 @@ const AppointmentCard = ({
                 <div className="flex flex-col pl-6 gap-1 text-slate-700">
                   {/* Therapist name & id PROMINENT */}
                   <span className="font-semibold">
-                    Name: <span>{therapistName}</span>
-                    <span className="ml-2 text-xs font-mono text-blue-700">
-                      ID: {therapistId}
-                    </span>
+                    Name:{" "}
+                    {therapistHref ? (
+                      <a
+                        href={therapistHref}
+                        className="text-blue-700 underline hover:text-blue-900 transition font-semibold"
+                        title={therapistName}
+                        tabIndex={0}
+                      >
+                        {therapistName}
+                      </a>
+                    ) : (
+                      <span>{therapistName}</span>
+                    )}
+                    {therapistHref ? (
+                      <a
+                        href={therapistHref}
+                        className="ml-2 text-xs font-mono text-blue-700 underline hover:text-blue-900 transition"
+                        title={therapistId}
+                        tabIndex={0}
+                      >
+                        ID: {therapistId}
+                      </a>
+                    ) : (
+                      <span className="ml-2 text-xs font-mono text-blue-700">
+                        ID: {therapistId}
+                      </span>
+                    )}
                   </span>
                   <span className="text-xs flex items-center gap-2">
                     {booking.therapist?.userId?.email && (
@@ -376,42 +484,79 @@ const AppointmentCard = ({
                   </tr>
                 </thead>
                 <tbody>
-                  {booking.sessions.map((s: any, idx: number) => (
-                    <tr key={s._id || s.date + s.slotId}>
-                      <td className="px-2 py-1 border border-slate-200 text-slate-400">
-                        {idx + 1}
-                      </td>
-                      <td className="px-2 py-1 border border-slate-200 text-blue-900">
-                        {formatShortDate(s.date)}
-                      </td>
-                      <td className="px-2 py-1 border border-slate-200">
-                        <span className="bg-slate-100 rounded px-2 font-mono">
-                          {s.slotId || "-"}
-                        </span>
-                      </td>
-                      <td className="px-2 py-1 border border-slate-200">
-                        {/* Therapist name & id in session table */}
-                        {s.therapist?.userId?.name || "-"}
-                        {s.therapist?.therapistId && (
-                          <span className="ml-2 text-xs font-mono text-blue-800">
-                            [{s.therapist.therapistId}]
+                  {booking.sessions.map((s: any, idx: number) => {
+                    // Therapist link for each session, use therapist._id or therapist.userId._id or therapist.therapistId
+                    const sessionTherapistName = s.therapist?.userId?.name || "-";
+                    const sessionTherapistId = s.therapist?.therapistId || "-";
+                    const sessionTherapist_ObjId = s.therapist?._id || s.therapist?.userId?._id || s.therapist?.therapistId || "";
+                    const sessionTherapistHref =
+                      sessionTherapist_ObjId && sessionTherapist_ObjId !== "-"
+                        ? `/super-admin/therapists?therapist=${encodeURIComponent(sessionTherapist_ObjId)}`
+                        : undefined;
+                    return (
+                      <tr key={s._id || s.date + s.slotId}>
+                        <td className="px-2 py-1 border border-slate-200 text-slate-400">
+                          {idx + 1}
+                        </td>
+                        <td className="px-2 py-1 border border-slate-200 text-blue-900">
+                          {formatShortDate(s.date)}
+                        </td>
+                        <td className="px-2 py-1 border border-slate-200">
+                          <span className="bg-slate-100 rounded px-2 font-mono">
+                            {s.slotId || "-"}
                           </span>
-                        )}
-                      </td>
-                      <td className="px-2 py-1 border border-slate-200">
-                        {s.therapyTypeId?.name || "-"}
-                      </td>
-                      <td className="px-2 py-1 border border-slate-200 text-center">
-                        {s.isCheckedIn ? (
-                          <span className="flex items-center gap-1 text-green-600">
-                            <FiCheckCircle className="inline" /> Yes
-                          </span>
-                        ) : (
-                          <span className="text-slate-400">No</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                        <td className="px-2 py-1 border border-slate-200">
+                          {/* Therapist name & id in session table */}
+                          {sessionTherapistHref ? (
+                            <>
+                              <a
+                                href={sessionTherapistHref}
+                                className="text-blue-700 underline hover:text-blue-900 font-semibold transition"
+                                title={sessionTherapistName}
+                                tabIndex={0}
+                                onClick={e => e.stopPropagation()}
+                              >
+                                {sessionTherapistName}
+                              </a>
+                              {s.therapist?.therapistId && (
+                                <a
+                                  href={sessionTherapistHref}
+                                  className="ml-2 text-xs font-mono text-blue-700 underline hover:text-blue-900 transition"
+                                  title={sessionTherapistId}
+                                  tabIndex={0}
+                                  onClick={e => e.stopPropagation()}
+                                >
+                                  [{sessionTherapistId}]
+                                </a>
+                              )}
+                            </>
+                          ) : (
+                            <>
+                              {sessionTherapistName}
+                              {s.therapist?.therapistId && (
+                                <span className="ml-2 text-xs font-mono text-blue-800">
+                                  [{sessionTherapistId}]
+                                </span>
+                              )}
+                            </>
+                          )}
+                        </td>
+                        <td className="px-2 py-1 border border-slate-200">
+                          {s.therapyTypeId?.name || "-"}
+                        </td>
+                        <td className="px-2 py-1 border border-slate-200 text-center">
+                          {s.isCheckedIn ? (
+                            <span className="flex items-center gap-1 text-green-600">
+                              <FiCheckCircle className="inline" /> Yes
+                            </span>
+                          ) : (
+                            <span className="text-slate-400">No</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

@@ -372,6 +372,9 @@ export default function SessionEditRequestsAdmin() {
 
                     const expanded = viewRequestId === req._id;
 
+                    // Patient page href: /admin/children?patientId=${encodeURIComponent(patient.patientId)}
+                    // Only render as link if patient.patientId exists
+
                     return (
                       <React.Fragment key={req._id + idx}>
                         <tr
@@ -381,8 +384,36 @@ export default function SessionEditRequestsAdmin() {
                           }
                         >
                           <td className="px-4 py-3 font-mono text-sm text-blue-900">{getAppointmentId(req) || "-"}</td>
-                          <td className="px-4 py-3">{patient.name || <span className="text-slate-400 italic">Anonymous</span>}</td>
-                          <td className="px-4 py-3 font-mono">{patient.patientId || <span className="text-slate-400 italic">-</span>}</td>
+                          <td className="px-4 py-3">
+                            {patient.name && patient.patientId ? (
+                              <a
+                                href={`/admin/children?patientId=${encodeURIComponent(patient.patientId)}`}
+                                className="text-blue-700 hover:underline font-medium"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                {patient.name}
+                              </a>
+                            ) : patient.name ? (
+                              patient.name
+                            ) : (
+                              <span className="text-slate-400 italic">Anonymous</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 font-mono">
+                            {patient.patientId ? (
+                              <a
+                                href={`/admin/children?patientId=${encodeURIComponent(patient.patientId)}`}
+                                className="text-blue-700 hover:underline font-mono"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                {patient.patientId}
+                              </a>
+                            ) : (
+                              <span className="text-slate-400 italic">-</span>
+                            )}
+                          </td>
                           <td className="px-4 py-3">{therapyName || <span className="text-slate-400 italic">-</span>}</td>
                           <td className="px-4 py-3">
                             {patient.mobile1 || patient.mobile2 ? (

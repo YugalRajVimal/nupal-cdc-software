@@ -6,6 +6,7 @@ import {
   FiCalendar,
   FiChevronDown,
   FiChevronUp,
+  FiX,
 } from "react-icons/fi";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -34,6 +35,7 @@ type Appointment = {
   patient: { name: string; _id: string; patientId?: string; gender?: string; mobile?: string } | null;
   therapistName: string;
   therapistId: string;
+  therapistUserId:string,
   sessionId:string,
   time?: string;
   status?: "scheduled" | "checked-in";
@@ -51,6 +53,7 @@ type PaymentInfo = {
   paymentAmount?: number | string;
   paymentMethod?: string;
   paymentRecordId?: string;
+  amountPaid?: number | string;
   [key: string]: any;
 };
 
@@ -62,12 +65,68 @@ function getTodaySession(sessions?: any[], today?: string) {
   return sessions.find((sess) => sess.date === today);
 }
 
+type CollectModalState = {
+  visible: boolean,
+  payment: PaymentInfo | null
+};
+
 export default function ReceptionDesk() {
   const [loading, setLoading] = useState(true);
   const [guideOpen, setGuideOpen] = useState(false);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [payments, setPayments] = useState<PaymentInfo[]>([]);
   const [today, setToday] = useState<string>("");
+
+  // Modal State
+  const [collectModal, setCollectModal] = useState<CollectModalState>({ visible: false, payment: null });
+  const [collectType, setCollectType] = useState<'full' | 'partial'>('full');
+  const [partialValue, setPartialValue] = useState<string>("");
+  const [collectLoading, setCollectLoading] = useState(false);
+
+  // For disabling button if entered partial + amountPaid > amount
+  function toNumber(v: any): number | undefined {
+    if (typeof v === "number") return v;
+    if (typeof v === "string" && v.trim() !== "") {
+      const n = parseFloat(v);
+      return isNaN(n) ? undefined : n;
+    }
+    return undefined;
+  }
+
+  // Get the total amount due for the invoice (total invoice amount)
+  const getPaymentAmount = () => {
+    if (!collectModal.payment?.paymentAmount) return undefined;
+    let amount = collectModal.payment.paymentAmount;
+    return toNumber(amount);
+  };
+
+  // Get how much was already paid (if any)
+  const getAmountPaid = () => {
+    if (!collectModal.payment?.amountPaid) return 0;
+    let paid = collectModal.payment.amountPaid;
+    const paidNum = toNumber(paid);
+    return paidNum ?? 0;
+  };
+
+  const paymentAmount = getPaymentAmount();
+  const amountAlreadyPaid = getAmountPaid();
+  const partialNumeric = parseFloat(partialValue);
+
+  // New logic: check if partialValue + alreadyPaid exceeds paymentAmount
+  const isPartialOverDue =
+    collectType === "partial" &&
+    partialValue &&
+    paymentAmount !== undefined &&
+    !isNaN(partialNumeric) &&
+    (partialNumeric + amountAlreadyPaid) > paymentAmount;
+
+  // Legacy compatibility: get pending/due for just display/max UI
+  const getPaymentDue = () => {
+    if (paymentAmount === undefined) return undefined;
+    return paymentAmount - amountAlreadyPaid;
+  };
+
+  const paymentDue = getPaymentDue();
 
   // Fetch reception desk data
   useEffect(() => {
@@ -98,9 +157,11 @@ export default function ReceptionDesk() {
           // Therapist info: Try to get therapistName from session's therapist.userId.name, fall back to main therapist
           let therapistName = "";
           let therapistId = "";
+          let therapistUserId = "";
           if (session && session.therapist && session.therapist.userId && session.therapist.userId.name) {
             therapistName = session.therapist.userId.name;
             therapistId = session.therapist.therapistId;
+            therapistUserId = session.therapist._id;
           } else if (
             booking.therapist &&
             (typeof booking.therapist === "object") &&
@@ -111,11 +172,8 @@ export default function ReceptionDesk() {
                 ? booking.therapist.userId.name
                 : (booking.therapist.name || "");
             therapistId = booking.therapist._id;
+            therapistUserId = booking.therapist._id;
           }
-
-          // Patient info
-          // const patientName =
-          //   booking.patient && booking.patient.name ? booking.patient.name : "";
 
           let status: "scheduled" | "checked-in" = "scheduled";
           if (booking.isCheckedIn) status = "checked-in";
@@ -127,6 +185,7 @@ export default function ReceptionDesk() {
             patient: booking.patient || null,
             therapistName: therapistName,
             therapistId: therapistId,
+            therapistUserId: therapistUserId,
             sessionId:session?._id,
             time: session?.slotId ?? session?.time ?? "",
             status,
@@ -147,6 +206,7 @@ export default function ReceptionDesk() {
           let paymentAmount = (typeof paymentRecord.amount !== "undefined" ? paymentRecord.amount : undefined);
           let paymentMethod = paymentRecord.paymentMethod || "";
           let paymentRecordId = paymentRecord._id || undefined;
+          let amountPaid = (typeof paymentRecord.amountPaid !== "undefined" ? paymentRecord.amountPaid : 0);
 
           return {
             _id: booking._id,
@@ -158,6 +218,7 @@ export default function ReceptionDesk() {
             paymentAmount,
             paymentMethod,
             paymentRecordId,
+            amountPaid,
           };
         });
 
@@ -211,26 +272,150 @@ export default function ReceptionDesk() {
     }
   };
 
-  // Handler to "collect" a payment (actual POST to API)
-  const handleCollect = async (_id: string, paymentRecordId?: string) => {
+  // Opens the Collect Modal
+  const openCollectModal = (payment: PaymentInfo) => {
+    setCollectModal({ visible: true, payment });
+    setCollectType('full');
+    setPartialValue("");
+  };
+
+  // Closes the Collect Modal
+  const closeCollectModal = () => {
+    setCollectModal({ visible: false, payment: null });
+    setPartialValue("");
+    setCollectType('full');
+    setCollectLoading(false);
+  };
+
+  // Handler to "collect" a payment (actual POST to API) — now handles full/partial
+  const handleCollect = async () => {
+    const payment = collectModal.payment;
+    if (!payment) return;
+    const _id = payment._id;
+    const paymentRecordId = payment.paymentRecordId;
+
     const token = localStorage.getItem("admin-token");
-    console.log(paymentRecordId);
+    setCollectLoading(true);
+
     try {
-      const res = await fetch(
-        `${API_URL}/api/admin/bookings/${_id}/collect-payment`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: token || "",
-            "Content-Type": "application/json",
-          },
+      let url = `${API_URL}/api/admin/bookings/${_id}/collect-payment`;
+      let payload: any = {};
+      // let method = "POST";
+
+      let newAmountPaid = getAmountPaid();
+
+      let partialPaidAmount: number | undefined = undefined;
+
+      if (collectType === "partial") {
+        let val = parseFloat(partialValue);
+        if (isNaN(val) || val <= 0) {
+          setCollectLoading(false);
+          alert("Please enter a valid partial amount.");
+          return;
         }
-      );
+        // Prevent partial + alreadyPaid > amount
+        if (
+          paymentAmount !== undefined &&
+          !isNaN(val) &&
+          (val + amountAlreadyPaid) > paymentAmount
+        ) {
+          setCollectLoading(false);
+          alert(
+            `Partial amount plus already paid (${val} + ${amountAlreadyPaid
+            }) cannot exceed the pending amount (${paymentAmount})`
+          );
+          return;
+        }
+        payload = { partialAmount: val, paymentId: paymentRecordId, paymentType: collectType };
+        partialPaidAmount = val;
+        newAmountPaid += val;
+      } else {
+        payload = paymentRecordId ? { paymentId: paymentRecordId } : {};
+        // In case of full, payment is paid in full
+        newAmountPaid = paymentAmount !== undefined ? paymentAmount : newAmountPaid;
+      }
+
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          Authorization: token || "",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.message || "Failed to record payment");
-      // Remove from pending payments
-      setPayments((pays) => pays.filter((p) => p._id !== _id));
+
+      // We'll use the returned server data for payment status/amount if available
+      // let updatedPaymentStatus = data.paymentStatus || data.status || (collectType === "full" ? "paid" : "partial");
+
+      // If server has payment/amountPaid on response, use it. If partial, but only updated amount, add previous + new paid
+      let finalAmountPaid: number;
+      if (typeof data.amountPaid !== 'undefined' && data.amountPaid !== null) {
+        // Use server value if it's a valid number, else fallback
+        finalAmountPaid = toNumber(data.amountPaid) ?? newAmountPaid;
+      } else if (collectType === "partial" && typeof partialPaidAmount === "number") {
+        // Partial payment, if no server field, sum up amount
+        finalAmountPaid = amountAlreadyPaid + partialPaidAmount;
+      } else {
+        finalAmountPaid = newAmountPaid;
+      }
+
+      let totalAmount: number;
+      if (typeof data.amount !== 'undefined' && data.amount !== null) {
+        totalAmount = toNumber(data.amount) ?? paymentAmount ?? 0;
+      } else {
+        totalAmount = paymentAmount ?? 0;
+      }
+
+      // If server returned final fields, trust them
+      if (
+        data.status === "paid" ||
+        data.paymentStatus === "paid" ||
+        (typeof totalAmount === "number" && typeof finalAmountPaid === "number" && totalAmount > 0 && finalAmountPaid >= totalAmount)
+      ) {
+        // Fully paid, remove from pending
+        setPayments((pays) => pays.filter((p) => p._id !== _id));
+      } else {
+        // Partial payment, update the corresponding record
+        setPayments((pays) =>
+          pays.map((p) => {
+            if (p._id === _id) {
+              const updatedFields: Partial<PaymentInfo> = {};
+              // If it's a partial payment, refresh the paid amount by adding the partial to previous paid if server did not give amountPaid:
+              if (
+                collectType === "partial" &&
+                typeof data.amountPaid === "undefined" &&
+                typeof partialPaidAmount === "number"
+              ) {
+                updatedFields.amountPaid = (toNumber(p.amountPaid) ?? 0) + partialPaidAmount;
+              } else if (typeof data.amountPaid !== "undefined") {
+                updatedFields.amountPaid = data.amountPaid;
+              }
+              if (typeof data.amount !== "undefined") updatedFields.paymentAmount = data.amount;
+
+              // Mark status as "partiallypaid" on partial, unless it's already paid
+              if (
+                collectType === "partial" &&
+                (
+                  typeof data.paymentStatus === "undefined" &&
+                  typeof data.status === "undefined"
+                )
+              ) {
+                updatedFields.paymentStatus = "partiallypaid";
+              } else {
+                if (typeof data.paymentStatus !== "undefined") updatedFields.paymentStatus = data.paymentStatus;
+                if (typeof data.status !== "undefined") updatedFields.paymentStatus = data.status;
+              }
+              return { ...p, ...updatedFields };
+            }
+            return p;
+          })
+        );
+      }
+      closeCollectModal();
     } catch (err) {
+      setCollectLoading(false);
       alert(
         typeof err === "string"
           ? err
@@ -270,13 +455,6 @@ export default function ReceptionDesk() {
             – {today || new Date().toISOString().slice(0, 10)}
           </span>
         </h1>
-        {/* <div className="relative w-72">
-          <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input
-            placeholder="Quick Patient Search…"
-            className="w-full rounded-md border border-slate-300 bg-white pl-10 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
-        </div> */}
       </div>
 
       {/* Guide */}
@@ -357,6 +535,150 @@ export default function ReceptionDesk() {
         </AnimatePresence>
       </motion.div>
 
+      {/* Payment Collection Modal */}
+      <AnimatePresence>
+        {collectModal.visible && collectModal.payment && (
+          <motion.div
+            key="collect-modal"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/30"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={{ backdropFilter: "blur(2px)" }}
+            onClick={closeCollectModal}
+          >
+            <motion.div
+              initial={{ scale: 0.96, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              transition={{ type: "spring", stiffness: 280, damping: 30 }}
+              className="bg-white rounded-lg shadow-lg max-w-sm w-full border border-slate-200 relative"
+              onClick={e => e.stopPropagation()}
+            >
+              <button
+                className="absolute top-3 right-3 text-slate-400 hover:text-slate-700"
+                onClick={closeCollectModal}
+                tabIndex={-1}
+                aria-label="Close"
+              >
+                <FiX size={20} />
+              </button>
+              <div className="p-6 pb-2">
+                <div className="font-semibold text-lg text-slate-800 flex items-center gap-2 mb-2">
+                  Collect Payment
+                </div>
+                <div className="text-sm mb-3">
+                  <span className="font-medium text-blue-700">Appt#: {collectModal.payment.appointmentId}</span>
+                  <br />
+                  {/* PatientName with a link for modal */}
+                  {collectModal.payment.patientId && (
+                    <a
+                      href={`/admin/children?patientId=${encodeURIComponent(collectModal.payment.patientId)}`}
+                      className="text-blue-700 hover:underline"
+                      title="View patient details"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={e => e.stopPropagation()}
+                    >
+                      <span className="text-slate-800">{collectModal.payment.patientName}</span>
+                    </a>
+                  )}
+                  {!collectModal.payment.patientId && (
+                    <span className="text-slate-800">{collectModal.payment.patientName}</span>
+                  )}
+                  {" "}
+                  <span className="text-xs text-blue-300 font-mono">({collectModal.payment.patientId})</span>
+                  <br />
+                  <span className="text-xs text-slate-500">
+                    Amount Due: <span className="font-semibold text-slate-700">
+                      ₹{String(collectModal.payment.paymentAmount ?? "—")}
+                    </span>
+                  </span>
+                  {collectModal.payment.amountPaid && (
+                    <span className="text-xs text-slate-400 ml-2">
+                      (Already paid: ₹{String(collectModal.payment.amountPaid)})
+                    </span>
+                  )}
+                </div>
+                <form
+                  onSubmit={e => {
+                    e.preventDefault();
+                    if (collectLoading || isPartialOverDue) return;
+                    handleCollect();
+                  }}
+                >
+                  <div className="mb-4 mt-1">
+                    <label className="block font-medium text-slate-700 mb-1">Collection Type</label>
+                    <div className="flex gap-4 items-center">
+                      <label className="flex items-center gap-1 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="collectType"
+                          value="full"
+                          checked={collectType === "full"}
+                          onChange={() => setCollectType("full")}
+                        />
+                        <span className="text-sm">Full Amount</span>
+                      </label>
+                      <label className="flex items-center gap-1 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="collectType"
+                          value="partial"
+                          checked={collectType === "partial"}
+                          onChange={() => setCollectType("partial")}
+                        />
+                        <span className="text-sm">Partial Amount</span>
+                      </label>
+                    </div>
+                  </div>
+                  {collectType === "partial" && (
+                    <div className="mb-2">
+                      <label className="block mb-1 text-slate-700 text-xs">
+                        Enter Partial Amount <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        min={1}
+                        step={1}
+                        value={partialValue}
+                        onChange={e => setPartialValue(e.target.value)}
+                        className="w-full px-2 py-1 rounded border border-slate-300 text-slate-800 focus:ring focus:ring-green-200 text-sm"
+                        placeholder="E.g. 800"
+                        required
+                        disabled={collectLoading}
+                        max={paymentDue ?? undefined} // Just for UI, but main check is in code
+                      />
+                      {isPartialOverDue && (
+                        <div className="text-xs text-red-500 mt-1">
+                          Partial amount plus already paid cannot exceed the invoice total ({paymentAmount}).
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  <button
+                    type="submit"
+                    className={`mt-3 w-full rounded-md border border-green-500 px-4 py-2 text-sm font-semibold text-green-700 relative ${
+                      collectLoading || isPartialOverDue ? "bg-green-50 opacity-80 cursor-not-allowed" : "hover:bg-green-50"
+                    }`}
+                    disabled={Boolean(collectLoading || isPartialOverDue)}
+                  >
+                    {collectLoading
+                      ? "Processing…"
+                      : collectType === "full"
+                      ? "Collect Full Amount"
+                      : "Collect Partial Amount"}
+                  </button>
+                  <div className="mt-1 text-xs text-slate-400 text-center">
+                    {collectType === "partial" ? "Collects a partial payment; the remaining will appear as pending." : "Marks the invoice as fully paid."}
+                  </div>
+                </form>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Bottom Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Appointments */}
@@ -379,12 +701,25 @@ export default function ReceptionDesk() {
                   <div>
                     <div className="font-medium text-slate-800 flex flex-col items-start gap-1 flex-wrap">
                       <span>
-                        {a.patient?.name ?? "Anonymous"}
+                        {/* Add a link for patient name if id present */}
+                        {a.patient && a.patient._id ? (
+                          <a
+                            href={`/admin/children?patientId=${encodeURIComponent(a.patient._id)}`}
+                            className="text-blue-700 hover:underline"
+                            title="View patient details"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={e => e.stopPropagation()}
+                          >
+                            {a.patient.name ?? "Anonymous"}
+                          </a>
+                        ) : (
+                          a.patient?.name ?? "Anonymous"
+                        )}
                         <span className="text-xs text-blue-400 font-semibold ml-1">
                           ({a.patient?.patientId || "--"})
                         </span>
                       </span>
-
                       <span className=" text-sm font-semibold text-slate-600">
                         | Appt#:{" "}
                         <span className="text-blue-700">{a.appointmentId}</span>
@@ -396,7 +731,6 @@ export default function ReceptionDesk() {
                         }
                       </span>
                       </span>
-                     
                       {(a.status === "checked-in" || a.isCheckedIn) && (
                         <span className="ml-2 text-green-600 text-xs bg-green-50 rounded px-2 py-0.5 font-semibold">
                           Checked In
@@ -406,7 +740,20 @@ export default function ReceptionDesk() {
                     <div className="text-xs text-slate-500 mt-0.5">
                       Therapist:{" "}
                       <span className="font-semibold">
-                        {a.therapistName || "—"}
+                        {(a.therapistName && a.therapistId) ? (
+                          <a
+                            href={`/admin/therapists?therapistId=${encodeURIComponent(a.therapistUserId)}`}
+                            className="text-blue-600 hover:underline"
+                            title="View therapist details"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={e => e.stopPropagation()}
+                          >
+                            {a.therapistName}
+                          </a>
+                        ) : (
+                          a.therapistName || "—"
+                        )}
                       </span>{" "}
                       <span className="text-blue-400 font-mono">
                         {a.therapistId ? `(${a.therapistId})` : ""}
@@ -441,7 +788,6 @@ export default function ReceptionDesk() {
           <div className="flex items-center gap-2 font-semibold text-slate-700 mb-4">
             <FiCreditCard className="text-green-600" /> Pending Payments
           </div>
-
           {payments.length === 0 ? (
             <p className="text-sm text-slate-500">No pending payments.</p>
           ) : (
@@ -457,7 +803,21 @@ export default function ReceptionDesk() {
                         Appt#: {payment.appointmentId}
                       </span>
                       <span className="font-medium text-slate-800">
-                        {payment.patientName}
+                        {/* Add a link for patientName if patientId present */}
+                        {payment.patientId ? (
+                          <a
+                            href={`/admin/children?patientId=${encodeURIComponent(payment.patientId)}`}
+                            className="text-blue-700 hover:underline"
+                            title="View patient details"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={e => e.stopPropagation()}
+                          >
+                            {payment.patientName}
+                          </a>
+                        ) : (
+                          payment.patientName
+                        )}
                         <span className="ml-1 text-xs text-blue-400 font-mono">
                           ({payment.patientId})
                         </span>
@@ -489,19 +849,19 @@ export default function ReceptionDesk() {
                           ? payment.paymentAmount
                           : "—"}
                       </span>
-                      {/* {payment.paymentMethod && (
+                      {payment.amountPaid && (
                         <span>
-                          Method:{" "}
-                          <span className="text-slate-700">
-                            {payment.paymentMethod}
-                          </span>
+                          , Paid: ₹
+                          {typeof payment.amountPaid === "number" || /^\d+$/.test(String(payment.amountPaid))
+                            ? payment.amountPaid
+                            : "—"}
                         </span>
-                      )} */}
+                      )}
                     </div>
                   </div>
                   <button
                     className="rounded-md border border-green-500 px-4 py-1.5 text-sm font-medium text-green-600 hover:bg-green-50 transition"
-                    onClick={() => handleCollect(payment._id, payment.paymentRecordId)}
+                    onClick={() => openCollectModal(payment)}
                   >
                     Collect
                   </button>

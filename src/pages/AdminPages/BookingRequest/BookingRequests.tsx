@@ -37,11 +37,6 @@ type BookingRequest = {
   createdAt?: string;
 };
 
-// type BookingRequestFilter = {
-//   search: string; // simple search string
-//   status: string; // filter by status
-// };
-
 function useBookingRequests(
   queryParams: {
     search: string;
@@ -202,21 +197,20 @@ export default function BookingRequests() {
         },
       });
       if (!res.ok) throw new Error(await res.text());
-      // Instead of removing, set status to "rejected" in frontend state
-      // We need to update the current page, so refetch
-      // Alternatively, simply locally update status if desired:
-      // (could also refetch by re-setting activeSearch)
-      // setBookingRequests((prev) =>
-      //   prev.map((br) =>
-      //     br._id === requestId ? { ...br, status: "rejected" } : br
-      //   )
-      // );
       setActiveSearch((search) => search); // trigger refetch
     } catch {
       setActionError((prev) => ({ ...prev, [requestId]: "Failed to reject." }));
     }
     setActionLoading((prev) => ({ ...prev, [requestId]: false }));
   };
+
+  // Helper to build patient link href
+  // const getPatientHref = (patient: BookingRequest["patient"]) => {
+  //   if (patient?.patientId) {
+  //     return `/admin/children?patientId=${encodeURIComponent(patient.patientId)}`;
+  //   }
+  //   return undefined;
+  // };
 
   return (
     <div className="min-h-screen p-8">
@@ -328,6 +322,18 @@ export default function BookingRequests() {
                   const hasSessions = Array.isArray(req.sessions) && req.sessions.length > 0;
                   const isExpanded = expandedSessions[req._id] ?? false;
 
+                  // Patient link logic
+                  // const patientHref = getPatientHref(req.patient);
+                  const patientName = req.patient?.name || req.patient?.childFullName;
+                  // const patientId = req.patient?.patientId;
+                  const showPatientId = req.patient?.patientId
+                    ? req.patient.patientId
+                    : req.patient?.userId
+                      ? typeof req.patient.userId === "string"
+                        ? req.patient.userId
+                        : req.patient.userId?._id
+                      : null;
+
                   return (
                     <React.Fragment key={req._id}>
                       <tr className="border-t hover:bg-blue-50">
@@ -343,16 +349,38 @@ export default function BookingRequests() {
                             </div>
                             <div>
                               <p className="font-medium text-slate-800">
-                                {req.patient?.name || req.patient?.childFullName || (
+                                {patientName ? (
+                                  req.patient?.patientId ? (
+                                    <a
+                                      href={`/admin/children?patientId=${encodeURIComponent(req.patient.patientId)}`}
+                                      className="hover:underline text-blue-700"
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                    >
+                                      {patientName}
+                                    </a>
+                                  ) : (
+                                    patientName
+                                  )
+                                ) : (
                                   <span className="italic text-slate-400">N/A</span>
                                 )}
                               </p>
                               <div className="text-xs text-slate-500">
-                                {req.patient?.patientId
-                                  ? <span>ID: {req.patient.patientId}</span>
-                                  : req.patient?.userId
-                                    ? <span>ID: {typeof req.patient.userId === "string" ? req.patient.userId : req.patient.userId?._id}</span>
-                                    : null}
+                                {showPatientId &&
+                                  (req.patient?.patientId ? (
+                                    <a
+                                      href={`/admin/children?patientId=${encodeURIComponent(req.patient.patientId)}`}
+                                      className="hover:underline text-blue-600"
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                    >
+                                      ID: {showPatientId}
+                                    </a>
+                                  ) : (
+                                    <span>ID: {showPatientId}</span>
+                                  ))
+                                }
                                 {req.patient?.childDOB && (
                                   <span className="ml-2">
                                     DOB: {new Date(req.patient.childDOB).toLocaleDateString()}

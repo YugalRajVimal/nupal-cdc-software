@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   FiInfo, FiCalendar, FiChevronLeft, FiChevronRight, FiClock, FiUser, FiTag,
   FiChevronUp, FiChevronDown, FiList, FiPackage, FiEdit2, FiX, FiHash,
-  FiCheckCircle, FiRepeat, FiCreditCard
+  FiCheckCircle, FiCreditCard
 } from "react-icons/fi";
 
 import { toast } from "react-toastify";
@@ -82,7 +82,7 @@ function pad2(n: number) { return n < 10 ? `0${n}` : `${n}`; }
 function getDateKey(year: number, month: number, day: number): string { return `${year}-${pad2(month)}-${pad2(day)}`; }
 function getDaysInMonth(year: number, month: number) { return new Date(year, month + 1, 0).getDate(); }
 function getStartDay(year: number, month: number) { return new Date(year, month, 1).getDay(); }
-function getDayIndex(dayShort: string): number { const idx = DAYS.findIndex(d => d === dayShort.toUpperCase()); return idx >= 0 ? idx : 0; }
+// function getDayIndex(dayShort: string): number { const idx = DAYS.findIndex(d => d === dayShort.toUpperCase()); return idx >= 0 ? idx : 0; }
 
 export default function AppointmentBookingSystemNew() {
   const location = useLocation();
@@ -101,7 +101,6 @@ export default function AppointmentBookingSystemNew() {
   const [apiLoading, setApiLoading] = useState<boolean>(false);
   const [apiError, setApiError] = useState<string | null>(null);
 
-
   const [couponInput, setCouponInput] = useState<string>("");
   const [appliedCoupon, setAppliedCoupon] = useState<any>(null);
   const [couponStatus, setCouponStatus] = useState<null | "valid" | "invalid">(null);
@@ -119,11 +118,11 @@ export default function AppointmentBookingSystemNew() {
 
   const [paymentLoadingBookingId, setPaymentLoadingBookingId] = useState<string | null>(null);
 
-  const [repeatDay, setRepeatDay] = useState<string>("");
-  const [repeatStartDate, setRepeatStartDate] = useState<string>("");
-  const [repeatSlotId, setRepeatSlotId] = useState<string>("");
-  const [repeatError, setRepeatError] = useState<string | null>(null);
-  const [repeatConflictInfo, setRepeatConflictInfo] = useState<{ [date: string]: string }>({});
+  // const [repeatDay, setRepeatDay] = useState<string>("");
+  // const [repeatStartDate, setRepeatStartDate] = useState<string>("");
+  // const [repeatSlotId, setRepeatSlotId] = useState<string>("");
+  // const [repeatError, setRepeatError] = useState<string | null>(null);
+  // const [repeatConflictInfo, setRepeatConflictInfo] = useState<{ [date: string]: string }>({});
   const [bookedSlotsPerRow, setBookedSlotsPerRow] = useState<{ [rowKey: string]: string[] }>({});
 
   const [isBookingRequest, setIsBookingRequest] = useState<boolean>(false);
@@ -227,8 +226,6 @@ export default function AppointmentBookingSystemNew() {
   const [bookingsError, setBookingsError] = useState<string | null>(null);
   
 
-
-
   // Build monthly slot summary
   useEffect(() => {
     if (therapists.length === 0) return;
@@ -243,10 +240,8 @@ export default function AppointmentBookingSystemNew() {
       const therapistsBookedSlots: { [therapistId: string]: string[] } = {};
 
       for (const t of therapists) {
-        if (jsDate.getDay() === 0) {
-          therapistsBookedSlots[t._id] = [];
-          continue;
-        }
+        // Sunday is NOT holiday, allow normal slot counts.
+        // Remove all jsDate.getDay() === 0 holiday logic.
         let fullDayHoliday = (t.holidays || []).find(h => h.date === dateKeyApi && (h.isFullDay === true || h.isFullDay === undefined));
         if (fullDayHoliday) {
           therapistsBookedSlots[t._id] = [];
@@ -260,7 +255,7 @@ export default function AppointmentBookingSystemNew() {
         }
         let normalSlots = 10;
         let limitedSlots = 5;
-        if (jsDate.getDay() === 0) { normalSlots = 0; limitedSlots = 0; }
+        // Remove Sunday slot zeroing; allow full slots even on Sunday.
         for (const so of slotsOut) {
           const slotData = SESSION_TIME_OPTIONS.find(opt => opt.id === so);
           if (!slotData) continue;
@@ -642,45 +637,20 @@ export default function AppointmentBookingSystemNew() {
 
       setRemark(booking.remark || "");
     }
-    setRepeatDay(""); setRepeatStartDate(""); setRepeatSlotId("");
-    setRepeatError(null); setRepeatConflictInfo({});
+    // setRepeatDay(""); setRepeatStartDate(""); setRepeatSlotId("");
+    // setRepeatError(null); setRepeatConflictInfo({});
   }
 
   function handleCancelEdit() {
     resetForm();
   }
 
-  // async function handleDeleteBooking(id: string) {
-  //   if (!window.confirm("Delete this booking?")) return;
-  //   let endpoint = import.meta.env.VITE_API_URL || (window as any).VITE_API_URL;
-  //   if (endpoint) endpoint = endpoint.replace(/\/$/, "");
-  //   setBookingLoading(true);
-  //   try {
-  //     const resp = await fetch(`${endpoint}/api/admin/bookings/${id}`, {
-  //       method: "DELETE"
-  //     });
-  //     if (!resp.ok) {
-  //       const err = await resp.json();
-  //       throw new Error(err?.message || "Failed to delete booking.");
-  //     }
-  //     toast.success("Booking deleted.");
-  //     if (editBookingId === id) resetForm();
-  //     setBookingLoading(!bookingLoading);
-
-
-  //   } catch (e: any) {
-  //     toast.error(e?.message || "Failed to delete booking.");
-  //   } finally {
-  //     setBookingLoading(false);
-  //   }
-  // }
-
   function resetForm() {
     setPatientId(""); setTherapyId(""); setPackageId(""); setTherapistId("");
     setSessions([]); setEditBookingId(null);
     setBookingError(null); setBookingSuccess(null);
-    setRepeatDay(""); setRepeatStartDate(""); setRepeatSlotId("");
-    setRepeatError(null); setRepeatConflictInfo({});
+    // setRepeatDay(""); setRepeatStartDate(""); setRepeatSlotId("");
+    // setRepeatError(null); setRepeatConflictInfo({});
     setBookedSlotsPerRow({});
     setCouponInput(""); setAppliedCoupon(null); setCouponStatus(null);
     setRemark("");
@@ -743,12 +713,8 @@ export default function AppointmentBookingSystemNew() {
     const jsDate = new Date(date);
     const apiDate = `${jsDate.getFullYear()}-${pad2(jsDate.getMonth() + 1)}-${pad2(jsDate.getDate())}`;
 
-    if (jsDate.getDay() === 0) {
-      SESSION_TIME_OPTIONS.forEach(opt => {
-        slotInfo[opt.id] = { disabled: true, reason: "Sunday/Holiday" }
-      });
-      return slotInfo;
-    }
+    // Remove Sunday is-holiday logic: do not disable slots for Sunday.
+    // Instead: treat like any other day unless holiday defined in therapist.holidays.
     let isFullDayHoliday = holidays.find(
       h => h.date === apiDate && (h.isFullDay === true || h.isFullDay === undefined)
     );
@@ -800,89 +766,88 @@ export default function AppointmentBookingSystemNew() {
     return slotInfo;
   }
 
-  function getNextNDatesWeekly(
-    startDate: Date,
-    sessionCount: number,
-    dayOfWeek: number,
-    therapist: Therapist | undefined
-  ): string[] {
-    let dates: string[] = [];
-    let date = new Date(startDate);
-    while (date.getDay() !== dayOfWeek) {
-      date.setDate(date.getDate() + 1);
-    }
-    while (dates.length < sessionCount) {
-      if (date.getDay() !== 0) {
-        const dApi = `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
-        let isHoliday = false;
-        if (
-          therapist &&
-          Array.isArray(therapist.holidays) &&
-          therapist.holidays.find(h => h.date === dApi && (h.isFullDay === true || h.isFullDay === undefined))
-        ) {
-          isHoliday = true;
-        }
-        if (!isHoliday) dates.push(`${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`);
-      }
-      date.setDate(date.getDate() + 7);
-    }
-    return dates;
-  }
+  // function getNextNDatesWeekly(
+  //   startDate: Date,
+  //   sessionCount: number,
+  //   dayOfWeek: number,
+  //   therapist: Therapist | undefined
+  // ): string[] {
+  //   let dates: string[] = [];
+  //   let date = new Date(startDate);
+  //   while (date.getDay() !== dayOfWeek) {
+  //     date.setDate(date.getDate() + 1);
+  //   }
+  //   while (dates.length < sessionCount) {
+  //     // Remove Sunday skip: do not exclude Sunday from valid dates.
+  //     const dApi = `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+  //     let isHoliday = false;
+  //     if (
+  //       therapist &&
+  //       Array.isArray(therapist.holidays) &&
+  //       therapist.holidays.find(h => h.date === dApi && (h.isFullDay === true || h.isFullDay === undefined))
+  //     ) {
+  //       isHoliday = true;
+  //     }
+  //     if (!isHoliday) dates.push(`${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`);
+  //     date.setDate(date.getDate() + 7);
+  //   }
+  //   return dates;
+  // }
 
-  function handleRepeatApply() {
-    setRepeatError(null); setRepeatConflictInfo({});
-    if (!repeatDay || !repeatStartDate || !repeatSlotId) {
-      setRepeatError("Please select start date, weekday, and time slot.");
-      return;
-    }
-    if (!selectedTherapist) {
-      setRepeatError("Please select a therapist.");
-      return;
-    }
-    if (!maxSelectableDates || !selectedPackage) {
-      setRepeatError("Please select a package.");
-      return;
-    }
-    const start = new Date(repeatStartDate);
-    const wantedDayNum = getDayIndex(repeatDay);
-    while (start.getDay() !== wantedDayNum) start.setDate(start.getDate() + 1);
-    const sessionsOnTargetDay = getNextNDatesWeekly(
-      start, maxSelectableDates, wantedDayNum, selectedTherapist
-    );
-    let conflicts: { [date: string]: string } = {};
-    let validSessions: BookingSession[] = [];
-    for (const date of sessionsOnTargetDay) {
-      const slotInfo = getAvailableSlotsForDate(date, [], repeatSlotId, selectedTherapist._id, false);
-      if (slotInfo[repeatSlotId].disabled) {
-        conflicts[date] = slotInfo[repeatSlotId].reason || "Slot unavailable";
-      } else {
-        let therapyTypeObj: { _id: string; name: string } | undefined = undefined;
-        if (therapyId) {
-          const th = therapies.find((t) => t._id === therapyId);
-          therapyTypeObj = th
-            ? { _id: th._id, name: th.name }
-            : { _id: therapyId, name: "" };
-        }
-        validSessions.push({
-          date,
-          slotId: repeatSlotId,
-          therapistId: selectedTherapist._id,
-          ...(therapyTypeObj ? { therapyTypeId: therapyTypeObj } : {}),
-        });
-      }
-    }
-    setRepeatConflictInfo(conflicts);
-    setSessions(validSessions);
-    if (Object.keys(conflicts).length > 0) {
-      setRepeatError("Some slots/days were not available and skipped.");
-    } else {
-      setRepeatError(null);
-    }
-  }
+  // function handleRepeatApply() {
+  //   setRepeatError(null); setRepeatConflictInfo({});
+  //   if (!repeatDay || !repeatStartDate || !repeatSlotId) {
+  //     setRepeatError("Please select start date, weekday, and time slot.");
+  //     return;
+  //   }
+  //   if (!selectedTherapist) {
+  //     setRepeatError("Please select a therapist.");
+  //     return;
+  //   }
+  //   if (!maxSelectableDates || !selectedPackage) {
+  //     setRepeatError("Please select a package.");
+  //     return;
+  //   }
+  //   const start = new Date(repeatStartDate);
+  //   const wantedDayNum = getDayIndex(repeatDay);
+  //   while (start.getDay() !== wantedDayNum) start.setDate(start.getDate() + 1);
+  //   const sessionsOnTargetDay = getNextNDatesWeekly(
+  //     start, maxSelectableDates, wantedDayNum, selectedTherapist
+  //   );
+  //   let conflicts: { [date: string]: string } = {};
+  //   let validSessions: BookingSession[] = [];
+  //   for (const date of sessionsOnTargetDay) {
+  //     const slotInfo = getAvailableSlotsForDate(date, [], repeatSlotId, selectedTherapist._id, false);
+  //     if (slotInfo[repeatSlotId].disabled) {
+  //       conflicts[date] = slotInfo[repeatSlotId].reason || "Slot unavailable";
+  //     } else {
+  //       let therapyTypeObj: { _id: string; name: string } | undefined = undefined;
+  //       if (therapyId) {
+  //         const th = therapies.find((t) => t._id === therapyId);
+  //         therapyTypeObj = th
+  //           ? { _id: th._id, name: th.name }
+  //           : { _id: therapyId, name: "" };
+  //       }
+  //       validSessions.push({
+  //         date,
+  //         slotId: repeatSlotId,
+  //         therapistId: selectedTherapist._id,
+  //         ...(therapyTypeObj ? { therapyTypeId: therapyTypeObj } : {}),
+  //       });
+  //     }
+  //   }
+  //   setRepeatConflictInfo(conflicts);
+  //   setSessions(validSessions);
+  //   if (Object.keys(conflicts).length > 0) {
+  //     setRepeatError("Some slots/days were not available and skipped.");
+  //   } else {
+  //     setRepeatError(null);
+  //   }
+  // }
 
-  function handleRepeatClear() {
-    setRepeatDay(""); setRepeatStartDate(""); setRepeatSlotId(""); setRepeatError(null); setRepeatConflictInfo({}); setSessions([]);
-  }
+  // function handleRepeatClear() {
+  //   setRepeatDay(""); setRepeatStartDate(""); setRepeatSlotId(""); setRepeatError(null); setRepeatConflictInfo({}); setSessions([]);
+  // }
 
   function getTherapistObject(booking: Booking): Therapist | undefined {
     if (booking.therapist && typeof booking.therapist === "object" && "_id" in booking.therapist) {
@@ -1082,7 +1047,7 @@ export default function AppointmentBookingSystemNew() {
             onChange={e => setRemark(e.target.value)}
           />
 
-          {!editBookingId && (
+          {/* {!editBookingId && (
             <RepeatWeeklyPanel
               repeatDay={repeatDay}
               setRepeatDay={setRepeatDay}
@@ -1099,7 +1064,7 @@ export default function AppointmentBookingSystemNew() {
               repeatConflictInfo={repeatConflictInfo}
               therapistId={therapistId}
             />
-          )}
+          )} */}
           {sessions.length > 0 && (
             <SessionDatesTimesTable
               sessions={sessions}
@@ -1375,96 +1340,96 @@ function CalendarPanel({
   );
 }
 
-function RepeatWeeklyPanel({ repeatDay, setRepeatDay, repeatStartDate, setRepeatStartDate, repeatSlotId, setRepeatSlotId, today, handleRepeatApply, handleRepeatClear, maxSelectableDates, packageId, repeatError, repeatConflictInfo, therapistId }: any) {
-  return (
-    <div className="mb-6 space-y-2 bg-blue-50 border border-blue-100 rounded p-3">
-      <div className="flex items-center gap-2 font-medium text-blue-700">
-        <FiRepeat className="text-blue-500" /> Repeat weekly (set all sessions to same day/time)
-      </div>
-      <div className="flex flex-wrap gap-3 items-end">
-        <div>
-          <label className="block text-xs font-semibold text-slate-700 mb-1">Start Date</label>
-          <input
-            type="date"
-            value={repeatStartDate}
-            onChange={e => setRepeatStartDate(e.target.value)}
-            className="border rounded px-2 py-1 text-sm cursor-pointer"
-            min={today.toISOString().slice(0, 10)}
-            onFocus={e => e.target.showPicker && e.target.showPicker()}
-          />
-        </div>
-        <div>
-          <label className="block text-xs font-semibold text-slate-700 mb-1">Day</label>
-          <select
-            value={repeatDay}
-            onChange={e => setRepeatDay(e.target.value)}
-            className="border rounded px-2 py-1 text-sm"
-          >
-            <option value="">Select Day</option>
-            {DAYS.map((d: string) => (
-              <option value={d} key={d}>{d}</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="block text-xs font-semibold text-slate-700 mb-1">Time Slot</label>
-          <select
-            value={repeatSlotId}
-            onChange={e => setRepeatSlotId(e.target.value)}
-            className="border rounded px-2 py-1 text-sm"
-          >
-            <option value="">Select Time Slot</option>
-            {SESSION_TIME_OPTIONS.map((opt: any) => (
-              <option key={opt.id} value={opt.id}>
-                {opt.label} {opt.limited ? " (Limited case)" : ""}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <button
-            className="text-xs bg-blue-600 text-white px-4 py-2 rounded disabled:opacity-70 mt-1"
-            type="button"
-            style={{ minWidth: "110px" }}
-            onClick={handleRepeatApply}
-            disabled={
-              !repeatDay || !repeatStartDate || !repeatSlotId || !packageId || !therapistId
-            }
-          >
-            Apply
-          </button>
-          <button
-            className="ml-3 text-xs px-3 py-2 rounded border border-gray-300 text-slate-700 bg-gray-100"
-            type="button"
-            onClick={handleRepeatClear}
-          >
-            Clear
-          </button>
-        </div>
-      </div>
-      {maxSelectableDates && packageId && (
-        <div className="text-xs text-slate-500 mt-1">
-          Will set up to {maxSelectableDates} sessions {repeatDay && `on ${repeatDay}`} at selected time, skipping therapist holidays and slot conflicts.
-          <br />
-          <span className="text-blue-700">Each therapist: <b>10 normal</b> and <b>5 limited</b> case slots available per day.</span>
-        </div>
-      )}
-      {repeatError && (<div className="text-xs text-red-600 mt-1">{repeatError}</div>)}
-      {Object.keys(repeatConflictInfo).length > 0 && (
-        <ul className="text-xs text-red-600 mt-1 space-y-0.5">
-          {Object.entries(repeatConflictInfo).map(([date, msg]) => (
-            <li key={date}>• {String(msg)}</li>
-          ))}
-        </ul>
-      )}
-      {(!therapistId || !packageId) && (
-        <div className="text-xs text-blue-600 mt-1">
-          Please select therapist and package first.
-        </div>
-      )}
-    </div>
-  );
-}
+// function RepeatWeeklyPanel({ repeatDay, setRepeatDay, repeatStartDate, setRepeatStartDate, repeatSlotId, setRepeatSlotId, today, handleRepeatApply, handleRepeatClear, maxSelectableDates, packageId, repeatError, repeatConflictInfo, therapistId }: any) {
+//   return (
+//     <div className="mb-6 space-y-2 bg-blue-50 border border-blue-100 rounded p-3">
+//       <div className="flex items-center gap-2 font-medium text-blue-700">
+//         <FiRepeat className="text-blue-500" /> Repeat weekly (set all sessions to same day/time)
+//       </div>
+//       <div className="flex flex-wrap gap-3 items-end">
+//         <div>
+//           <label className="block text-xs font-semibold text-slate-700 mb-1">Start Date</label>
+//           <input
+//             type="date"
+//             value={repeatStartDate}
+//             onChange={e => setRepeatStartDate(e.target.value)}
+//             className="border rounded px-2 py-1 text-sm cursor-pointer"
+//             min={today.toISOString().slice(0, 10)}
+//             onFocus={e => e.target.showPicker && e.target.showPicker()}
+//           />
+//         </div>
+//         <div>
+//           <label className="block text-xs font-semibold text-slate-700 mb-1">Day</label>
+//           <select
+//             value={repeatDay}
+//             onChange={e => setRepeatDay(e.target.value)}
+//             className="border rounded px-2 py-1 text-sm"
+//           >
+//             <option value="">Select Day</option>
+//             {DAYS.map((d: string) => (
+//               <option value={d} key={d}>{d}</option>
+//             ))}
+//           </select>
+//         </div>
+//         <div>
+//           <label className="block text-xs font-semibold text-slate-700 mb-1">Time Slot</label>
+//           <select
+//             value={repeatSlotId}
+//             onChange={e => setRepeatSlotId(e.target.value)}
+//             className="border rounded px-2 py-1 text-sm"
+//           >
+//             <option value="">Select Time Slot</option>
+//             {SESSION_TIME_OPTIONS.map((opt: any) => (
+//               <option key={opt.id} value={opt.id}>
+//                 {opt.label} {opt.limited ? " (Limited case)" : ""}
+//               </option>
+//             ))}
+//           </select>
+//         </div>
+//         <div>
+//           <button
+//             className="text-xs bg-blue-600 text-white px-4 py-2 rounded disabled:opacity-70 mt-1"
+//             type="button"
+//             style={{ minWidth: "110px" }}
+//             onClick={handleRepeatApply}
+//             disabled={
+//               !repeatDay || !repeatStartDate || !repeatSlotId || !packageId || !therapistId
+//             }
+//           >
+//             Apply
+//           </button>
+//           <button
+//             className="ml-3 text-xs px-3 py-2 rounded border border-gray-300 text-slate-700 bg-gray-100"
+//             type="button"
+//             onClick={handleRepeatClear}
+//           >
+//             Clear
+//           </button>
+//         </div>
+//       </div>
+//       {maxSelectableDates && packageId && (
+//         <div className="text-xs text-slate-500 mt-1">
+//           Will set up to {maxSelectableDates} sessions {repeatDay && `on ${repeatDay}`} at selected time, skipping therapist holidays and slot conflicts.
+//           <br />
+//           <span className="text-blue-700">Each therapist: <b>10 normal</b> and <b>5 limited</b> case slots available per day.</span>
+//         </div>
+//       )}
+//       {repeatError && (<div className="text-xs text-red-600 mt-1">{repeatError}</div>)}
+//       {Object.keys(repeatConflictInfo).length > 0 && (
+//         <ul className="text-xs text-red-600 mt-1 space-y-0.5">
+//           {Object.entries(repeatConflictInfo).map(([date, msg]) => (
+//             <li key={date}>• {String(msg)}</li>
+//           ))}
+//         </ul>
+//       )}
+//       {(!therapistId || !packageId) && (
+//         <div className="text-xs text-blue-600 mt-1">
+//           Please select therapist and package first.
+//         </div>
+//       )}
+//     </div>
+//   );
+// }
 
 function SessionDatesTimesTable({
   sessions, updateSlotId, updateSessionTherapist, updateSessionTherapyType, editBookingId,
@@ -1708,6 +1673,352 @@ const PAGE_SIZE_OPTIONS = [5, 15, 25, 50];
  * - minTotal / maxTotal (price range)
  * - createdFrom / createdTo (Date ISO, for creation date)
  */
+
+// --- Collect Payment Modal (ported from ReceptionDesk) ---
+
+
+
+// Types used for payment
+// type CollectPaymentModalProps = {
+//   open: boolean;
+//   onClose: () => void;
+//   payment: {
+//     _id: string;
+//     appointmentId: string;
+//     patientName: string;
+//     patientId: string;
+//     paymentAmount?: number | string;
+//     amountPaid?: number | string;
+//     paymentRecordId?: string;
+//   } | null;
+//   onCollect: (
+//     paymentId: string,
+//     collectType: "full" | "partial",
+//     partialAmount?: number
+//   ) => Promise<void>;
+//   loading?: boolean;
+// };
+
+
+
+/**
+ * CollectPaymentModal is a modal UI for administrators to collect either full or partial payment.
+ * Core logic ported from ReceptionDesk.tsx (534-656).
+ */
+
+
+// --- Collect Payment Modal (ported from ReceptionDesk) ---
+type CollectPaymentModalProps = {
+  open: boolean;
+  onClose: () => void;
+  payment: {
+    _id: string;
+    appointmentId: string;
+    patientName: string;
+    patientId: string;
+    paymentAmount?: number | string;
+    amountPaid?: number | string;
+    paymentRecordId?: string;
+  } | null;
+  onCollected: () => void;
+};
+
+const toNumber = (v: any): number | undefined => {
+  if (typeof v === "number") return v;
+  if (typeof v === "string" && v.trim() !== "") {
+    const n = parseFloat(v);
+    return isNaN(n) ? undefined : n;
+  }
+  return undefined;
+};
+
+function CollectPaymentModal({
+  open,
+  onClose,
+  payment,
+  onCollected,
+}: CollectPaymentModalProps) {
+  const [collectType, setCollectType] = useState<"full" | "partial">("full");
+  const [partialValue, setPartialValue] = useState<string>("");
+  const [loading, setLoading] = useState(false);
+
+  const paymentAmount = payment && toNumber(payment.paymentAmount);
+  const amountAlreadyPaid =
+    payment && toNumber(payment.amountPaid) ? toNumber(payment.amountPaid) : 0;
+  const partialNumeric = parseFloat(partialValue);
+
+  const isPartialOverDue: boolean =
+    collectType === "partial" &&
+    typeof paymentAmount === "number" &&
+    !isNaN(partialNumeric) &&
+    (partialNumeric + (typeof amountAlreadyPaid === "number" ? amountAlreadyPaid : 0)) > paymentAmount;
+
+  // For 'max' on input, show the due left (so cannot input more than the remaining due)
+  const paymentDue: number | undefined =
+    typeof paymentAmount === "number" && typeof amountAlreadyPaid === "number"
+      ? paymentAmount - amountAlreadyPaid
+      : typeof paymentAmount === "number"
+        ? paymentAmount
+        : undefined;
+
+  // Reset fields when modal opens/closes or when payment changes
+  useEffect(() => {
+    if (open) {
+      setCollectType("full");
+      setPartialValue("");
+      setLoading(false);
+    }
+  }, [open, payment]);
+
+  // ReceptionDesk logic for collect-payment API (see ReceptionDesk.tsx)
+  // Uses /api/admin/bookings/:id/collect-payment POST as per routes and controller
+  const handleCollectPaymentAPI = async () => {
+    if (!payment) return;
+    let endpoint =
+      import.meta.env.VITE_API_URL || (window as any).VITE_API_URL;
+    if (endpoint) endpoint = endpoint.replace(/\/$/, "");
+    if (!endpoint) {
+      alert("API endpoint is not configured.");
+      return;
+    }
+
+    // Prepare body for backend controller (expects paymentType and partialAmount optionally)
+    let body: Record<string, any> = {
+      paymentType: collectType,
+    };
+
+    if (collectType === "partial") {
+      body.partialAmount = partialNumeric;
+    }
+
+    setLoading(true);
+    try {
+      const res = await fetch(
+        `${endpoint}/api/admin/bookings/${payment._id}/collect-payment`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(body),
+        }
+      );
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(
+          data?.error ||
+            data?.message ||
+            "Failed to collect payment. Please try again."
+        );
+      }
+      onCollected();
+      onClose();
+    } catch (err: any) {
+      alert(err.message || "Failed to collect payment.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!payment) return;
+    if (loading || isPartialOverDue) return;
+    if (
+      collectType === "partial" &&
+      (isNaN(partialNumeric) || partialNumeric <= 0)
+    ) {
+      alert("Please enter a valid partial amount.");
+      return;
+    }
+    await handleCollectPaymentAPI();
+  };
+
+  if (!open || !payment) return null;
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        key="collect-modal"
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/30"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        style={{ backdropFilter: "blur(2px)" }}
+        onClick={onClose}
+      >
+        <motion.div
+          initial={{ scale: 0.96, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 0.95, opacity: 0 }}
+          transition={{ type: "spring", stiffness: 280, damping: 30 }}
+          className="bg-white rounded-lg shadow-lg max-w-sm w-full border border-slate-200 relative"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            className="absolute top-3 right-3 text-slate-400 hover:text-slate-700"
+            onClick={onClose}
+            tabIndex={-1}
+            aria-label="Close"
+            type="button"
+          >
+            <FiX size={20} />
+          </button>
+          <div className="p-6 pb-2">
+            <div className="font-semibold text-lg text-slate-800 flex items-center gap-2 mb-2">
+              Collect Payment
+            </div>
+            <div className="text-sm mb-3">
+              <span className="font-medium text-blue-700">
+                Appt#: {payment.appointmentId}
+              </span>
+              <br />
+              <span className="text-slate-800">{payment.patientName}</span>{" "}
+              <span className="text-xs text-blue-300 font-mono">
+                ({payment.patientId})
+              </span>
+              <br />
+              <span className="text-xs text-slate-500">
+                Amount Due:{" "}
+                <span className="font-semibold text-slate-700">
+                  ₹{String(payment.paymentAmount ?? "—")}
+                </span>
+              </span>
+              {payment.amountPaid && (
+                <span className="text-xs text-slate-400 ml-2">
+                  (Already paid: ₹{String(payment.amountPaid)})
+                </span>
+              )}
+            </div>
+            <form onSubmit={handleSubmit}>
+              <div className="mb-4 mt-1">
+                <label className="block font-medium text-slate-700 mb-1">
+                  Collection Type
+                </label>
+                <div className="flex gap-4 items-center">
+                  <label className="flex items-center gap-1 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="collectType"
+                      value="full"
+                      checked={collectType === "full"}
+                      onChange={() => setCollectType("full")}
+                      disabled={loading}
+                    />
+                    <span className="text-sm">Full Amount</span>
+                  </label>
+                  <label className="flex items-center gap-1 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="collectType"
+                      value="partial"
+                      checked={collectType === "partial"}
+                      onChange={() => setCollectType("partial")}
+                      disabled={loading}
+                    />
+                    <span className="text-sm">Partial Amount</span>
+                  </label>
+                </div>
+              </div>
+              {collectType === "partial" && (
+                <div className="mb-2">
+                  <label className="block mb-1 text-slate-700 text-xs">
+                    Enter Partial Amount <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    step={1}
+                    value={partialValue}
+                    onChange={(e) => setPartialValue(e.target.value)}
+                    className="w-full px-2 py-1 rounded border border-slate-300 text-slate-800 focus:ring focus:ring-green-200 text-sm"
+                    placeholder="E.g. 800"
+                    required
+                    disabled={loading}
+                    max={paymentDue ?? undefined}
+                  />
+                  {isPartialOverDue && (
+                    <div className="text-xs text-red-500 mt-1">
+                      Partial amount plus already paid cannot exceed the invoice
+                      total ({paymentAmount}).
+                    </div>
+                  )}
+                </div>
+              )}
+              <button
+                type="submit"
+                className={`mt-3 w-full rounded-md border border-green-500 px-4 py-2 text-sm font-semibold text-green-700 relative ${
+                  loading || isPartialOverDue
+                    ? "bg-green-50 opacity-80 cursor-not-allowed"
+                    : "hover:bg-green-50"
+                }`}
+                disabled={loading || isPartialOverDue}
+              >
+                {loading
+                  ? "Processing…"
+                  : collectType === "full"
+                  ? "Collect Full Amount"
+                  : "Collect Partial Amount"}
+              </button>
+              <div className="mt-1 text-xs text-slate-400 text-center">
+                {collectType === "partial"
+                  ? "Collects a partial payment; the remaining will appear as pending."
+                  : "Marks the invoice as fully paid."}
+              </div>
+            </form>
+          </div>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
+  );
+}
+
+// -- BookingSummary: manage modal state and API trigger --
+
+
+
+// ...other imports...
+
+// CheckIn Modal component
+function CheckInConfirmationModal({ open, onClose, onConfirm, session, booking }: any) {
+  if (!open) return null;
+  return (
+    <div className="fixed z-40 inset-0 flex items-center justify-center bg-black/20">
+      <div className="bg-white rounded shadow-lg p-6 w-[95vw] max-w-xs relative">
+        <div className="flex items-center gap-2 mb-3">
+          <FiCheckCircle className="text-blue-500" size={24} />
+          <div className="font-semibold text-blue-700 text-base">Check In Session?</div>
+        </div>
+        <div className="mb-4 text-sm">
+          Are you sure you want to check in this session?
+          <div className="mt-2 text-xs p-2 rounded bg-blue-50 border border-blue-100">
+            <div>
+              <b>Date:</b> {session.date}
+            </div>
+            <div>
+              <b>Booking ID:</b> {booking.appointmentId}
+            </div>
+          </div>
+        </div>
+        <div className="flex justify-end gap-2">
+          <button
+            onClick={onClose}
+            className="text-xs px-3 py-1 rounded border border-slate-300 text-slate-700 hover:bg-slate-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => onConfirm()}
+            className="text-xs px-3 py-1 rounded border border-green-500 text-green-700 font-semibold bg-green-100 hover:bg-green-200"
+          >
+            Yes, Check In
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function BookingSummary({
   getTherapistObject,
   editBookingId,
@@ -1716,8 +2027,6 @@ function BookingSummary({
   SESSION_TIME_OPTIONS,
   handleEditBooking,
   // handleDeleteBooking,
-  handleCollectPayment,
-  paymentLoadingBookingId,
 }: any) {
   const [bookings, setBookings] = useState<any[]>([]);
   const [bookingsLoading, setBookingsLoading] = useState(false);
@@ -1725,6 +2034,18 @@ function BookingSummary({
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
   const [total, setTotal] = useState(0);
+
+  // Collect Payment Modal state
+  const [collectModalOpen, setCollectModalOpen] = useState(false);
+  const [collectModalPayment, setCollectModalPayment] = useState<any>(null);
+  // const [paymentLoadingBookingId, setPaymentLoadingBookingId] = useState<string | null>(null);
+
+  // Check-In Modal state
+  const [checkInModalOpen, setCheckInModalOpen] = useState(false);
+  const [checkInSession, setCheckInSession] = useState<any>(null);
+  const [checkInBooking, setCheckInBooking] = useState<any>(null);
+  const [checkInLoading, setCheckInLoading] = useState(false);
+  const [checkInError, setCheckInError] = useState<string | null>(null);
 
   // Table pagination logic
   const totalPages = Math.ceil(total / pageSize);
@@ -1753,15 +2074,103 @@ function BookingSummary({
       });
   }
 
-  // Auto-fetch on page/pageSize change
+  // Auto-fetch on page/pageSize change & also after collecting payment
   useEffect(() => {
     fetchBookings();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, pageSize]);
 
+  const handleModalCollectPayment = (booking: any) => {
+    setCollectModalOpen(true);
+    // Pass only relevant payment info.
+    setCollectModalPayment({
+      _id: booking._id,
+      appointmentId: booking.appointmentId,
+      patientName: booking.patient?.name || "",
+      patientId: booking.patient?._id || "",
+      paymentAmount: booking.payment?.amount || booking.paymentAmount,
+      amountPaid: booking.payment?.amountPaid || booking.amountPaid,
+      paymentRecordId: booking.payment?._id,
+    });
+  };
+
+  const handleModalCollected = () => {
+    setCollectModalOpen(false);
+    setCollectModalPayment(null);
+    fetchBookings();
+  };
+
+  // Check-in modal
+  const openCheckInModal = (booking: any, session: any) => {
+    setCheckInBooking(booking);
+    setCheckInSession(session);
+    setCheckInError(null);
+    setCheckInModalOpen(true);
+  };
+
+  const closeCheckInModal = () => {
+    setCheckInBooking(null);
+    setCheckInSession(null);
+    setCheckInError(null);
+    setCheckInModalOpen(false);
+  };
+
+  const handleConfirmCheckIn = async () => {
+    if (!checkInBooking || !checkInSession) return;
+    setCheckInLoading(true);
+    setCheckInError(null);
+    let endpoint = import.meta.env.VITE_API_URL || (window as any).VITE_API_URL;
+    if (endpoint) endpoint = endpoint.replace(/\/$/, "");
+
+    try {
+      const res = await fetch(
+        `${endpoint}/api/admin/bookings/check-in`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            bookingId: checkInBooking._id,
+            sessionId: checkInSession._id,
+          }),
+        }
+      );
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(errorText || "Failed to check in session.");
+      }
+      // Success
+      closeCheckInModal();
+      setCheckInLoading(false);
+      fetchBookings();
+    } catch (err: any) {
+      setCheckInError(err.message || "Unable to check in.");
+      setCheckInLoading(false);
+    }
+  };
+
   // Render: No search/filter UI, just pagination and booking list
   return (
     <div className="mt-6">
+      <CollectPaymentModal
+        open={collectModalOpen}
+        onClose={() => {
+          setCollectModalOpen(false);
+          setCollectModalPayment(null);
+        }}
+        payment={collectModalPayment}
+        onCollected={handleModalCollected}
+      />
+
+      <CheckInConfirmationModal
+        open={checkInModalOpen}
+        onClose={closeCheckInModal}
+        onConfirm={handleConfirmCheckIn}
+        session={checkInSession}
+        booking={checkInBooking}
+      />
+
       <div className="bg-white border rounded-lg p-4 text-sm">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
           <p className="font-medium">Booking Summary</p>
@@ -1812,7 +2221,12 @@ function BookingSummary({
           <div className="flex flex-col gap-4">
             {bookings.map((booking: any) => {
               const therapistObj = getTherapistObject(booking);
-              const isPaid = booking.payment?.status === "paid";
+              const paymentStatus = booking.payment?.status;
+              const isPaid = paymentStatus === "paid";
+              const isPartiallyPaid = paymentStatus === "partiallypaid";
+              const paymentAmount = booking.payment?.amount;
+              const paidAmount = booking.payment?.amountPaid;
+
               return (
                 <div
                   className={`border p-3 rounded bg-sky-50 relative ${
@@ -1842,7 +2256,6 @@ function BookingSummary({
                               target="_blank"
                               rel="noopener noreferrer"
                               onClick={(e) => {
-                                // Optionally: if you want to open in same tab, just remove target/_blank
                                 e.stopPropagation();
                               }}
                             >
@@ -1895,6 +2308,12 @@ function BookingSummary({
                     <FiCreditCard className="text-green-600" />
                     {isPaid ? (
                       <span className="text-green-700 font-semibold">Payment Collected</span>
+                    ) : isPartiallyPaid ? (
+                      <span className="text-amber-700 font-semibold">
+                        Partially Paid{typeof paymentAmount !== 'undefined' && typeof paidAmount !== 'undefined'
+                          ? ` (Amount: ₹${paymentAmount} | Paid: ₹${paidAmount})`
+                          : ""}
+                      </span>
                     ) : (
                       <span className="text-orange-600 font-semibold">Payment Pending</span>
                     )}
@@ -1903,12 +2322,15 @@ function BookingSummary({
                         className={`ml-3 flex items-center gap-1 text-xs border px-2 py-1 rounded 
                         border-green-400 text-green-800 bg-green-100 hover:bg-green-200 font-medium 
                         transition disabled:opacity-60`}
-                        disabled={!!paymentLoadingBookingId}
-                        onClick={() => handleCollectPayment(booking)}
+                        // disabled={!!paymentLoadingBookingId}
+                        onClick={() => handleModalCollectPayment(booking)}
                         title="Mark payment as collected"
                       >
                         <FiCreditCard />{" "}
-                        {paymentLoadingBookingId === booking._id ? "Collecting..." : "Collect Payment"}
+                        {/* {paymentLoadingBookingId === booking._id
+                          ? "Collecting..."
+                          : "Collect Payment"} */}
+                          Collect Payment
                       </button>
                     )}
                   </div>
@@ -1922,7 +2344,11 @@ function BookingSummary({
                         </span>
                       </summary>
                       <div className="overflow-x-auto mt-2">
-                        <table className="min-w-[680px] w-fit border-collapse text-xs">
+                        {/* Show Check-In error, if any (for this booking's sessions) */}
+                        {checkInError && checkInBooking && checkInBooking._id === booking._id && (
+                          <div className="text-xs text-red-600 mb-2">{checkInError}</div>
+                        )}
+                        <table className="min-w-[800px] w-fit border-collapse text-xs">
                           <thead>
                             <tr>
                               <th className="px-2 py-1 border border-slate-200 bg-slate-100 font-semibold text-left">#</th>
@@ -1930,17 +2356,19 @@ function BookingSummary({
                               <th className="px-2 py-1 border border-slate-200 bg-slate-100 font-semibold text-left">Time Slot</th>
                               <th className="px-2 py-1 border border-slate-200 bg-slate-100 font-semibold text-left">Therapist</th>
                               <th className="px-2 py-1 border border-slate-200 bg-slate-100 font-semibold text-left">Therapy Type</th>
+                              <th className="px-2 py-1 border border-slate-200 bg-slate-100 font-semibold text-left">Checked In</th>
+                              <th className="px-2 py-1 border border-slate-200 bg-slate-100 font-semibold text-left"></th>
                             </tr>
                           </thead>
                           <tbody>
                             {booking.sessions.map((s: any, idx: number) => {
                               const slot = SESSION_TIME_OPTIONS.find((opt: any) => opt.id === s.slotId);
-
                               const tObj = s.therapist;
                               const therapy =
                                 (s && typeof s.therapyTypeId === "object" && s.therapyTypeId)
                                   ? s.therapyTypeId
                                   : (typeof s.therapyType === "string" ? s.therapyType : undefined);
+                              const checkedIn = s.isCheckedIn === true;
 
                               return (
                                 <tr key={s._id || s.date + "-" + idx}>
@@ -1970,6 +2398,25 @@ function BookingSummary({
                                         ? therapy
                                         : <span className="text-gray-400">—</span>}
                                   </td>
+                                  <td className="px-2 py-1 border border-slate-200 whitespace-nowrap">
+                                    {checkedIn ? (
+                                      <span className="text-green-700 font-semibold">Checked In</span>
+                                    ) : (
+                                      <span className="text-red-600 font-semibold">Not Checked In</span>
+                                    )}
+                                  </td>
+                                  <td className="px-2 py-1 border border-slate-200 whitespace-nowrap text-right">
+                                    {!checkedIn && (
+                                      <button
+                                        className={`text-xs rounded px-2 py-1 border border-green-500 text-green-700 hover:bg-green-50 flex items-center gap-1 ${checkInLoading ? 'opacity-60 cursor-not-allowed' : ''}`}
+                                        disabled={checkInLoading}
+                                        onClick={() => openCheckInModal(booking, s)}
+                                        title="Check in this session"
+                                      >
+                                        <FiCheckCircle /> Check In
+                                      </button>
+                                    )}
+                                  </td>
                                 </tr>
                               );
                             })}
@@ -1988,14 +2435,6 @@ function BookingSummary({
                     >
                       <FiEdit2 />Edit
                     </button>
-                    {/* <button
-                      className="text-xs rounded px-2 py-1 border border-red-400 text-red-600 hover:bg-red-50"
-                      onClick={() => handleDeleteBooking(booking._id)}
-                      title="Delete booking"
-                      disabled={!!editBookingId && editBookingId === booking._id}
-                    >
-                      Delete
-                    </button> */}
                   </div>
                   {editBookingId === booking._id && (
                     <div className="absolute -top-2 right-2">

@@ -172,7 +172,7 @@ function TherapistBox({ therapist }: { therapist: Therapist }) {
         <b>Therapist:</b>{" "}
         {therapistId ? (
           <a
-            href={`/admin/therapists?therapistId=${encodeURIComponent(therapistUserId)}`}
+            href={`/super-admin/therapists?therapist=${encodeURIComponent(therapistUserId)}`}
             className="text-blue-600 hover:underline"
             title="View therapist details"
             target="_blank"
@@ -263,7 +263,7 @@ function CalendarSessionItem({
         <span className="font-bold text-indigo-900">
           {patient && patient.patientId ? (
             <a
-              href={`/admin/children?patientId=${encodeURIComponent(patient.patientId)}`}
+              href={`/super-admin/children?patientId=${encodeURIComponent(patient.patientId)}`}
               className="text-blue-700 hover:underline"
               title="View patient details"
               target="_blank"
@@ -524,7 +524,7 @@ function CalendarMonthGrid({
 }
 
 // --- Main FullCalendar Page ---
-export default function FullCalendar() {
+export default function SuperAdminFullCalendar() {
   const [loading, setLoading] = useState(true);
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
