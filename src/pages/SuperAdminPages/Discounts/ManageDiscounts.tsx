@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { FiTag, FiCheckCircle, FiEdit, FiTrash2, FiPlusCircle } from "react-icons/fi";
+import { FiTag, FiCheckCircle, FiEdit, FiPlusCircle } from "react-icons/fi";
 import { motion } from "framer-motion";
 
 // You can replace this with your Toast utility or Ant message -- shown with window.alert for now
@@ -119,9 +119,13 @@ export default function ManageDiscounts() {
     try {
       if (editCoupon) {
         // Update existing
+        const superAdminToken = localStorage.getItem("super-admin-token");
         const res = await fetch(`${API_BASE}/${editCoupon.couponCode}`, {
           method: "PUT",
-          headers: { "Content-Type": "application/json" },
+          headers: { 
+            "Content-Type": "application/json",
+            ...(superAdminToken ? { Authorization: `${superAdminToken}` } : {})
+          },
           body: JSON.stringify(modalForm),
         });
         const data = await res.json();
@@ -135,9 +139,13 @@ export default function ManageDiscounts() {
         }
       } else {
         // Add new
+        const superAdminToken = localStorage.getItem("super-admin-token");
         const res = await fetch(API_BASE, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { 
+            "Content-Type": "application/json",
+            ...(superAdminToken ? { Authorization: `${superAdminToken}` } : {})
+          },
           body: JSON.stringify(modalForm),
         });
         const data = await res.json();
@@ -157,10 +165,17 @@ export default function ManageDiscounts() {
   };
 
   // Delete coupon
+  /*
   const handleDelete = async (coupon: DiscountCoupon) => {
     if (!window.confirm(`Delete coupon "${coupon.couponCode}"? This cannot be undone.`)) return;
     try {
-      const res = await fetch(`${API_BASE}/${coupon.couponCode}`, { method: "DELETE" });
+      const superAdminToken = localStorage.getItem("super-admin-token");
+      const res = await fetch(`${API_BASE}/${coupon.couponCode}`, { 
+        method: "DELETE",
+        headers: {
+          ...(superAdminToken ? { Authorization: `${superAdminToken}` } : {})
+        }
+      });
       const data = await res.json();
       if (data.success) {
         showToast("Coupon deleted.", "success");
@@ -172,6 +187,7 @@ export default function ManageDiscounts() {
       showToast("Failed to delete coupon.", "error");
     }
   };
+  */
 
   return (
     <motion.div
@@ -236,6 +252,7 @@ export default function ManageDiscounts() {
                     >
                       <FiEdit /> Edit
                     </button>
+                    {/* 
                     <button
                       className="inline-flex items-center gap-1 rounded-md border border-red-200 px-3 py-1.5 text-xs text-red-600 hover:bg-red-50"
                       onClick={() => handleDelete(c)}
@@ -243,6 +260,7 @@ export default function ManageDiscounts() {
                     >
                       <FiTrash2 /> Delete
                     </button>
+                    */}
                   </div>
                 </td>
               </tr>

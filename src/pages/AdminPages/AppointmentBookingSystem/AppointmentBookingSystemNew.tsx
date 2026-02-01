@@ -130,6 +130,8 @@ export default function AppointmentBookingSystemNew() {
   const [isSessionEditRequest, setIsSessionEditRequest] = useState<boolean>(false);
   const [sessionEditRequestId, setSessionEditRequestId] = useState<string>("");
 
+  // const [bookings, setBookings] = useState<any[]>([]);
+
   useEffect(() => {
     if (location.state && (location.state as any).bookingRequest) {
       const req = (location.state as any).bookingRequest;
@@ -537,9 +539,13 @@ export default function AppointmentBookingSystemNew() {
       };
 
       if (!editBookingId) {
+        const token = localStorage.getItem("admin-token");
         const resp = await fetch(`${endpoint}/api/admin/bookings`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { 
+            "Content-Type": "application/json",
+            ...(token ? { "Authorization": `${token}` } : {})
+          },
           body: JSON.stringify(body),
         });
         if (!resp.ok) {
@@ -548,9 +554,13 @@ export default function AppointmentBookingSystemNew() {
         }
         setBookingSuccess("Booking successfully created.");
       } else {
+        const token = localStorage.getItem("admin-token");
         const resp = await fetch(`${endpoint}/api/admin/bookings/${editBookingId}`, {
           method: "PUT",
-          headers: { "Content-Type": "application/json" },
+          headers: { 
+            "Content-Type": "application/json",
+            ...(token ? { "Authorization": `${token}` } : {})
+          },
           body: JSON.stringify(body),
         });
         if (!resp.ok) {
@@ -578,51 +588,63 @@ export default function AppointmentBookingSystemNew() {
     setBookingError(null);
     setBookingSuccess(null);
     const booking = bookings.find(b => b._id === bookingId);
+    console.log("handleEditBooking: booking found:", booking);
     if (booking) {
       const mainTherapistId =
         (typeof booking.therapist === "string" && booking.therapist) ||
         ((booking.therapist as any)?._id) || "";
       setTherapistId(mainTherapistId);
+
       const foundPatient = patients.find(p => {
-        return (
+        const matches =
           (p.patientId && (booking.patient as any)?.patientId && p.patientId === (booking.patient as any)?.patientId) ||
-          (p.id && (booking.patient as any)?.id && p.id === (booking.patient as any)?.id)
-        );
+          (p.id && (booking.patient as any)?.id && p.id === (booking.patient as any)?.id);
+        if (matches) {
+          console.log("handleEditBooking: found matching patient", p);
+        }
+        return matches;
       });
+      console.log("handleEditBooking: foundPatient:", foundPatient);
+
       setPatientId(foundPatient ? foundPatient.id : ((booking.patient as any)?.id || ""));
       setTherapyId((booking.therapy as any)?._id || "");
       setPackageId((booking.package as any)?._id || "");
-      setSessions(
-        Array.isArray(booking.sessions)
-          ? booking.sessions.map((s) => {
-              // Set therapyTypeId as a proper object
-              let therapyTypeObj;
-              if (typeof s.therapyTypeId === "object") {
-                therapyTypeObj = s.therapyTypeId && s.therapyTypeId._id
-                  ? { _id: s.therapyTypeId._id, name: s.therapyTypeId.name || "" }
-                  : { _id: "", name: "" };
-              } else if (typeof s.therapyTypeId === "string") {
-                const foundTherapy = therapies.find((tt) => tt._id === s.therapyTypeId);
-                therapyTypeObj = foundTherapy
-                  ? { _id: foundTherapy._id, name: foundTherapy.name }
-                  : { _id: s.therapyTypeId, name: "" };
-              } else {
-                const bTherapy = typeof booking.therapy === "object" && booking.therapy._id ? booking.therapy : undefined;
-                therapyTypeObj = bTherapy ? { _id: bTherapy._id, name: bTherapy.name || "" } : { _id: "", name: "" };
+
+      const mappedSessions = Array.isArray(booking.sessions)
+        ? booking.sessions.map((s) => {
+            let therapyTypeObj;
+            if (typeof s.therapyTypeId === "object") {
+              therapyTypeObj = s.therapyTypeId && s.therapyTypeId._id
+                ? { _id: s.therapyTypeId._id, name: s.therapyTypeId.name || "" }
+                : { _id: "", name: "" };
+            } else if (typeof s.therapyTypeId === "string") {
+              const foundTherapy = therapies.find((tt) => tt._id === s.therapyTypeId);
+              if (foundTherapy) {
+                console.log("handleEditBooking: session therapyTypeId string matched", foundTherapy);
               }
-              return {
-                date: s.date,
-                slotId: s.slotId ?? "",
-                therapistId:
-                  s.therapistId ||
-                  (s.therapist && typeof s.therapist === "object" && s.therapist._id) ||
-                  (s.therapist && typeof s.therapist === "string" ? s.therapist : "") ||
-                  mainTherapistId,
-                therapyTypeId: therapyTypeObj,
-              };
-            })
-          : []
-      );
+              therapyTypeObj = foundTherapy
+                ? { _id: foundTherapy._id, name: foundTherapy.name }
+                : { _id: s.therapyTypeId, name: "" };
+            } else {
+              const bTherapy = typeof booking.therapy === "object" && booking.therapy._id ? booking.therapy : undefined;
+              therapyTypeObj = bTherapy ? { _id: bTherapy._id, name: bTherapy.name || "" } : { _id: "", name: "" };
+            }
+            const result = {
+              date: s.date,
+              slotId: s.slotId ?? "",
+              therapistId:
+                s.therapistId ||
+                (s.therapist && typeof s.therapist === "object" && s.therapist._id) ||
+                (s.therapist && typeof s.therapist === "string" ? s.therapist : "") ||
+                mainTherapistId,
+              therapyTypeId: therapyTypeObj,
+            };
+            console.log("handleEditBooking: mapped session", result);
+            return result;
+          })
+        : [];
+      setSessions(mappedSessions);
+
       let couponObj: any = null;
       if (booking && booking.discountInfo && booking.discountInfo.coupon) {
         const c = booking.discountInfo.coupon;
@@ -630,12 +652,15 @@ export default function AppointmentBookingSystemNew() {
           (x.couponCode === c.couponCode) ||
           (x._id === c._id)
         );
+        console.log("handleEditBooking: found couponObj:", couponObj);
       }
       setAppliedCoupon(couponObj || null);
       setCouponInput(couponObj?.couponCode || "");
       setCouponStatus(couponObj ? "valid" : null);
 
       setRemark(booking.remark || "");
+    } else {
+      console.log("handleEditBooking: No booking found with id", bookingId);
     }
     // setRepeatDay(""); setRepeatStartDate(""); setRepeatSlotId("");
     // setRepeatError(null); setRepeatConflictInfo({});
@@ -1138,6 +1163,8 @@ export default function AppointmentBookingSystemNew() {
           )}
         </div>
       </div>
+
+      
       <BookingSummary
         bookings={bookings}
         setBookings={setBookings}
@@ -1152,6 +1179,8 @@ export default function AppointmentBookingSystemNew() {
         // handleDeleteBooking={handleDeleteBooking}
         handleCollectPayment={handleCollectPayment}
         paymentLoadingBookingId={paymentLoadingBookingId}
+        // bookings={bookings}
+        // setBookings={setBookings}
       />
       {(apiLoading || bookingsLoading) && (
         <div className="fixed inset-0 bg-black bg-opacity-15 z-50 flex items-center justify-center pointer-events-none select-none">
@@ -1799,6 +1828,7 @@ function CollectPaymentModal({
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            "Authorization": `${localStorage.getItem("admin-token") || ""}`,
           },
           body: JSON.stringify(body),
         }
@@ -2026,9 +2056,10 @@ function BookingSummary({
   getPackageDisplay,
   SESSION_TIME_OPTIONS,
   handleEditBooking,
+  bookings, setBookings
   // handleDeleteBooking,
 }: any) {
-  const [bookings, setBookings] = useState<any[]>([]);
+ 
   const [bookingsLoading, setBookingsLoading] = useState(false);
   const [bookingsError, setBookingsError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
@@ -2129,6 +2160,7 @@ function BookingSummary({
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            "Authorization": `${localStorage.getItem("admin-token") || ""}`,
           },
           body: JSON.stringify({
             bookingId: checkInBooking._id,

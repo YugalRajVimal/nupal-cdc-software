@@ -395,11 +395,15 @@ function HolidayModal({
                 return;
             }
             try {
+                const token = localStorage.getItem("admin-token");
                 const res = await axios.post(
                     apiUrl,
                     {
                         fromDate,
                         toDate,
+                    },
+                    {
+                        headers: token ? { Authorization: token } : undefined,
                     }
                 );
                 setSuccessMsg(
@@ -417,11 +421,15 @@ function HolidayModal({
                 return;
             }
             try {
+                const token = localStorage.getItem("admin-token");
                 const res = await axios.post(
                     apiUrl,
                     {
                         date: partialDate,
                         slots: selectedSlots,
+                    },
+                    {
+                        headers: token ? { Authorization: token } : undefined,
                     }
                 );
                 setSuccessMsg(

@@ -190,11 +190,14 @@ export default function BookingRequests() {
     setActionError((prev) => ({ ...prev, [requestId]: null }));
 
     try {
+      const adminToken = localStorage.getItem("admin-token");
       const res = await fetch(`${API_BASE_URL}/api/admin/bookings/booking-requests/${requestId}/reject`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `${adminToken}`,
         },
+
       });
       if (!res.ok) throw new Error(await res.text());
       setActiveSearch((search) => search); // trigger refetch

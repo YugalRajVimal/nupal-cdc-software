@@ -17,7 +17,12 @@ import {
   FiSearch,
   FiChevronLeft,
   FiChevronRight,
+  FiCalendar,
 } from "react-icons/fi";
+// We will use react-date-picker for a simple calendar widget
+import DatePicker from "react-date-picker";
+import "react-date-picker/dist/DatePicker.css";
+import "react-calendar/dist/Calendar.css";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "";
 
@@ -282,9 +287,15 @@ function LeadsTableSection({
       return;
     try {
       setActionInProgressId(lead.id);
+      const adminToken = localStorage.getItem("admin-token");
       const res = await fetch(`${API_BASE_URL}/api/admin/leads/${lead.id}`, {
         method: "DELETE",
         credentials: "same-origin",
+        headers: adminToken
+          ? {
+              Authorization: `${adminToken}`,
+            }
+          : {},
       });
       if (!res.ok) throw new Error("Failed to delete lead");
       // If only one lead left on a page, move back a page
@@ -310,10 +321,18 @@ function LeadsTableSection({
       return;
     try {
       setActionInProgressId(lead.id);
+      const adminToken = localStorage.getItem("admin-token");
       const res = await fetch(`${API_BASE_URL}/api/admin/leads/${lead.id}`, {
         method: "PUT",
         credentials: "same-origin",
-        headers: { "Content-Type": "application/json" },
+        headers: adminToken
+          ? {
+              "Content-Type": "application/json",
+              Authorization: `${adminToken}`,
+            }
+          : {
+              "Content-Type": "application/json",
+            },
         body: JSON.stringify({
           ...lead,
           status: "converted",
@@ -602,12 +621,16 @@ export default function ConsultationsLeads() {
   });
 
   const [editingLeadId, setEditingLeadId] = useState<string | null>(null);
-  // const [currentLeads, setCurrentLeads] = useState<Lead[]>([]);
 
   const parentNameRef = useRef<HTMLInputElement | null>(null);
+
+  // Add calendar open states for both fields so only one calendar can be opened at a time
   const [showCallDateCalendar, setShowCallDateCalendar] = useState(false);
   const [showChildDOBCalendar, setShowChildDOBCalendar] = useState(false);
   const [showAppointmentDateCalendar, setShowAppointmentDateCalendar] = useState(false);
+
+  // React-Date-Picker wants dates as Date or null
+  // We'll sync string <-> Date in the custom components below
 
   useEffect(() => {
     if (enqModalOpen && !editingLeadId) {
@@ -642,7 +665,10 @@ export default function ConsultationsLeads() {
           `${API_BASE_URL}/api/admin/leads/${editingLeadId}`,
           {
             method: "PUT",
-            headers: { "Content-Type": "application/json" },
+            headers: { 
+              "Content-Type": "application/json",
+              "Authorization": `${localStorage.getItem("admin-token") || ""}`,
+            },
             credentials: "same-origin",
             body: JSON.stringify(payload),
           }
@@ -651,7 +677,10 @@ export default function ConsultationsLeads() {
       } else {
         res = await fetch(`${API_BASE_URL}/api/admin/leads`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { 
+            "Content-Type": "application/json",
+            "Authorization": `${localStorage.getItem("admin-token") || ""}`,
+          },
           credentials: "same-origin",
           body: JSON.stringify(payload),
         });
@@ -724,7 +753,8 @@ export default function ConsultationsLeads() {
     });
   }
 
-  function DateInputWithCalendar({
+  // Custom date input with calendar popup for DOB and appointment date
+  function CalendarInput({
     label,
     name,
     value,
@@ -732,7 +762,7 @@ export default function ConsultationsLeads() {
     placeholder,
     required,
     disabled,
-    readOnly,
+    // readOnly,
     showCalendar,
     setShowCalendar,
     min,
@@ -741,61 +771,115 @@ export default function ConsultationsLeads() {
     label: string;
     name: string;
     value: string;
-    onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+    onChange: (e: React.ChangeEvent<HTMLInputElement> | Date) => void;
     placeholder?: string;
     required?: boolean;
     disabled?: boolean;
     readOnly?: boolean;
     showCalendar: boolean;
     setShowCalendar: (b: boolean) => void;
-    min?: string;
-    max?: string;
+    min?: string | Date;
+    max?: string | Date;
   }) {
-    const inputRef = useRef<HTMLInputElement>(null);
+    // Convert string value (yyyy-mm-dd) to Date object for DatePicker
+    const parsedValue = value && /^\d{4}-\d{2}-\d{2}$/.test(value)
+      ? new Date(value + "T12:00:00") // set time so TZ doesn't shift
+      : null;
+
+    // Always show the calendar if this field is focused or clicked
+    // or programmatically open the calendar directly on field focus/click
+    useEffect(() => {
+      // nothing needed, setShowCalendar invoked from below
+    }, []);
+
     return (
       <div style={{ position: "relative" }}>
         <label className="block text-xs font-semibold text-slate-600 mb-1">
           {label}
         </label>
-        {!showCalendar ? (
+        <div className="relative">
           <input
             type="text"
-            className="w-full border px-3 py-2 rounded cursor-pointer bg-white"
+            className="w-full border px-3 py-2 rounded bg-white cursor-pointer"
             name={name}
             value={value}
+            placeholder={placeholder}
+            readOnly
+            required={required}
+            disabled={disabled}
             onFocus={() => setShowCalendar(true)}
             onClick={() => setShowCalendar(true)}
-            onChange={() => {}}
-            placeholder={placeholder}
-            required={required}
-            disabled={disabled}
-            readOnly={readOnly}
+            style={{ paddingRight: "2rem" }}
             autoComplete="off"
           />
-        ) : (
-          <input
-            ref={inputRef}
-            type="date"
-            className="w-full border px-3 py-2 rounded bg-white"
-            name={name}
-            value={value}
-            autoFocus
-            onChange={(e) => {
-              onChange(e);
-              setShowCalendar(false);
-            }}
-            onBlur={() => setTimeout(() => setShowCalendar(false), 150)}
-            min={min}
-            max={max}
-            required={required}
-            disabled={disabled}
-            readOnly={readOnly}
-          />
-        )}
+          <button
+            type="button"
+            className="absolute top-1/2 -translate-y-1/2 right-2 text-slate-400 hover:text-blue-700 focus:outline-none"
+            tabIndex={-1}
+            onClick={() => setShowCalendar(true)}
+            aria-label="Show calendar"
+          >
+            <FiCalendar />
+          </button>
+          <div style={{
+            position: "absolute",
+            left: 0,
+            zIndex: 20,
+            background: "white",
+            boxShadow: "0 4px 20px rgba(0,0,0,.08)",
+            borderRadius: "8px",
+            marginTop: "4px"
+          }}>
+            <AnimatePresence>
+              {showCalendar && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10, scale: 0.96 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 10, scale: 0.96 }}
+                  transition={{ duration: 0.14 }}
+                >
+                  <DatePicker
+                    value={parsedValue}
+                    onChange={(value: any) => {
+                      // DatePicker onChange might deliver Date | string | null | array
+                      let selectedDate: Date | null = null;
+                      if (value instanceof Date) {
+                        selectedDate = value;
+                      } else if (typeof value === "string" && value) {
+                        // Try to parse as ISO string
+                        selectedDate = new Date(value);
+                        if (isNaN(selectedDate.getTime())) {
+                          selectedDate = null;
+                        }
+                      } else if (Array.isArray(value) && value.length > 0 && value[0] instanceof Date) {
+                        // Sometimes a range, just pick the first
+                        selectedDate = value[0];
+                      }
+
+                      if (selectedDate) {
+                        const iso = selectedDate.toISOString().slice(0, 10);
+                        onChange({
+                          target: { name, value: iso }
+                        } as any);
+                      }
+                      setShowCalendar(false);
+                    }}
+                    onCalendarClose={() => setShowCalendar(false)}
+                    calendarIcon={null}
+                    clearIcon={null}
+                    minDate={min ? (typeof min === "string" ? new Date(min) : min) : undefined}
+                    maxDate={max ? (typeof max === "string" ? new Date(max) : max) : undefined}
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </div>
       </div>
     );
   }
 
+  // unchanged for callDate; leaving as original
   function DateTimeInputWithCalendar({
     label,
     name,
@@ -1078,11 +1162,17 @@ export default function ConsultationsLeads() {
                       />
                     </div>
                     <div>
-                      <DateInputWithCalendar
+                      {/* Use CalendarInput for DOB */}
+                      <CalendarInput
                         label="Date of Birth"
                         name="childDOB"
                         value={enqForm.childDOB}
-                        onChange={e => setEnqForm(f => ({ ...f, childDOB: e.target.value }))}
+                        onChange={e =>
+                          setEnqForm(f => ({
+                            ...f,
+                            childDOB: (e as any).target.value,
+                          }))
+                        }
                         showCalendar={showChildDOBCalendar}
                         setShowCalendar={setShowChildDOBCalendar}
                         placeholder="Select date"
@@ -1150,11 +1240,17 @@ export default function ConsultationsLeads() {
                       </select>
                     </div>
                     <div>
-                      <DateInputWithCalendar
+                      {/* Use CalendarInput for Appointment Date */}
+                      <CalendarInput
                         label="Appointment Date"
                         name="appointmentDate"
                         value={enqForm.appointmentDate}
-                        onChange={e => setEnqForm(f => ({ ...f, appointmentDate: e.target.value }))}
+                        onChange={e =>
+                          setEnqForm(f => ({
+                            ...f,
+                            appointmentDate: (e as any).target.value,
+                          }))
+                        }
                         showCalendar={showAppointmentDateCalendar}
                         setShowCalendar={setShowAppointmentDateCalendar}
                         placeholder="Select date"

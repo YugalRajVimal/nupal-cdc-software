@@ -1423,6 +1423,10 @@ export default function TherapistRegistration() {
       const res = await fetch(apiUrl, {
         method: "POST",
         body: payload,
+        headers: {
+          // Do not set Content-Type when sending FormData, browser sets it (incl. boundary)
+          Authorization: `${localStorage.getItem("admin-token") || ""}`,
+        },
       });
 
       if (res.status === 201) {

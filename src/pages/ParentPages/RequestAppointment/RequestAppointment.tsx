@@ -480,8 +480,12 @@ export default function RequestAppointment() {
   const handleDeleteRequest = async (id: string) => {
     if (!window.confirm("Are you sure you want to delete this booking request?")) return;
     try {
+      const patientToken = localStorage.getItem("patient-token");
       const res = await fetch(`${API_BASE_URL}/api/parent/booking-request/${id}`, {
         method: "DELETE",
+        headers: {
+          ...(patientToken ? { Authorization: `${patientToken}` } : {})
+        },
       });
       const text = await res.text();
       let result: any;
@@ -619,13 +623,19 @@ export default function RequestAppointment() {
       if (!editBookingId) {
         res = await fetch(`${API_BASE_URL}/api/parent/create-booking-request`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `${localStorage.getItem("patient-token") || ""}`
+          },
           body: JSON.stringify(payload),
         });
       } else {
         res = await fetch(`${API_BASE_URL}/api/parent/booking-request/${editBookingId}`, {
           method: "PUT",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `${localStorage.getItem("patient-token") || ""}`
+          },
           body: JSON.stringify(payload),
         });
       }

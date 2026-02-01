@@ -7,12 +7,16 @@ import {
 import { motion } from "framer-motion";
 import axios from "axios";
 
-// New: for reading query params
-// function useQuery() {
-//   return new URLSearchParams(window.location.search);
-// }
-
 const API_BASE_URL = import.meta.env.VITE_API_URL || "";
+
+// Utility to get the right auth header (admin-token / super-admin-token)
+function getAuthHeader() {
+  const adminToken = localStorage.getItem("admin-token");
+  if (adminToken) {
+    return { Authorization: `${adminToken}` };
+  }
+  return {};
+}
 
 type TherapistProfile = {
   _id: string;
@@ -250,7 +254,7 @@ export default function TherapistsPage() {
 
       const resp = await axios.get(
         `${API_BASE_URL.replace(/\/$/, "")}/api/admin/therapist`,
-        { params }
+        { params, headers: getAuthHeader() }
       );
       let therapistsArr: TherapistProfile[] = [];
       if (
@@ -332,7 +336,8 @@ export default function TherapistsPage() {
     setSelectedProfile(null);
     try {
       const res = await axios.get(
-        `${API_BASE_URL.replace(/\/$/, "")}/api/admin/therapist/${id}`
+        `${API_BASE_URL.replace(/\/$/, "")}/api/admin/therapist/${id}`,
+        { headers: getAuthHeader() }
       );
       setSelectedProfile(res.data.therapist ?? null);
     } catch (err: any) {
@@ -357,7 +362,7 @@ export default function TherapistsPage() {
       const endpoint = shouldDisable
         ? `${API_BASE_URL.replace(/\/$/, "")}/api/admin/therapist/${id}/disable`
         : `${API_BASE_URL.replace(/\/$/, "")}/api/admin/therapist/${id}/enable`;
-      await axios.patch(endpoint);
+      await axios.patch(endpoint, {}, { headers: getAuthHeader() });
       await fetchTherapists();
       if (selectedId === id) {
         await fetchTherapistById(id);
@@ -379,7 +384,8 @@ export default function TherapistsPage() {
     try {
       await axios.patch(
         `${API_BASE_URL.replace(/\/$/, "")}/api/admin/therapist/${id}/panel-access`,
-        { isPanelAccessible: enable }
+        { isPanelAccessible: enable },
+        { headers: getAuthHeader() }
       );
       await fetchTherapists();
       if (selectedId === id) {
@@ -445,7 +451,7 @@ export default function TherapistsPage() {
       await axios.put(
         `${API_BASE_URL.replace(/\/$/, "")}/api/admin/therapist/${editTherapist._id}`,
         payload,
-        { headers: { "Content-Type": "application/json" } }
+        { headers: { ...getAuthHeader(), "Content-Type": "application/json" } }
       );
       await fetchTherapists();
       setEditTherapist(null);

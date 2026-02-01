@@ -85,6 +85,7 @@ import ParentCompleteProfile from "./pages/ParentPages/ParentSignUp/ParentComple
 import SuperAdminProfile from "./pages/SuperAdminPages/ProfilePage/SuperAdminProfile";
 import LogOutSuperAdmin from "./pages/SuperAdminPages/LogOutSuperAdmin";
 import SuperAdminFullCalendar from "./pages/SuperAdminPages/FullCalendar/SuperAdminFullCalendar";
+import AllLogs from "./pages/SuperAdminPages/Auditlogs/AllLogs";
 
 
 export default function App() {
@@ -129,7 +130,7 @@ export default function App() {
             <Route path="/super-admin/therapy-types" element={<TherapyTypesPage />} />
             <Route path="/super-admin/packages" element={<PackagesPage />} />
             <Route path="/super-admin/discount-coupons" element={<ManageDiscounts />} />
-            <Route path="/super-admin/audit-logs" element={<h1>Audit Logs</h1>} />
+            <Route path="/super-admin/audit-logs" element={<AllLogs/>} />
             <Route path="/super-admin/finances" element={<FinancesSuperAdminPage/>} />
             <Route path="/super-admin/full-calendar" element={<SuperAdminFullCalendar/>} />
             <Route path="/super-admin/therapists" element={<SuperAdminTherapistsPage/>} />

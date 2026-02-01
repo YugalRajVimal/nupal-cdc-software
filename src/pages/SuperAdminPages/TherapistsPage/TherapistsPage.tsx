@@ -345,10 +345,13 @@ export default function SuperAdminTherapistsPage() {
     setLoading(true);
     setError(null);
     try {
+      const token = localStorage.getItem("super-admin-token");
       const endpoint = shouldDisable
         ? `${API_BASE_URL.replace(/\/$/, "")}/api/admin/therapist/${id}/disable`
         : `${API_BASE_URL.replace(/\/$/, "")}/api/admin/therapist/${id}/enable`;
-      await axios.patch(endpoint);
+      await axios.patch(endpoint, {}, {
+        headers: token ? { Authorization: `${token}` } : undefined,
+      });
       await fetchTherapists(search, page, limit);
       if (selectedId === id) {
         await fetchTherapistById(id);
@@ -368,9 +371,11 @@ export default function SuperAdminTherapistsPage() {
     setLoading(true);
     setError(null);
     try {
+      const token = localStorage.getItem("super-admin-token");
       await axios.patch(
         `${API_BASE_URL.replace(/\/$/, "")}/api/admin/therapist/${id}/panel-access`,
-        { isPanelAccessible: enable }
+        { isPanelAccessible: enable },
+        { headers: token ? { Authorization: `${token}` } : undefined }
       );
       await fetchTherapists(search, page, limit);
       if (selectedId === id) {
@@ -386,6 +391,7 @@ export default function SuperAdminTherapistsPage() {
       setLoading(false);
     }
   }
+
 
   async function handleEditSubmit() {
     if (!editTherapist) return;

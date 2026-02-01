@@ -88,9 +88,13 @@ export default function PackagesPage() {
         return;
       }
       const totalCost = sessionCount * costPerSession;
+      const superAdminToken = localStorage.getItem("super-admin-token");
       const res = await fetch(API_BASE + "/", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          ...(superAdminToken ? { "Authorization": `${superAdminToken}` } : {})
+        },
         credentials: "include",
         body: JSON.stringify({
           name: newPkg.name.trim(),
@@ -119,8 +123,12 @@ export default function PackagesPage() {
     setSubmitting(true);
     setError(null);
     try {
+      const superAdminToken = localStorage.getItem("super-admin-token");
       const res = await fetch(`${API_BASE}/${id}`, {
         method: "DELETE",
+        headers: {
+          ...(superAdminToken ? { "Authorization": `${superAdminToken}` } : {})
+        },
         credentials: "include"
       });
       if (!res.ok) throw new Error("Failed to delete package");
@@ -170,9 +178,13 @@ export default function PackagesPage() {
         return;
       }
       const totalCost = sessionCount * costPerSession;
+      const token = localStorage.getItem("super-admin-token");
       const res = await fetch(`${API_BASE}/${editId}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          ...(token ? { "Authorization": `${token}` } : {})
+        },
         credentials: "include",
         body: JSON.stringify({
           name: editPkg.name,

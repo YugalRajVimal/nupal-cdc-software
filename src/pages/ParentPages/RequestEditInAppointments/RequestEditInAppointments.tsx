@@ -473,11 +473,15 @@ export default function RequestEditInAppointment() {
     };
 
     try {
+      const patientToken = localStorage.getItem("patient-token");
       let resp = await fetch(
         `${API_BASE_URL}/api/parent/session-edit-request-bulk`,
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            ...(patientToken ? { Authorization: `${patientToken}` } : {}),
+          },
           body: JSON.stringify(payload),
         }
       );

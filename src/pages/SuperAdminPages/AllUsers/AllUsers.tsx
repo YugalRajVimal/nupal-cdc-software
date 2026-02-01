@@ -573,11 +573,15 @@ const AllUsers: React.FC<AllUsersProps> = () => {
     setError(null);
 
     try {
+      const superAdminToken = localStorage.getItem('super-admin-token');
       const res = await axios.post(
         `${API_BASE}/api/super-admin/users/login-as-user`,
         { userId: user._id },
         {
-          headers: { "Content-Type": "application/json" },
+          headers: { 
+            "Content-Type": "application/json",
+            ...(superAdminToken ? { "Authorization": `${superAdminToken}` } : {})
+          },
         }
       );
       const { token, role, user: userData } = res.data;

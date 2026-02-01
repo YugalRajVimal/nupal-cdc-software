@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { FiPlus, FiEdit, FiTrash, FiX, FiCheck } from "react-icons/fi";
+import { FiPlus, FiEdit, /* FiTrash, */ FiX, FiCheck } from "react-icons/fi";
 
 // Set your API base url here
 const API_BASE = import.meta.env.VITE_API_URL
@@ -63,9 +63,14 @@ export default function TherapyTypesPage() {
     setSubmitting(true);
     setError(null);
     try {
+      // Include the super-admin-token in the Authorization header
+      const token = localStorage.getItem("super-admin-token");
       const res = await fetch(API_BASE + "/", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          ...(token ? { "Authorization": `${token}` } : {})
+        },
         credentials: "include",
         body: JSON.stringify({ name: newType.trim() }),
       });
@@ -84,14 +89,19 @@ export default function TherapyTypesPage() {
   };
 
   // Delete a type by id
+  /*
+  // COMMENTED-OUT: Delete therapy type feature
   const deleteType = async (id: string) => {
     if (!window.confirm("Delete this therapy type?")) return;
     setSubmitting(true);
     setError(null);
     try {
+      // Assume you have a way to get the super-admin token, e.g. from localStorage or context
+      const token = localStorage.getItem("super-admin-token");
       const res = await fetch(`${API_BASE}/${id}`, {
         method: "DELETE",
-        credentials: "include"
+        credentials: "include",
+        headers: token ? { "Authorization": `${token}` } : {},
       });
       if (!res.ok) throw new Error("Failed to delete therapy type");
       setTypes((prev) => prev.filter((t) => t._id !== id));
@@ -100,6 +110,7 @@ export default function TherapyTypesPage() {
     }
     setSubmitting(false);
   };
+  */
 
   // Enable edit mode for a type
   const beginEdit = (type: TherapyType) => {
@@ -124,9 +135,13 @@ export default function TherapyTypesPage() {
     }
     setSubmitting(true);
     try {
+      const token = localStorage.getItem("super-admin-token");
       const res = await fetch(`${API_BASE}/${editId}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { "Authorization": `${token}` } : {})
+        },
         credentials: "include",
         body: JSON.stringify({ name: editName }),
       });
@@ -246,13 +261,13 @@ export default function TherapyTypesPage() {
                         >
                           <FiEdit /> Edit
                         </button>
-                        <button
+                        {/* <button
                           onClick={() => deleteType(type._id)}
                           className="inline-flex items-center gap-1 border border-red-300 text-red-600 px-3 py-1 rounded text-xs"
                           disabled={submitting}
                         >
                           <FiTrash /> Delete
-                        </button>
+                        </button> */}
                       </td>
                     </tr>
                   )

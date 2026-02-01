@@ -161,9 +161,14 @@ export default function PatientRegistration() {
         }
       });
 
+      const authToken = localStorage.getItem("admin-token");
       const res = await fetch(`${API_BASE_URL}/api/admin/patients`, {
         method: "POST",
         body: payload,
+        headers: {
+          // 'Content-Type' must NOT be set for FormData
+          ...(authToken ? { Authorization: authToken } : {}),
+        },
       });
 
       for (let pair of payload.entries()) {
@@ -256,16 +261,23 @@ export default function PatientRegistration() {
                       shouldShowError("childFullName") ? { borderColor: "red" } : {}
                     }
                   />
-                  <Input
-                    label="Gender*"
-                    value={formData.gender}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) => update("gender", e.target.value)}
-                    placeholder="Male / Female / Other"
-                    required
-                    style={
-                      shouldShowError("gender") ? { borderColor: "red" } : {}
-                    }
-                  />
+                  <div className="mb-4">
+                    <label className="block text-gray-700 font-semibold mb-2">
+                      Gender*
+                    </label>
+                    <select
+                      value={formData.gender}
+                      onChange={(e: ChangeEvent<HTMLSelectElement>) => update("gender", e.target.value)}
+                      required
+                      className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-300"
+                      style={shouldShowError("gender") ? { borderColor: "red" } : {}}
+                    >
+                      <option value="">Select Gender</option>
+                      <option value="Male">Male</option>
+                      <option value="Female">Female</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
                   <Input
                     label="Date of Birth*"
                     value={formData.childDOB}

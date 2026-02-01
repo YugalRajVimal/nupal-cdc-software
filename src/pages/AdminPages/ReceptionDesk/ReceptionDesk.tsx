@@ -28,15 +28,14 @@ const SESSION_TIME_OPTIONS = [
   { id: '1930-2015', label: '19:30 to 20:15', limited: true }
 ];
 
-// Types for reception bookings and payments
 type Appointment = {
   _id: string;
   appointmentId: string;
   patient: { name: string; _id: string; patientId?: string; gender?: string; mobile?: string } | null;
   therapistName: string;
   therapistId: string;
-  therapistUserId:string,
-  sessionId:string,
+  therapistUserId: string;
+  sessionId: string;
   time?: string;
   status?: "scheduled" | "checked-in";
   isCheckedIn?: boolean;
@@ -59,11 +58,11 @@ type PaymentInfo = {
 
 const API_URL = import.meta.env.VITE_API_URL;
 
-// Utility: Get today's session for a booking and extract therapist/user name and slot time
-function getTodaySession(sessions?: any[], today?: string) {
-  if (!sessions || !today) return undefined;
-  return sessions.find((sess) => sess.date === today);
-}
+// Utility and type for today session extraction
+// function getTodaySessionFromMainObj(obj: any) {
+//   if (!obj) return undefined;
+//   return obj.session;
+// }
 
 type CollectModalState = {
   visible: boolean,
@@ -83,7 +82,10 @@ export default function ReceptionDesk() {
   const [partialValue, setPartialValue] = useState<string>("");
   const [collectLoading, setCollectLoading] = useState(false);
 
-  // For disabling button if entered partial + amountPaid > amount
+  // Multi-select state for appointments
+  const [selectedAppointments, setSelectedAppointments] = useState<{ [_id_session: string]: boolean }>({});
+  const [multiCheckingIn, setMultiCheckingIn] = useState(false);
+
   function toNumber(v: any): number | undefined {
     if (typeof v === "number") return v;
     if (typeof v === "string" && v.trim() !== "") {
@@ -95,14 +97,14 @@ export default function ReceptionDesk() {
 
   // Get the total amount due for the invoice (total invoice amount)
   const getPaymentAmount = () => {
-    if (!collectModal.payment?.paymentAmount) return undefined;
+    if (!collectModal.payment?.paymentAmount && collectModal.payment?.paymentAmount !== 0) return undefined;
     let amount = collectModal.payment.paymentAmount;
     return toNumber(amount);
   };
 
   // Get how much was already paid (if any)
   const getAmountPaid = () => {
-    if (!collectModal.payment?.amountPaid) return 0;
+    if (!collectModal.payment?.amountPaid && collectModal.payment?.amountPaid !== 0) return 0;
     let paid = collectModal.payment.amountPaid;
     const paidNum = toNumber(paid);
     return paidNum ?? 0;
@@ -111,24 +113,18 @@ export default function ReceptionDesk() {
   const paymentAmount = getPaymentAmount();
   const amountAlreadyPaid = getAmountPaid();
   const partialNumeric = parseFloat(partialValue);
-
-  // New logic: check if partialValue + alreadyPaid exceeds paymentAmount
   const isPartialOverDue =
     collectType === "partial" &&
     partialValue &&
     paymentAmount !== undefined &&
     !isNaN(partialNumeric) &&
     (partialNumeric + amountAlreadyPaid) > paymentAmount;
-
-  // Legacy compatibility: get pending/due for just display/max UI
   const getPaymentDue = () => {
     if (paymentAmount === undefined) return undefined;
     return paymentAmount - amountAlreadyPaid;
   };
-
   const paymentDue = getPaymentDue();
 
-  // Fetch reception desk data
   useEffect(() => {
     let ignore = false;
     async function fetchData() {
@@ -143,62 +139,57 @@ export default function ReceptionDesk() {
         });
         if (!res.ok) throw new Error("Failed to load reception desk");
         const data = await res.json();
-
         if (!data.success) throw new Error(data.message || "API error");
         if (ignore) return;
 
         setToday(data.today);
 
-        // --- Today's Appointments ---
+        // ---- Today's Appointments ----
+        // Each item: { _id, appointmentId, ..., session: { ... } }
         const todays: Appointment[] = (data.todaysBookings || []).map((booking: any) => {
-          // Get today's session
-          const session = getTodaySession(booking.sessions, data.today);
-
-          // Therapist info: Try to get therapistName from session's therapist.userId.name, fall back to main therapist
+          const session = booking.session;
+          // For therapist info, use session.therapist structure.
           let therapistName = "";
           let therapistId = "";
           let therapistUserId = "";
-          if (session && session.therapist && session.therapist.userId && session.therapist.userId.name) {
+
+          if (session?.therapist && session.therapist.userId && session.therapist.userId.name) {
             therapistName = session.therapist.userId.name;
-            therapistId = session.therapist.therapistId;
-            therapistUserId = session.therapist._id;
-          } else if (
-            booking.therapist &&
-            (typeof booking.therapist === "object") &&
-            booking.therapist._id
-          ) {
-            therapistName =
-              (booking.therapist.userId && booking.therapist.userId.name)
-                ? booking.therapist.userId.name
-                : (booking.therapist.name || "");
+            therapistId = session.therapist.therapistId ?? session.therapist._id ?? "";
+            therapistUserId = session.therapist._id ?? "";
+          }
+
+          // Fallback: If session therapist not valid, try booking.therapist (in this API it's an id, not object)
+          if (!therapistName && booking.therapist && typeof booking.therapist === "object" && booking.therapist._id) {
             therapistId = booking.therapist._id;
+            therapistName = booking.therapist.name ?? "";
             therapistUserId = booking.therapist._id;
+          } else if (!therapistName && typeof booking.therapist === "string") {
+            therapistId = booking.therapist;
+            therapistUserId = booking.therapist;
           }
 
           let status: "scheduled" | "checked-in" = "scheduled";
-          if (booking.isCheckedIn) status = "checked-in";
-          else if (session && session.isCheckedIn) status = "checked-in";
+          if (session && session.isCheckedIn) status = "checked-in";
 
           return {
             _id: booking._id,
             appointmentId: booking.appointmentId,
             patient: booking.patient || null,
-            therapistName: therapistName,
-            therapistId: therapistId,
-            therapistUserId: therapistUserId,
-            sessionId:session?._id,
+            therapistName,
+            therapistId: therapistId ?? "",
+            therapistUserId: therapistUserId ?? "",
+            sessionId: session?._id,
             time: session?.slotId ?? session?.time ?? "",
             status,
-            isCheckedIn: booking.sessions.isCheckedIn,
-          };
+            isCheckedIn: session?.isCheckedIn,
+          } as Appointment;
         });
 
-        // --- Pending Payments ---
-        // Use all pendingPaymentBookings directly
+        // ---- Pending Payments ----
+        // Each: { payment: { ... }, sessions: [], ... }
         const pendings: PaymentInfo[] = (data.pendingPaymentBookings || []).map((booking: any) => {
-          // Get payment details
           let paymentRecord = booking.payment || {};
-          // Patient fields
           let patientName = booking.patient?.name || "";
           let patientId = booking.patient?.patientId || "";
           let paymentId = paymentRecord.paymentId || undefined;
@@ -239,13 +230,13 @@ export default function ReceptionDesk() {
   }, []);
 
   // Handler to "check in" an appointment (actual POST to API)
-  const handleCheckIn = async (_id: string, sessionId:string) => {
+  const handleCheckIn = async (_id: string, sessionId: string) => {
     const token = localStorage.getItem("admin-token");
     try {
       const res = await fetch(`${API_URL}/api/admin/bookings/check-in`, {
         method: "POST",
         headers: {
-          Authorization: token || "",
+          Authorization: `${token || ""}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ bookingId: _id, sessionId }),
@@ -253,10 +244,10 @@ export default function ReceptionDesk() {
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.message || "Failed check-in");
 
-      // Optimistic update
+      // Optimistic update: update session as checked-in and appointment status
       setAppointments((apps) =>
         apps.map((a) =>
-          a._id === _id
+          a._id === _id && a.sessionId === sessionId
             ? { ...a, status: "checked-in", isCheckedIn: true }
             : a
         )
@@ -272,14 +263,88 @@ export default function ReceptionDesk() {
     }
   };
 
-  // Opens the Collect Modal
+  // Handler to multi-check-in selected appointments
+  const handleMultiCheckIn = async () => {
+    const keys: string[] = Object.entries(selectedAppointments)
+      .filter(([_, checked]) => checked)
+      .map(([key]) => key);
+
+    if (keys.length === 0) {
+      alert("Please select at least one appointment to check in.");
+      return;
+    }
+    setMultiCheckingIn(true);
+    const token = localStorage.getItem("admin-token");
+
+    // Execute check-in for each selected appointment (one-after-another)
+    for (const key of keys) {
+      const [bookingId, sessionId] = key.split("||");
+      if (!bookingId || !sessionId) continue;
+      try {
+        const res = await fetch(`${API_URL}/api/admin/bookings/check-in`, {
+          method: "POST",
+          headers: {
+            Authorization: `${token || ""}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ bookingId, sessionId }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.message || "Failed check-in");
+        // Update one by one
+        setAppointments((apps) =>
+          apps.map((a) =>
+            a._id === bookingId && a.sessionId === sessionId
+              ? { ...a, status: "checked-in", isCheckedIn: true }
+              : a
+          )
+        );
+      } catch (err) {
+        alert(
+          "Failed check-in for Appt#: " + bookingId + ". " +
+            (typeof err === "string"
+              ? err
+              : err instanceof Error
+              ? err.message
+              : "Error checking in")
+        );
+        // Optionally break on failure, or keep going
+        // break;
+      }
+    }
+    setMultiCheckingIn(false);
+    // Clear all selections after completion
+    setSelectedAppointments({});
+  };
+
+  // Toggle a single checkbox for appointment selection
+  const toggleAppointmentSelection = (_id: string, sessionId: string) => {
+    const key = `${_id}||${sessionId}`;
+    setSelectedAppointments((prev) => ({
+      ...prev,
+      [key]: !prev[key],
+    }));
+  };
+
+  // "Select All" functionality for remaining scheduled appointments
+  const selectAllAppointments = () => {
+    // Only scheduled and not checked-in are selectable
+    const newSelection: typeof selectedAppointments = {};
+    appointments.forEach((a) => {
+      if (a.status === "scheduled" && !a.isCheckedIn) {
+        newSelection[`${a._id}||${a.sessionId}`] = true;
+      }
+    });
+    setSelectedAppointments(newSelection);
+  };
+  const deselectAllAppointments = () => setSelectedAppointments({});
+
   const openCollectModal = (payment: PaymentInfo) => {
     setCollectModal({ visible: true, payment });
     setCollectType('full');
     setPartialValue("");
   };
 
-  // Closes the Collect Modal
   const closeCollectModal = () => {
     setCollectModal({ visible: false, payment: null });
     setPartialValue("");
@@ -287,7 +352,6 @@ export default function ReceptionDesk() {
     setCollectLoading(false);
   };
 
-  // Handler to "collect" a payment (actual POST to API) — now handles full/partial
   const handleCollect = async () => {
     const payment = collectModal.payment;
     if (!payment) return;
@@ -300,10 +364,8 @@ export default function ReceptionDesk() {
     try {
       let url = `${API_URL}/api/admin/bookings/${_id}/collect-payment`;
       let payload: any = {};
-      // let method = "POST";
 
       let newAmountPaid = getAmountPaid();
-
       let partialPaidAmount: number | undefined = undefined;
 
       if (collectType === "partial") {
@@ -313,7 +375,6 @@ export default function ReceptionDesk() {
           alert("Please enter a valid partial amount.");
           return;
         }
-        // Prevent partial + alreadyPaid > amount
         if (
           paymentAmount !== undefined &&
           !isNaN(val) &&
@@ -331,14 +392,13 @@ export default function ReceptionDesk() {
         newAmountPaid += val;
       } else {
         payload = paymentRecordId ? { paymentId: paymentRecordId } : {};
-        // In case of full, payment is paid in full
         newAmountPaid = paymentAmount !== undefined ? paymentAmount : newAmountPaid;
       }
 
       const res = await fetch(url, {
         method: "POST",
         headers: {
-          Authorization: token || "",
+          "Authorization": `${token ?? ""}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify(payload),
@@ -346,16 +406,10 @@ export default function ReceptionDesk() {
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.message || "Failed to record payment");
 
-      // We'll use the returned server data for payment status/amount if available
-      // let updatedPaymentStatus = data.paymentStatus || data.status || (collectType === "full" ? "paid" : "partial");
-
-      // If server has payment/amountPaid on response, use it. If partial, but only updated amount, add previous + new paid
       let finalAmountPaid: number;
       if (typeof data.amountPaid !== 'undefined' && data.amountPaid !== null) {
-        // Use server value if it's a valid number, else fallback
         finalAmountPaid = toNumber(data.amountPaid) ?? newAmountPaid;
       } else if (collectType === "partial" && typeof partialPaidAmount === "number") {
-        // Partial payment, if no server field, sum up amount
         finalAmountPaid = amountAlreadyPaid + partialPaidAmount;
       } else {
         finalAmountPaid = newAmountPaid;
@@ -368,21 +422,17 @@ export default function ReceptionDesk() {
         totalAmount = paymentAmount ?? 0;
       }
 
-      // If server returned final fields, trust them
       if (
         data.status === "paid" ||
         data.paymentStatus === "paid" ||
         (typeof totalAmount === "number" && typeof finalAmountPaid === "number" && totalAmount > 0 && finalAmountPaid >= totalAmount)
       ) {
-        // Fully paid, remove from pending
         setPayments((pays) => pays.filter((p) => p._id !== _id));
       } else {
-        // Partial payment, update the corresponding record
         setPayments((pays) =>
           pays.map((p) => {
             if (p._id === _id) {
               const updatedFields: Partial<PaymentInfo> = {};
-              // If it's a partial payment, refresh the paid amount by adding the partial to previous paid if server did not give amountPaid:
               if (
                 collectType === "partial" &&
                 typeof data.amountPaid === "undefined" &&
@@ -394,7 +444,6 @@ export default function ReceptionDesk() {
               }
               if (typeof data.amount !== "undefined") updatedFields.paymentAmount = data.amount;
 
-              // Mark status as "partiallypaid" on partial, unless it's already paid
               if (
                 collectType === "partial" &&
                 (
@@ -509,6 +558,9 @@ export default function ReceptionDesk() {
                       therapist.
                     </li>
                     <li>
+                      You can select and check-in multiple appointments at once using the new multi-select feature.
+                    </li>
+                    <li>
                       Check the "Pending Payments" list. Collect fees before or
                       after the session.
                     </li>
@@ -594,7 +646,7 @@ export default function ReceptionDesk() {
                       ₹{String(collectModal.payment.paymentAmount ?? "—")}
                     </span>
                   </span>
-                  {collectModal.payment.amountPaid && (
+                  {(collectModal.payment.amountPaid || collectModal.payment.amountPaid === 0) && (
                     <span className="text-xs text-slate-400 ml-2">
                       (Already paid: ₹{String(collectModal.payment.amountPaid)})
                     </span>
@@ -689,93 +741,156 @@ export default function ReceptionDesk() {
           <div className="flex items-center gap-2 font-semibold text-slate-700 mb-4">
             <FiCalendar className="text-blue-600" /> Today’s Appointments
           </div>
+
+          {/* Multi-Check-in Controls */}
+          <div className="mb-3 flex flex-wrap gap-2 items-center">
+            <button
+              className="rounded border border-blue-400 px-3 py-1 text-xs font-medium text-blue-800 hover:bg-blue-50 bg-blue-50 transition"
+              onClick={selectAllAppointments}
+              type="button"
+              tabIndex={-1}
+            >
+              Select All
+            </button>
+            <button
+              className="rounded border border-slate-300 px-3 py-1 text-xs font-medium text-slate-600 hover:bg-slate-50 bg-white transition"
+              onClick={deselectAllAppointments}
+              type="button"
+              tabIndex={-1}
+            >
+              Deselect All
+            </button>
+            <button
+              className={`rounded border border-green-600 px-3 py-1 text-xs font-semibold text-green-700 bg-green-50 transition ${
+                multiCheckingIn || Object.entries(selectedAppointments).filter(([_, checked]) => checked).length === 0
+                  ? "opacity-60 cursor-not-allowed"
+                  : "hover:bg-green-100"
+              }`}
+              onClick={handleMultiCheckIn}
+              type="button"
+              disabled={multiCheckingIn || Object.entries(selectedAppointments).filter(([_, checked]) => checked).length === 0}
+              tabIndex={-1}
+              style={{ minWidth: 88 }}
+            >
+              {multiCheckingIn ? "Checking In…" : "Check-In Selected"}
+            </button>
+            <span className="text-xs text-slate-400 ml-2">
+              {Object.entries(selectedAppointments).filter(([_, v]) => v).length > 0
+                ? `(${Object.entries(selectedAppointments).filter(([_, checked]) => checked).length} selected)`
+                : ""}
+            </span>
+          </div>
+
           {appointments.length === 0 ? (
             <p className="text-sm text-slate-500">No appointments today.</p>
           ) : (
             <div className="space-y-4">
-              {appointments.map((a) => (
-                <div
-                  key={a._id}
-                  className="flex items-center justify-between border-b border-slate-100 pb-3 last:pb-0 last:border-0"
-                >
-                  <div>
-                    <div className="font-medium text-slate-800 flex flex-col items-start gap-1 flex-wrap">
-                      <span>
-                        {/* Add a link for patient name if id present */}
-                        {a.patient && a.patient._id ? (
-                          <a
-                            href={`/admin/children?patientId=${encodeURIComponent(a.patient._id)}`}
-                            className="text-blue-700 hover:underline"
-                            title="View patient details"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={e => e.stopPropagation()}
-                          >
-                            {a.patient.name ?? "Anonymous"}
-                          </a>
-                        ) : (
-                          a.patient?.name ?? "Anonymous"
-                        )}
-                        <span className="text-xs text-blue-400 font-semibold ml-1">
-                          ({a.patient?.patientId || "--"})
-                        </span>
-                      </span>
-                      <span className=" text-sm font-semibold text-slate-600">
-                        | Appt#:{" "}
-                        <span className="text-blue-700">{a.appointmentId}</span>
-                        <span className="ml-3 text-xs text-slate-400 font-normal">
-                        {
-                          SESSION_TIME_OPTIONS.find(opt => opt.id === a.time)?.label 
-                          ?? a.time 
-                          ?? ""
+              {appointments.map((a) => {
+                const key = `${a._id}||${a.sessionId}`;
+                const checked = !!selectedAppointments[key];
+                const selectable = a.status === "scheduled" && !a.isCheckedIn;
+                return (
+                  <div
+                    key={a._id + "|" + a.sessionId}
+                    className="flex items-center justify-between border-b border-slate-100 pb-3 last:pb-0 last:border-0"
+                  >
+                    <div className="flex items-center">
+                      {/* Checkbox for multi-select */}
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        disabled={!selectable}
+                        onChange={() => selectable && toggleAppointmentSelection(a._id, a.sessionId)}
+                        className="mr-2 accent-blue-600"
+                        tabIndex={selectable ? 0 : -1}
+                        aria-label={
+                          selectable
+                            ? `Select appointment ${a.appointmentId} for check-in`
+                            : "Checked in or not selectable"
                         }
-                      </span>
-                      </span>
-                      {(a.status === "checked-in" || a.isCheckedIn) && (
-                        <span className="ml-2 text-green-600 text-xs bg-green-50 rounded px-2 py-0.5 font-semibold">
-                          Checked In
+                        style={{ width: 16, height: 16 }}
+                      />
+                      {/* Existing appointment info */}
+                      <div>
+                        <div className="font-medium text-slate-800 flex flex-col items-start gap-1 flex-wrap">
+                          <span>
+                            {/* Add a link for patient name if id present */}
+                            {a.patient && a.patient._id ? (
+                              <a
+                                href={`/admin/children?patientId=${encodeURIComponent(a.patient._id)}`}
+                                className="text-blue-700 hover:underline"
+                                title="View patient details"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={e => e.stopPropagation()}
+                              >
+                                {a.patient.name ?? "Anonymous"}
+                              </a>
+                            ) : (
+                              a.patient?.name ?? "Anonymous"
+                            )}
+                            <span className="text-xs text-blue-400 font-semibold ml-1">
+                              ({a.patient?.patientId || "--"})
+                            </span>
+                          </span>
+                          <span className=" text-sm font-semibold text-slate-600">
+                            | Appt#:{" "}
+                            <span className="text-blue-700">{a.appointmentId}</span>
+                            <span className="ml-3 text-xs text-slate-400 font-normal">
+                              {
+                                SESSION_TIME_OPTIONS.find(opt => opt.id === a.time)?.label
+                                ?? a.time
+                                ?? ""
+                              }
+                            </span>
+                          </span>
+                          {(a.status === "checked-in" || a.isCheckedIn) && (
+                            <span className="ml-2 text-green-600 text-xs bg-green-50 rounded px-2 py-0.5 font-semibold">
+                              Checked In
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs text-slate-500 mt-0.5">
+                          Therapist:{" "}
+                          <span className="font-semibold">
+                            {(a.therapistName && a.therapistId) ? (
+                              <a
+                                href={`/admin/therapists?therapistId=${encodeURIComponent(a.therapistUserId)}`}
+                                className="text-blue-600 hover:underline"
+                                title="View therapist details"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={e => e.stopPropagation()}
+                              >
+                                {a.therapistName}
+                              </a>
+                            ) : (
+                              a.therapistName || "—"
+                            )}
+                          </span>{" "}
+                          <span className="text-blue-400 font-mono">
+                            {a.therapistId ? `(${a.therapistId})` : ""}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <div>
+                      {a.status === "scheduled" && !a.isCheckedIn ? (
+                        <button
+                          onClick={() => handleCheckIn(a._id, a.sessionId)}
+                          className="rounded-md border border-blue-500 px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 transition"
+                        >
+                          Check In
+                        </button>
+                      ) : (
+                        <span className="rounded-md border border-green-500 px-3 py-1.5 text-xs font-semibold text-green-600 bg-green-50">
+                          Present
                         </span>
                       )}
                     </div>
-                    <div className="text-xs text-slate-500 mt-0.5">
-                      Therapist:{" "}
-                      <span className="font-semibold">
-                        {(a.therapistName && a.therapistId) ? (
-                          <a
-                            href={`/admin/therapists?therapistId=${encodeURIComponent(a.therapistUserId)}`}
-                            className="text-blue-600 hover:underline"
-                            title="View therapist details"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={e => e.stopPropagation()}
-                          >
-                            {a.therapistName}
-                          </a>
-                        ) : (
-                          a.therapistName || "—"
-                        )}
-                      </span>{" "}
-                      <span className="text-blue-400 font-mono">
-                        {a.therapistId ? `(${a.therapistId})` : ""}
-                      </span>
-                    </div>
                   </div>
-                  <div>
-                    {a.status === "scheduled" && !a.isCheckedIn ? (
-                      <button
-                        onClick={() => handleCheckIn(a._id,a.sessionId)}
-                        className="rounded-md border border-blue-500 px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 transition"
-                      >
-                        Check In
-                      </button>
-                    ) : (
-                      <span className="rounded-md border border-green-500 px-3 py-1.5 text-xs font-semibold text-green-600 bg-green-50">
-                        Present
-                      </span>
-                    )}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </motion.div>
@@ -842,17 +957,18 @@ export default function ReceptionDesk() {
                           {payment.paymentStatus || "pending"}
                         </span>
                       </span>
-                      <span>Amount : 
-                        ₹
+                      <span>
+                        Amount : ₹
                         {typeof payment.paymentAmount === "number" ||
-                        /^\d+$/.test(String(payment.paymentAmount))
+                        (typeof payment.paymentAmount === "string" && /^\d+$/.test(payment.paymentAmount))
                           ? payment.paymentAmount
                           : "—"}
                       </span>
-                      {payment.amountPaid && (
+                      {(payment.amountPaid || payment.amountPaid === 0) && (
                         <span>
                           , Paid: ₹
-                          {typeof payment.amountPaid === "number" || /^\d+$/.test(String(payment.amountPaid))
+                          {(typeof payment.amountPaid === "number" ||
+                            (typeof payment.amountPaid === "string" && /^\d+$/.test(payment.amountPaid)))
                             ? payment.amountPaid
                             : "—"}
                         </span>

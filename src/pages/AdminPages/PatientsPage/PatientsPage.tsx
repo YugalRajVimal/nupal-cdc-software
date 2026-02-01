@@ -154,11 +154,15 @@ export default function PatientsPage() {
         name: editForm.name ?? editForm.childFullName ?? "",
         childFullName: editForm.name ?? editForm.childFullName ?? "",
       };
+      const token = localStorage.getItem("admin-token") || "";
       const res = await fetch(
         `${API_BASE_URL}/api/admin/patients/${viewPatient._id}`,
         {
           method: "PUT",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `${token}`,
+          },
           body: JSON.stringify(saveForm),
         }
       );
