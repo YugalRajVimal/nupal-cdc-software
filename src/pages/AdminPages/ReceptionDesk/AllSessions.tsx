@@ -233,7 +233,7 @@ export default function AllUpcomingSessions() {
     >
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-slate-800">
-          All Upcoming Sessions{" "}
+          All Sessions{" "}
           <span className="text-slate-400">
             – {(shownDate && `Date: ${shownDate}`) || ""}
           </span>
@@ -276,7 +276,7 @@ export default function AllUpcomingSessions() {
           className="bg-white border border-slate-200 rounded-lg p-6 shadow-sm"
         >
           <div className="flex items-center gap-2 font-semibold text-slate-700 mb-4">
-            <FiCalendar className="text-blue-600" /> Upcoming Sessions{" "}
+            <FiCalendar className="text-blue-600" /> All Sessions{" "}
             <span className="ml-2 text-xs text-slate-400">
               {filteredSessions.length} result{filteredSessions.length === 1 ? "" : "s"}
             </span>
