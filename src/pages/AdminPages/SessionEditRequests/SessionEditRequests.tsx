@@ -36,6 +36,7 @@ type TherapistType = {
 
 type SessionType = {
   _id: string;
+  sessionId?: string; // ADD: sessionId may now be present in each session (for clarity/compat).
   date: string;
   time?: string;
   status?: string;
@@ -556,6 +557,7 @@ function SessionEditsTable({
     <table className="w-full min-w-[800px] table-auto mb-2">
       <thead>
         <tr className="bg-slate-100 border-b">
+          {/* <th className="px-3 py-2 text-xs font-semibold text-slate-500 text-left">Session ID</th> */}
           <th className="px-3 py-2 text-xs font-semibold text-slate-500 text-left">Session ID</th>
           <th className="px-3 py-2 text-xs font-semibold text-slate-500 text-left">Orig. Date</th>
           <th className="px-3 py-2 text-xs font-semibold text-slate-500 text-left">Orig. Slot</th>
@@ -584,6 +586,9 @@ function SessionEditsTable({
               !dayjs(edit.newDate).isSame(dayjs(session.date), "day");
             const slotChanged =
               session?.slotId && edit.newSlotId && edit.newSlotId !== session.slotId;
+            // Show sessionId as stored in session.sessionId (if present), else session._id
+            const shownSessionId = session && (session.sessionId );
+
             return (
               <tr
                 key={edit.sessionId + idx}
@@ -592,7 +597,11 @@ function SessionEditsTable({
                   ((dateChanged || slotChanged) ? " bg-green-50/30" : " bg-white")
                 }
               >
-                <td className="px-3 py-2 font-mono text-xs">{edit.sessionId}</td>
+                {/* <td className="px-3 py-2 font-mono text-xs">{edit.sessionId}</td> */}
+                <td className="px-3 py-2 font-mono text-xs">
+                  {/* Show the sessionId property if present in the original session, else "-" */}
+                  {shownSessionId || <span className="italic text-slate-400">-</span>}
+                </td>
                 <td className="px-3 py-2">
                   {session?.date ? dayjs(session.date).format("YYYY-MM-DD") : <span className="italic text-slate-400">N/A</span>}
                 </td>
@@ -648,7 +657,7 @@ function SessionEditsTable({
           })
         ) : (
           <tr>
-            <td colSpan={7} className="px-3 py-5 text-center text-slate-400">
+            <td colSpan={8} className="px-3 py-5 text-center text-slate-400">
               No session edits in this request
             </td>
           </tr>

@@ -16,6 +16,7 @@ type UpcomingSessionDetail = {
   patientId: string;
   therapyTypeName: string;
   appointmentId: string;
+  sessionId?: string; // <- ADDED for sessionId
 };
 
 type DashboardData = {
@@ -235,6 +236,7 @@ export default function TherapistDashboardHome() {
                       <th className="py-2 px-3 text-left text-gray-600 font-semibold">Patient</th>
                       <th className="py-2 px-3 text-left text-gray-600 font-semibold">Therapy</th>
                       <th className="py-2 px-3 text-left text-gray-600 font-semibold">Booking ID</th>
+                      <th className="py-2 px-3 text-left text-gray-600 font-semibold">Session ID</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -246,6 +248,7 @@ export default function TherapistDashboardHome() {
                         </td>
                         <td className="py-2 px-3">{session.therapyTypeName}</td>
                         <td className="py-2 px-3">{session.appointmentId}</td>
+                        <td className="py-2 px-3 text-xs text-gray-500 break-all">{session.sessionId || <span className="text-gray-300 italic">—</span>}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -268,6 +271,8 @@ export default function TherapistDashboardHome() {
                 <table className="w-full border rounded-xl bg-white">
                   <thead>
                     <tr>
+                    <th className="py-2 px-3 text-left text-gray-600 font-semibold">Session ID</th>
+
                       <th className="py-2 px-3 text-left text-gray-600 font-semibold">Date</th>
                       <th className="py-2 px-3 text-left text-gray-600 font-semibold">Time</th>
                       <th className="py-2 px-3 text-left text-gray-600 font-semibold">Patient</th>
@@ -278,6 +283,8 @@ export default function TherapistDashboardHome() {
                   <tbody>
                     {dashboardData.upcomingSessionDetails.map((session, idx) => (
                       <tr key={session.appointmentId + session.date + session.slotTime + idx} className="border-t">
+                        <td className="py-2 px-3 text-xs text-gray-500 break-all">{session.sessionId || <span className="text-gray-300 italic">—</span>}</td>
+
                         <td className="py-2 px-3">{session.date}</td>
                         <td className="py-2 px-3">{session.slotTime}</td>
                         <td className="py-2 px-3">

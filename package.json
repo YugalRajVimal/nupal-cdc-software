@@ -25,6 +25,7 @@
     "clsx": "^2.1.1",
     "flatpickr": "^4.6.13",
     "framer-motion": "^12.26.2",
+    "jszip": "^3.10.1",
     "react": "^19.0.0",
     "react-apexcharts": "^1.7.0",
     "react-date-picker": "^12.0.1",

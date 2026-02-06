@@ -178,11 +178,11 @@ export default function PatientRegistration() {
       if (!res.ok) {
         const msg = await res.json();
         console.log(msg.message);
-        toast.error("Failed to register patient: " + msg.message, { position: "top-right" });
+        toast.error("Failed to register children: " + msg.message, { position: "top-right" });
         setSubmitting(false);
         return;
       }
-      toast.success("Patient registered successfully", { position: "top-right" });
+      toast.success("Children registered successfully", { position: "top-right" });
     } catch (error: any) {
       console.log(error);
       toast.error("Registration failed: " + (error?.message || error), { position: "top-right" });
@@ -216,7 +216,7 @@ export default function PatientRegistration() {
         <div className="w-full max-w-4xl bg-white rounded-2xl shadow-lg p-8">
 
           {/* Heading */}
-          <h1 className="text-3xl font-bold text-center mb-8 text-gray-800">Patient Registration</h1>
+          <h1 className="text-3xl font-bold text-center mb-8 text-gray-800">Children Registration</h1>
           {/* Step Indicator */}
           <div className="flex items-center justify-between mb-8">
             {steps.map((label, i) => (
@@ -240,7 +240,7 @@ export default function PatientRegistration() {
             >
               {/* Step 1: Patient Personal Details */}
               {step === 1 && (
-                <Section title="Patient & Parent Details">
+                <Section title="Children & Parent Details">
                   <Input
                     label="Email (for login)*"
                     value={formData.email}
@@ -453,7 +453,7 @@ export default function PatientRegistration() {
                   <div className="flex flex-col w-full">
                     <div className="bg-slate-50 p-6 rounded-xl grid grid-cols-1 md:grid-cols-2 gap-6 text-base">
                       <div>
-                        <h3 className="font-semibold text-gray-700 mb-2 border-b pb-1">Patient Details</h3>
+                        <h3 className="font-semibold text-gray-700 mb-2 border-b pb-1">Children Details</h3>
                         <Detail label="Email" value={formData.email} />
                         <Detail label="Child Name" value={formData.childFullName} />
                         <Detail label="Gender" value={formData.gender} />

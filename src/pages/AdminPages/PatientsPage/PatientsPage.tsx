@@ -15,6 +15,7 @@ type UserIdType = {
   otpAttempts?: number;
   phoneVerified?: boolean;
   emailVerified?: boolean;
+  manualSignUp?: boolean; // <-- Added this line
   status?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -45,6 +46,7 @@ type Patient = {
   parentOccupation?: string;
   remarks?: string;
   otherDocument?: string;
+  manualSignUp?: boolean; // <--- Added for table display
   __v?: number;
   [key: string]: any;
 };
@@ -140,6 +142,7 @@ export default function PatientsPage() {
       childReference: patient.childReference || "",
       parentOccupation: patient.parentOccupation || "",
       otherDocument: patient.otherDocument || "",
+      manualSignUp: patient.manualSignUp ?? false, // For editing (although likely not changeable)
     });
   };
 
@@ -264,6 +267,7 @@ export default function PatientsPage() {
     { label: "Package", key: "package", editable: true },
     { label: "Remarks", key: "remarks", editable: true },
     { label: "Other Document", key: "otherDocument", editable: true },
+    { label: "Manual Sign Up", key: "manualSignUp" }, // Added for table display, read-only
   ];
 
   // List of userId fields (if present)
@@ -279,6 +283,7 @@ export default function PatientsPage() {
     { label: "Auth Provider", key: "authProvider" },
     { label: "Phone Verified", key: "phoneVerified" },
     { label: "Email Verified", key: "emailVerified" },
+    { label: "Manual Sign Up", key: "manualSignUp" }, // <-- Add manualSignUp here
     { label: "Created At", key: "createdAt" },
     { label: "Updated At", key: "updatedAt" },
   ];
@@ -352,6 +357,7 @@ export default function PatientsPage() {
                 <th className="px-4 py-3 text-left">Children</th>
                 <th className="px-4 py-3 text-left">Diagnosis/Concern</th>
                 <th className="px-4 py-3 text-left">Contact</th>
+                <th className="px-4 py-3 text-left">Manual Sign Up</th>
                 <th className="px-4 py-3 text-left">Actions</th>
               </tr>
             </thead>
@@ -390,6 +396,17 @@ export default function PatientsPage() {
                       <span className="italic text-slate-400">N/A</span>
                     )}
                   </td>
+                  {/* Manual Sign Up column */}
+                  <td className="px-4 py-4 text-slate-600">
+                    {
+                      // Prefer the patient.manualSignUp field if present, else use p.userId?.manualSignUp
+                      typeof p.manualSignUp === "boolean"
+                        ? (p.manualSignUp ? "Yes" : "No")
+                        : typeof p.userId?.manualSignUp === "boolean"
+                          ? (p.userId.manualSignUp ? "Yes" : "No")
+                          : <span className="italic text-slate-400">N/A</span>
+                    }
+                  </td>
                   <td className="px-4 py-4">
                     <div className="flex flex-wrap gap-2">
                       <button
@@ -407,7 +424,7 @@ export default function PatientsPage() {
               ))}
               {patients.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="text-center p-6 text-slate-400">
+                  <td colSpan={6} className="text-center p-6 text-slate-400">
                     No patients found.
                   </td>
                 </tr>
@@ -433,9 +450,8 @@ export default function PatientsPage() {
             // Show first, last, and nearby pages
             i === 1 || i === pageCount || Math.abs(i - page) <= 2
           )
-          .reduce<number[]>((arr, i, idx, src) => {
+          .reduce<number[]>((arr, i, idx) => {
             // Add ellipsis if there is a gap
-            console.log(src);
             if (idx > 0 && i - arr[arr.length - 1] > 1) arr.push(-1);
             arr.push(i);
             return arr;
@@ -489,28 +505,43 @@ export default function PatientsPage() {
             {!editMode ? (
               <>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {patientFields.map((field) => (
-                    <div key={field.key}>
-                      <span className="block text-xs text-slate-400 font-medium">
-                        {field.label}
-                      </span>
-                      <span className="block text-slate-800 font-semibold min-h-[24px]">
-                        {/* For name "alias", always show the merged value */}
-                        {field.key === "name"
-                          ? getDisplayName(viewPatient)
-                          : field.key === "gender"
-                          ? (viewPatient[field.key] || "")
-                              .charAt(0)
-                              .toUpperCase() +
-                            (viewPatient[field.key] || "").slice(1)
-                          : field.key === "childDOB" && viewPatient.childDOB
-                          ? new Date(viewPatient.childDOB).toLocaleDateString()
-                          : viewPatient[field.key] || (
-                              <span className="italic text-slate-400">N/A</span>
-                            )}
-                      </span>
-                    </div>
-                  ))}
+                  {patientFields.map((field) => {
+                    // only show manualSignUp if present in patient (or userId)
+                    if (field.key === "manualSignUp") {
+                      // Only render field if manualSignUp exists on either patient or patient.userId
+                      const hasManualSignUp = typeof viewPatient.manualSignUp === "boolean" ||
+                        typeof viewPatient.userId?.manualSignUp === "boolean";
+                      if (!hasManualSignUp) return null;
+                    }
+                    return (
+                      <div key={field.key}>
+                        <span className="block text-xs text-slate-400 font-medium">
+                          {field.label}
+                        </span>
+                        <span className="block text-slate-800 font-semibold min-h-[24px]">
+                          {/* For name "alias", always show the merged value */}
+                          {field.key === "name"
+                            ? getDisplayName(viewPatient)
+                            : field.key === "gender"
+                            ? (viewPatient[field.key] || "")
+                                .charAt(0)
+                                .toUpperCase() +
+                              (viewPatient[field.key] || "").slice(1)
+                            : field.key === "childDOB" && viewPatient.childDOB
+                            ? new Date(viewPatient.childDOB).toLocaleDateString()
+                            : field.key === "manualSignUp"
+                            ? typeof viewPatient.manualSignUp === "boolean"
+                              ? (viewPatient.manualSignUp ? "Yes" : "No")
+                              : typeof viewPatient.userId?.manualSignUp === "boolean"
+                                ? (viewPatient.userId.manualSignUp ? "Yes" : "No")
+                                : <span className="italic text-slate-400">N/A</span>
+                            : viewPatient[field.key] || (
+                                <span className="italic text-slate-400">N/A</span>
+                              )}
+                        </span>
+                      </div>
+                    );
+                  })}
                   {/* userId embedded fields */}
                   {viewPatient.userId && (
                     <>
@@ -572,6 +603,34 @@ export default function PatientsPage() {
                   {patientFields.map((field) => {
                     // Only show as readonly field if not editable
                     if (!field.editable) {
+                      // For manualSignUp, show as non-editable
+                      if (field.key === "manualSignUp") {
+                        // Only show if present on patient or userId
+                        const hasManualSignUp = typeof viewPatient.manualSignUp === "boolean" ||
+                          typeof viewPatient.userId?.manualSignUp === "boolean";
+                        if (!hasManualSignUp) return null;
+                        return (
+                          <div key={field.key}>
+                            <label className="block mb-1 text-sm font-medium">
+                              {field.label}
+                            </label>
+                            <input
+                              type="text"
+                              className="w-full border rounded px-3 py-2 bg-gray-100 text-gray-600 cursor-not-allowed"
+                              value={
+                                typeof viewPatient.manualSignUp === "boolean"
+                                  ? (viewPatient.manualSignUp ? "Yes" : "No")
+                                  : typeof viewPatient.userId?.manualSignUp === "boolean"
+                                    ? (viewPatient.userId.manualSignUp ? "Yes" : "No")
+                                    : ""
+                              }
+                              readOnly
+                              disabled
+                              style={{ opacity: 1 }}
+                            />
+                          </div>
+                        );
+                      }
                       return (
                         <div key={field.key}>
                           <label className="block mb-1 text-sm font-medium">
@@ -693,6 +752,34 @@ export default function PatientsPage() {
                                 pincode: e.target.value,
                               }))
                             }
+                          />
+                        </div>
+                      );
+                    }
+                    // Do not show editable input for manualSignUp
+                    if (field.key === "manualSignUp") {
+                      // Only show if present on patient or userId
+                      const hasManualSignUp = typeof viewPatient.manualSignUp === "boolean" ||
+                        typeof viewPatient.userId?.manualSignUp === "boolean";
+                      if (!hasManualSignUp) return null;
+                      return (
+                        <div key={field.key}>
+                          <label className="block mb-1 text-sm font-medium">
+                            {field.label}
+                          </label>
+                          <input
+                            type="text"
+                            className="w-full border rounded px-3 py-2 bg-gray-100 text-gray-600 cursor-not-allowed"
+                            value={
+                              typeof viewPatient.manualSignUp === "boolean"
+                                ? (viewPatient.manualSignUp ? "Yes" : "No")
+                                : typeof viewPatient.userId?.manualSignUp === "boolean"
+                                  ? (viewPatient.userId.manualSignUp ? "Yes" : "No")
+                                  : ""
+                            }
+                            readOnly
+                            disabled
+                            style={{ opacity: 1 }}
                           />
                         </div>
                       );

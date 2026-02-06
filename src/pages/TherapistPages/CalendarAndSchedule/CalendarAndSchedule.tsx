@@ -32,6 +32,7 @@ type Session = {
   date: string;
   slotId: string;
   _id?: string;
+  sessionId:string,
   patient?: {
     id?: string;
     _id?: string;
@@ -157,6 +158,12 @@ function CalendarSessionItem({ session }: { session: Session }) {
           <span className="ml-1 text-amber-600 font-semibold"> (Limited)</span>
         )}
       </span>
+      {/* Show sessionId (session._id) always */}
+      {session._id && (
+        <span className="text-xs text-gray-400 break-all">
+          Session ID: {session.sessionId}
+        </span>
+      )}
       {session.therapyType && session.therapyType.name && (
         <span className="text-xs text-gray-500">{session.therapyType.name}</span>
       )}

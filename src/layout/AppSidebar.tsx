@@ -62,6 +62,11 @@ const navItems: NavItem[] = [
     name: "Finances",
     path: "/super-admin/finances",
   },
+  {
+    icon: <ArrowDownIcon />,
+    name: "Therapist Salary Comparison",
+    path: "/super-admin/therapist-salary-comparison",
+  },
   // {
   //   icon: <UserIcon />,
   //   name: "Onboard Sub Admin",

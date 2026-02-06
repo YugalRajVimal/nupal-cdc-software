@@ -467,6 +467,9 @@ const AppointmentCard = ({
                       #
                     </th>
                     <th className="px-2 py-1 border border-slate-200 bg-slate-100 font-semibold text-left">
+                      SessionId
+                    </th>
+                    <th className="px-2 py-1 border border-slate-200 bg-slate-100 font-semibold text-left">
                       Date
                     </th>
                     <th className="px-2 py-1 border border-slate-200 bg-slate-100 font-semibold text-left">
@@ -478,7 +481,8 @@ const AppointmentCard = ({
                     <th className="px-2 py-1 border border-slate-200 bg-slate-100 font-semibold text-left">
                       Therapy Type
                     </th>
-                    <th className="px-2 py-1 border border-slate-200 bg-slate-100 font-semibold text-left">
+                    
+                     <th className="px-2 py-1 border border-slate-200 bg-slate-100 font-semibold text-left">
                       Checked In
                     </th>
                   </tr>
@@ -497,6 +501,9 @@ const AppointmentCard = ({
                       <tr key={s._id || s.date + s.slotId}>
                         <td className="px-2 py-1 border border-slate-200 text-slate-400">
                           {idx + 1}
+                        </td>
+                        <td className="px-2 py-1 border border-slate-200 font-mono text-xs text-slate-500 break-all">
+                          {s.sessionId || s._id || <span className="text-slate-300 italic">—</span>}
                         </td>
                         <td className="px-2 py-1 border border-slate-200 text-blue-900">
                           {formatShortDate(s.date)}
@@ -545,6 +552,7 @@ const AppointmentCard = ({
                         <td className="px-2 py-1 border border-slate-200">
                           {s.therapyTypeId?.name || "-"}
                         </td>
+
                         <td className="px-2 py-1 border border-slate-200 text-center">
                           {s.isCheckedIn ? (
                             <span className="flex items-center gap-1 text-green-600">

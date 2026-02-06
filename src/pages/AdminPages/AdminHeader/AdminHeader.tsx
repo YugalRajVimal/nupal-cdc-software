@@ -67,7 +67,7 @@ const AdminHeader = () => {
         </a>
         <a href="/admin/register-patient">
           <Button>
-            Add Patient
+            Add Children
           </Button>
         </a>
       </div>

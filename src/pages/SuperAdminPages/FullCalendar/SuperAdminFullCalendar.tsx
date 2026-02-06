@@ -57,6 +57,7 @@ type BackendCalendarRecord = {
     therapyTypeId?: TherapyType;
     isCheckedIn?: boolean;
     _id?: string;
+    sessionId?: string; // Add sessionId from API if present
   };
   therapist?: {
     therapistId: string;
@@ -65,6 +66,7 @@ type BackendCalendarRecord = {
 };
 type Session = {
   _id?: string;
+  sessionId?: string; // Our Session will carry sessionId
   date: string;
   slotId: string;
   isCheckedIn?: boolean;
@@ -93,11 +95,12 @@ function getPatientDisplayName(patient: any) {
   return resultName;
 }
 function processBackendSessionList(data: BackendCalendarRecord[]): Session[] {
-  // Only include: appointmentId, patient (id, name), session date, slotId, therapist, therapyTypeId, isCheckedIn, _id
+  // Only include: appointmentId, patient (id, name), session date, slotId, therapist, therapyTypeId, isCheckedIn, _id, sessionId
   return data.map((rec) => {
     const { appointmentId, patient, session } = rec;
     return {
       _id: session._id,
+      sessionId: session.sessionId, // extract sessionId if present
       appointmentId,
       patient: patient && {
         patientId: patient.patientId,
@@ -146,7 +149,7 @@ function AppointmentIdBox({ appointmentId }: { appointmentId: string }) {
   if (!appointmentId) return null;
   return (
     <div className="mb-1 px-1 rounded-full font-semibold text-[0.98em] bg-teal-100 text-teal-800 inline-block">
-      APT ID: {appointmentId}
+      Booking ID: {appointmentId}
     </div>
   );
 }
@@ -254,6 +257,9 @@ function CalendarSessionItem({
   const therapyType = session.therapyTypeId;
   const isCheckedIn = !!session.isCheckedIn;
 
+  // Session identifier for display (prefer sessionId if available, else fallback to _id)
+  const sessionIdDisplay = session.sessionId || session._id;
+
   if (!showAllDetails) {
     return (
       <div
@@ -284,13 +290,18 @@ function CalendarSessionItem({
             <span className="ml-1 text-amber-600 font-semibold">(Limited)</span>
           )}
         </span>
+        {sessionIdDisplay && (
+          <span className="block text-[10px] text-slate-400 font-mono mt-0.5">
+            SessionId: {sessionIdDisplay}
+          </span>
+        )}
       </div>
     );
   } else {
     return (
       <div className="mb-3 p-2 rounded border border-indigo-300 bg-slate-50 flex flex-col">
         {appointmentId && <AppointmentIdBox appointmentId={appointmentId} />}
-        <div className="mb-1 flex items-center gap-3">
+        <div className="mb-1 flex items-center gap-3 flex-wrap">
           <span className="text-xs text-slate-700">{session.date}</span>
           <span
             className={`inline-block rounded px-2 py-0.5 mr-1 text-xs font-semibold ${
@@ -304,6 +315,11 @@ function CalendarSessionItem({
           {isCheckedIn && (
             <span className="bg-green-200 px-2 py-0.5 rounded text-green-900 text-xs font-semibold">
               Checked In
+            </span>
+          )}
+          {sessionIdDisplay && (
+            <span className="bg-slate-100 border border-slate-200 rounded px-2 py-0.5 text-slate-600 text-xs font-mono ml-1 mt-1">
+              SessionId: {sessionIdDisplay}
             </span>
           )}
         </div>
@@ -479,7 +495,7 @@ function CalendarMonthGrid({
                 {sessionsToDisplay.map((session, idx) => (
                   <CalendarSessionItem
                     session={session}
-                    key={session._id || `${session.date}-${session.slotId}-${idx}`}
+                    key={session.sessionId || session._id || `${session.date}-${session.slotId}-${idx}`}
                   />
                 ))}
                 {moreSessionsCount > 0 && (
@@ -777,7 +793,7 @@ export default function SuperAdminFullCalendar() {
         {modalDay && modalSessions && modalSessions.length > 0 ? (
           <div className="flex flex-col gap-2">
             {modalSessions.map((session, idx) => (
-              <div key={session._id || `${session.date}-${session.slotId}-${idx}`}>
+              <div key={session.sessionId || session._id || `${session.date}-${session.slotId}-${idx}`}>
                 <CalendarSessionItem session={session} showAllDetails={true} />
               </div>
             ))}

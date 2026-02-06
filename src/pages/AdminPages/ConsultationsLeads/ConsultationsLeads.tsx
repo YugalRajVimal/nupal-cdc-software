@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   FiUserPlus,
@@ -19,20 +19,11 @@ import {
   FiChevronRight,
   FiCalendar,
 } from "react-icons/fi";
-// We will use react-date-picker for a simple calendar widget
 import DatePicker from "react-date-picker";
 import "react-date-picker/dist/DatePicker.css";
 import "react-calendar/dist/Calendar.css";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "";
-
-const staffMembers = [
-  "Dr. Anjali Sharma",
-  "Rahul Singh",
-  "Priya Malhotra",
-  "Vishal Gupta",
-  "Other",
-];
 
 const appointmentTimes = [
   "09:00 AM",
@@ -140,7 +131,6 @@ function FilterSearchBar({
           >Search</button>
         </form>
       </div>
-    
       {filters.status && (
         <button
           className="text-xs px-2 py-1 bg-blue-50 border-blue-200 border rounded ml-2"
@@ -152,27 +142,28 @@ function FilterSearchBar({
           <FiX className="inline ml-1" />
         </button>
       )}
-        <div className="flex items-center gap-2 ml-1 mt-2">
-          <label className="text-xs font-semibold">Status:</label>
-          <select
-            className="text-sm border px-2 py-1 rounded"
-            value={filters.status}
-            onChange={e => {
-              setFilters({ ...filters, status: e.target.value });
-            }}
-          >
-            {statusOptions.map(opt => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-        </div>
+      <div className="flex items-center gap-2 ml-1 mt-2">
+        <label className="text-xs font-semibold">Status:</label>
+        <select
+          className="text-sm border px-2 py-1 rounded"
+          value={filters.status}
+          onChange={e => {
+            setFilters({ ...filters, status: e.target.value });
+          }}
+        >
+          {statusOptions.map(opt => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+      </div>
     </div>
   );
 }
 
 // --- Pagination implementation and table ---
+// (Unchanged: Keep logic as is.)
 function LeadsTableSection({
   search,
   filters,
@@ -200,14 +191,10 @@ function LeadsTableSection({
 
   const [localRefreshFlag, setLocalRefreshFlag] = useState(false);
 
-  // ------------- PAGINATION/LEAD FETCH LOGIC -------------
-  // Implements: GET leads with ?page, ?pageSize, search, and filters (pagination logic)
-
   useEffect(() => {
     let ignore = false;
     async function fetchLeads() {
       setTableLoading(true);
-      // Compose URL: supports page, pageSize, search, status
       let url = `${API_BASE_URL}/api/admin/leads?page=${page}&pageSize=${pageSize}`;
       if (search && search.trim() !== "") url += `&search=${encodeURIComponent(search.trim())}`;
       if (filters.status) url += `&status=${encodeURIComponent(filters.status)}`;
@@ -215,7 +202,6 @@ function LeadsTableSection({
         const res = await fetch(url, { credentials: "same-origin" });
         const data: LeadsApiResponse = await res.json();
         if (!res.ok) throw new Error("Failed to fetch leads");
-        // Map API -> UI fields
         if (ignore) return;
         const uiLeads: Lead[] = Array.isArray(data.leads)
           ? data.leads.map((lead: any) => ({
@@ -266,15 +252,12 @@ function LeadsTableSection({
     return () => {
       ignore = true;
     };
-    // Note: dependencies cover all variables that reset or affect pagination, filtering, refresh
   }, [page, pageSize, search, filters.status, localRefreshFlag, parentRefreshFlag, fetchKey]);
 
-  // When search or filters change, reset to page 1
   useEffect(() => {
     setPage(1);
   }, [search, filters.status]);
 
-  // Table row actions (delete, convert)
   const [actionInProgressId, setActionInProgressId] = useState<string | null>(null);
   const triggerRefresh = () => setLocalRefreshFlag(f => !f);
 
@@ -298,7 +281,6 @@ function LeadsTableSection({
           : {},
       });
       if (!res.ok) throw new Error("Failed to delete lead");
-      // If only one lead left on a page, move back a page
       if (leads.length === 1 && page > 1) {
         setPage(page - 1);
       } else {
@@ -479,7 +461,6 @@ function LeadsTableSection({
     const iconProps = { size: 16, "aria-hidden": true };
     return (
       <div className="flex gap-2 justify-end">
-        {/* Edit inquiry */}
         <button
           className={`${actionButton} text-amber-600 bg-amber-50 hover:bg-amber-100 border border-amber-100`}
           title="Edit"
@@ -488,7 +469,6 @@ function LeadsTableSection({
         >
           <FiEdit2 {...iconProps} />
         </button>
-        {/* Convert to Registration */}
         {row.status !== "converted" && (
           <button
             className={`${actionButton} text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-100`}
@@ -501,7 +481,6 @@ function LeadsTableSection({
             <span className="hidden md:inline">Convert</span>
           </button>
         )}
-        {/* Delete */}
         <button
           className={`${actionButton} text-red-600 bg-red-50 hover:bg-red-100 border border-red-100`}
           title="Delete"
@@ -586,8 +565,70 @@ function LeadsTableSection({
   );
 }
 
+// --- Dynamic fetch of ALL form field options ---
+// Add reloadVal to force reload
+function useLeadFormFields(reloadVal: number = 0) {
+  const [staffMembers, setStaffMembers] = useState<string[]>([]);
+  const [findUsOptions, setFindUsOptions] = useState<string[]>([]);
+  const [relationships, setRelationships] = useState<string[]>([]);
+  const [pincodes, setPincodes] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function fetchFormFields() {
+      setLoading(true);
+      setError(null);
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/admin/leads/form-fields`, {
+          credentials: "same-origin",
+          headers: {
+            Authorization: `${localStorage.getItem("admin-token") || ""}`,
+          },
+        });
+        if (!res.ok) throw new Error("Failed to fetch form fields");
+        const data = await res.json();
+        // Data format: { success: true, fields: { staffMembers: [], findUsOptions: [], relationships: [], pincodes: [] } }
+        if (!cancelled && data.success && data.fields) {
+          setStaffMembers(Array.isArray(data.fields.staffMembers) && data.fields.staffMembers.length > 0
+            ? [...data.fields.staffMembers, "Other"]
+            : ["Other"]);
+          setFindUsOptions(Array.isArray(data.fields.findUsOptions) && data.fields.findUsOptions.length > 0
+            ? [...data.fields.findUsOptions, "Other"]
+            : ["Other"]);
+          setRelationships(Array.isArray(data.fields.relationships) && data.fields.relationships.length > 0
+            ? [...data.fields.relationships, "Other"]
+            : ["Other"]);
+          setPincodes(Array.isArray(data.fields.pincodes) && data.fields.pincodes.length > 0
+            ? [...data.fields.pincodes, "Other"]
+            : ["Other"]);
+        } else if (!cancelled) {
+          setStaffMembers(["Other"]);
+          setFindUsOptions(["Other"]);
+          setRelationships(["Other"]);
+          setPincodes(["Other"]);
+        }
+      } catch (e: any) {
+        setError(e?.message || "Error fetching fields");
+        if (!cancelled) {
+          setStaffMembers(["Other"]);
+          setFindUsOptions(["Other"]);
+          setRelationships(["Other"]);
+          setPincodes(["Other"]);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    fetchFormFields();
+    return () => { cancelled = true; }
+  }, [reloadVal]);
+
+  return { staffMembers, findUsOptions, relationships, pincodes, loading, error };
+}
+
 export default function ConsultationsLeads() {
-  // const [loading, setLoading] = useState(true);
   const [guideOpen, setGuideOpen] = useState(false);
 
   const [tableLoading, setTableLoading] = useState(false);
@@ -603,11 +644,14 @@ export default function ConsultationsLeads() {
     staff: "",
     staffOther: "",
     referralSource: "",
+    referralSourceOther: "",
     parentName: "",
     parentRelationship: "",
+    parentRelationshipOther: "",
     parentMobile: "",
     parentEmail: "",
     parentArea: "",
+    parentAreaOther: "",
     childName: "",
     childDOB: "",
     childGender: "",
@@ -624,13 +668,34 @@ export default function ConsultationsLeads() {
 
   const parentNameRef = useRef<HTMLInputElement | null>(null);
 
-  // Add calendar open states for both fields so only one calendar can be opened at a time
   const [showCallDateCalendar, setShowCallDateCalendar] = useState(false);
   const [showChildDOBCalendar, setShowChildDOBCalendar] = useState(false);
   const [showAppointmentDateCalendar, setShowAppointmentDateCalendar] = useState(false);
 
-  // React-Date-Picker wants dates as Date or null
-  // We'll sync string <-> Date in the custom components below
+  // Additional validation error state
+  const [formErrors, setFormErrors] = useState<{[k: string]: string}>({});
+
+  //------------- START MOD: Refresh Form Fields on Add -------------
+
+  // Add a reload counter for the form fields
+  const [formFieldsReload, setFormFieldsReload] = useState(0);
+
+  // Expose a reloadFormFields function for easy refresh
+  const reloadFormFields = useCallback(() => {
+    setFormFieldsReload(val => val + 1);
+  }, []);
+
+  // Use updated hook
+  const {
+    staffMembers,
+    findUsOptions,
+    relationships,
+    pincodes,
+    loading: metaLoading,
+    error: metaError,
+  } = useLeadFormFields(formFieldsReload);
+
+  //------------- END MOD -------------
 
   useEffect(() => {
     if (enqModalOpen && !editingLeadId) {
@@ -639,6 +704,7 @@ export default function ConsultationsLeads() {
         callDate: new Date().toISOString().slice(0, 16),
         status: "pending",
       }));
+      setFormErrors({});
     }
   }, [enqModalOpen, editingLeadId]);
 
@@ -648,22 +714,114 @@ export default function ConsultationsLeads() {
     }
   }, [enqModalOpen]);
 
-  async function handleModalSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    try {
-      const payload = {
-        ...enqForm,
-        staff: enqForm.staff === "Other" && enqForm.staffOther
-          ? enqForm.staffOther
-          : enqForm.staff,
-        status: enqForm.status || "pending",
-      };
+  // --- Autocomplete dropdown helpers
+  function buildDropdownField(options: string[], value: string, otherValue: string, name: string, otherName: string, label: string, placeholder: string, required: boolean, disabled: boolean, onMainChange: (val: string) => void, onOtherChange: (val: string) => void) {
+    return (
+      <div>
+        <label className="block text-xs font-semibold text-slate-600 mb-1">{label}</label>
+        <select
+          className="w-full border px-3 py-2 rounded"
+          name={name}
+          value={value}
+          onChange={e => {
+            const vf = e.target.value;
+            onMainChange(vf);
+            // If Other, show other input; else clear other
+            if (vf !== "Other") onOtherChange("");
+          }}
+          required={required}
+          disabled={disabled}
+        >
+          <option value="">Select...</option>
+          {options.map(opt => (
+            <option key={opt} value={opt}>{opt}</option>
+          ))}
+        </select>
+        {value === "Other" && (
+          <input
+            className="mt-2 w-full border px-3 py-2 rounded"
+            type="text"
+            name={otherName}
+            value={otherValue}
+            onChange={e => onOtherChange(e.target.value)}
+            placeholder={placeholder}
+            required
+          />
+        )}
+      </div>
+    );
+  }
 
-      let res;
-      if (editingLeadId) {
-        res = await fetch(
-          `${API_BASE_URL}/api/admin/leads/${editingLeadId}`,
-          {
+  // Validation helpers
+  function validateForm() {
+    const errs: {[key: string]: string} = {};
+
+    // Phone 10 digit, no +91
+    if(!/^[0-9]{10}$/.test(enqForm.parentMobile.trim())) {
+      errs.parentMobile = "Enter a valid 10-digit phone number (without country code)";
+    }
+
+    // Pincode numeric and 6 digits if selected (either from dropdown or free field)
+    const pincodeValue =
+      enqForm.parentArea === "Other" ? enqForm.parentAreaOther.trim() : enqForm.parentArea.trim();
+    if (!/^\d{6}$/.test(pincodeValue)) {
+      errs.parentArea = "Enter a valid 6-digit pincode";
+    }
+
+    // DOB < today
+    if (enqForm.childDOB) {
+      const today = new Date();
+      today.setHours(0,0,0,0);
+      const dob = new Date(enqForm.childDOB);
+      if (isNaN(dob.getTime())) {
+        errs.childDOB = "Select a valid date of birth";
+      } else if (dob >= today) {
+        errs.childDOB = "Date of birth must be before today";
+      }
+    }
+
+    // Appointment Date > today (if exists)
+    if (enqForm.appointmentDate) {
+      const today = new Date();
+      today.setHours(0,0,0,0);
+      const appt = new Date(enqForm.appointmentDate);
+      if (isNaN(appt.getTime())) {
+        errs.appointmentDate = "Select a valid appointment date";
+      } else if (appt <= today) {
+        errs.appointmentDate = "Appointment date must be after today";
+      }
+    }
+
+    return errs;
+  }
+
+  function handleModalSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const validationErrors = validateForm();
+    setFormErrors(validationErrors);
+    if (Object.keys(validationErrors).length > 0) {
+      // Do not submit
+      return;
+    }
+
+    (async () => {
+      try {
+        const staffOut = enqForm.staff === "Other" && enqForm.staffOther ? enqForm.staffOther : enqForm.staff;
+        const referralOut = enqForm.referralSource === "Other" && enqForm.referralSourceOther ? enqForm.referralSourceOther : enqForm.referralSource;
+        const relationshipOut = enqForm.parentRelationship === "Other" && enqForm.parentRelationshipOther ? enqForm.parentRelationshipOther : enqForm.parentRelationship;
+        const parentAreaOut = enqForm.parentArea === "Other" && enqForm.parentAreaOther ? enqForm.parentAreaOther : enqForm.parentArea;
+        const payload = {
+          ...enqForm,
+          staff: staffOut,
+          referralSource: referralOut,
+          parentRelationship: relationshipOut,
+          parentArea: parentAreaOut,
+          status: enqForm.status || "pending",
+        };
+
+        let res;
+        if (editingLeadId) {
+          res = await fetch(`${API_BASE_URL}/api/admin/leads/${editingLeadId}`, {
             method: "PUT",
             headers: { 
               "Content-Type": "application/json",
@@ -671,31 +829,34 @@ export default function ConsultationsLeads() {
             },
             credentials: "same-origin",
             body: JSON.stringify(payload),
-          }
+          });
+          if (!res.ok) throw new Error("Failed to update lead");
+        } else {
+          res = await fetch(`${API_BASE_URL}/api/admin/leads`, {
+            method: "POST",
+            headers: { 
+              "Content-Type": "application/json",
+              "Authorization": `${localStorage.getItem("admin-token") || ""}`,
+            },
+            credentials: "same-origin",
+            body: JSON.stringify(payload),
+          });
+          if (!res.ok) throw new Error("Failed to submit lead");
+
+          // MOD: After adding, reload form field options (in case new staff/area etc were added)
+          reloadFormFields();
+        }
+        setParentRefreshFlag((f) => !f);
+        setTableKey(Math.random().toString(36));
+        handleModalClose();
+      } catch (error) {
+        alert(
+          editingLeadId
+            ? "Failed to update lead. Please try again."
+            : "Failed to create lead. Please try again."
         );
-        if (!res.ok) throw new Error("Failed to update lead");
-      } else {
-        res = await fetch(`${API_BASE_URL}/api/admin/leads`, {
-          method: "POST",
-          headers: { 
-            "Content-Type": "application/json",
-            "Authorization": `${localStorage.getItem("admin-token") || ""}`,
-          },
-          credentials: "same-origin",
-          body: JSON.stringify(payload),
-        });
-        if (!res.ok) throw new Error("Failed to submit lead");
       }
-      setParentRefreshFlag((f) => !f);
-      setTableKey(Math.random().toString(36));
-      handleModalClose();
-    } catch (error) {
-      alert(
-        editingLeadId
-          ? "Failed to update lead. Please try again."
-          : "Failed to create lead. Please try again."
-      );
-    }
+    })();
   }
 
   function handleModalClose() {
@@ -705,11 +866,14 @@ export default function ConsultationsLeads() {
       staff: "",
       staffOther: "",
       referralSource: "",
+      referralSourceOther: "",
       parentName: "",
       parentRelationship: "",
+      parentRelationshipOther: "",
       parentMobile: "",
       parentEmail: "",
       parentArea: "",
+      parentAreaOther: "",
       childName: "",
       childDOB: "",
       childGender: "",
@@ -725,21 +889,36 @@ export default function ConsultationsLeads() {
     setShowCallDateCalendar(false);
     setShowChildDOBCalendar(false);
     setShowAppointmentDateCalendar(false);
+    setFormErrors({});
   }
 
   function handleEditModalOpen(lead: Lead) {
+    const staffChoices = staffMembers.length ? staffMembers : ["Other"];
+    const relationshipChoices = relationships.length ? relationships : ["Other"];
+    const findUsChoices = findUsOptions.length ? findUsOptions : ["Other"];
+    const pincodeChoices = pincodes.length ? pincodes : ["Other"];
+
     setEnqModalOpen(true);
     setEditingLeadId(lead.id);
+
+    const staffIsInOptions = staffChoices.includes(lead.staff ?? "");
+    const relIsInOptions = relationshipChoices.includes(lead.parentRelationship ?? "");
+    const referralIsInOptions = findUsChoices.includes(lead.referralSource ?? "");
+    const pincodeIsInOptions = pincodeChoices.includes(lead.parentArea ?? "");
+
     setEnqForm({
       callDate: lead.callDate || "",
-      staff: staffMembers.includes(lead.staff ?? "") ? (lead.staff ?? "") : "Other",
-      staffOther: staffMembers.includes(lead.staff ?? "") ? "" : (lead.staff ?? ""),
-      referralSource: lead.referralSource || "",
+      staff: staffIsInOptions && lead.staff ? (lead.staff ?? "") : "Other",
+      staffOther: staffIsInOptions ? "" : (lead.staff ?? ""),
+      referralSource: referralIsInOptions && lead.referralSource ? (lead.referralSource ?? "") : "Other",
+      referralSourceOther: referralIsInOptions ? "" : (lead.referralSource ?? ""),
       parentName: lead.parent,
-      parentRelationship: lead.parentRelationship || "",
+      parentRelationship: relIsInOptions && lead.parentRelationship ? (lead.parentRelationship ?? "") : "Other",
+      parentRelationshipOther: relIsInOptions ? "" : (lead.parentRelationship ?? ""),
       parentMobile: lead.phone,
       parentEmail: lead.email,
-      parentArea: lead.parentArea || "",
+      parentArea: pincodeIsInOptions && lead.parentArea ? (lead.parentArea ?? "") : "Other",
+      parentAreaOther: pincodeIsInOptions ? "" : (lead.parentArea ?? ""),
       childName: lead.child,
       childDOB: lead.childDOB || "",
       childGender: lead.childGender || "",
@@ -751,9 +930,9 @@ export default function ConsultationsLeads() {
       remarks: lead.remarks || "",
       status: lead.status || "pending",
     });
+    setFormErrors({});
   }
 
-  // Custom date input with calendar popup for DOB and appointment date
   function CalendarInput({
     label,
     name,
@@ -762,7 +941,6 @@ export default function ConsultationsLeads() {
     placeholder,
     required,
     disabled,
-    // readOnly,
     showCalendar,
     setShowCalendar,
     min,
@@ -781,17 +959,10 @@ export default function ConsultationsLeads() {
     min?: string | Date;
     max?: string | Date;
   }) {
-    // Convert string value (yyyy-mm-dd) to Date object for DatePicker
     const parsedValue = value && /^\d{4}-\d{2}-\d{2}$/.test(value)
-      ? new Date(value + "T12:00:00") // set time so TZ doesn't shift
+      ? new Date(value + "T12:00:00")
       : null;
-
-    // Always show the calendar if this field is focused or clicked
-    // or programmatically open the calendar directly on field focus/click
-    useEffect(() => {
-      // nothing needed, setShowCalendar invoked from below
-    }, []);
-
+    useEffect(() => {}, []);
     return (
       <div style={{ position: "relative" }}>
         <label className="block text-xs font-semibold text-slate-600 mb-1">
@@ -841,18 +1012,12 @@ export default function ConsultationsLeads() {
                   <DatePicker
                     value={parsedValue}
                     onChange={(value: any) => {
-                      // DatePicker onChange might deliver Date | string | null | array
                       let selectedDate: Date | null = null;
-                      if (value instanceof Date) {
-                        selectedDate = value;
-                      } else if (typeof value === "string" && value) {
-                        // Try to parse as ISO string
+                      if (value instanceof Date) selectedDate = value;
+                      else if (typeof value === "string" && value) {
                         selectedDate = new Date(value);
-                        if (isNaN(selectedDate.getTime())) {
-                          selectedDate = null;
-                        }
-                      } else if (Array.isArray(value) && value.length > 0 && value[0] instanceof Date) {
-                        // Sometimes a range, just pick the first
+                        if (isNaN(selectedDate.getTime())) selectedDate = null;
+                      } else if (Array.isArray(value) && value[0] instanceof Date) {
                         selectedDate = value[0];
                       }
 
@@ -875,11 +1040,13 @@ export default function ConsultationsLeads() {
             </AnimatePresence>
           </div>
         </div>
+        {formErrors && formErrors[name] && (
+          <div className="text-xs text-red-600 mt-1">{formErrors[name]}</div>
+        )}
       </div>
     );
   }
 
-  // unchanged for callDate; leaving as original
   function DateTimeInputWithCalendar({
     label,
     name,
@@ -960,6 +1127,20 @@ export default function ConsultationsLeads() {
     );
   }
 
+  // Today's date for validation disables
+  const todayDateStr = (() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d.toISOString().slice(0, 10);
+  })();
+
+  const tomorrowDateStr = (() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() + 1);
+    return d.toISOString().slice(0, 10);
+  })();
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -967,11 +1148,10 @@ export default function ConsultationsLeads() {
       transition={{ duration: 0.5, ease: "easeOut" }}
       className="min-h-screen h-screen overflow-y-auto  p-8"
     >
-      {/* Modal for New Enquiry or Edit Enquiry */}
       <AnimatePresence>
         {enqModalOpen && (
           <motion.div
-            className="fixed inset-0 z-30 flex items-center justify-center bg-black/30"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/30"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -1042,46 +1222,41 @@ export default function ConsultationsLeads() {
                       />
                     </div>
                     <div className="flex-1 mb-2 md:mb-0">
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">
-                        Staff Member Taking Call
-                      </label>
-                      <select
-                        className="w-full border px-3 py-2 rounded"
-                        name="staff"
-                        value={enqForm.staff}
-                        onChange={e => setEnqForm(f => ({ ...f, staff: e.target.value }))}
-                        required
-                      >
-                        <option value="">Select...</option>
-                        {staffMembers.map(staff => (
-                          <option key={staff} value={staff}>{staff}</option>
-                        ))}
-                      </select>
-                      {enqForm.staff === "Other" && (
-                        <input
-                          className="mt-2 w-full border px-3 py-2 rounded"
-                          type="text"
-                          name="staffOther"
-                          value={enqForm.staffOther}
-                          onChange={e => setEnqForm(f => ({ ...f, staffOther: e.target.value }))}
-                          placeholder="Enter staff name"
-                          required
-                        />
+                      {buildDropdownField(
+                        staffMembers,
+                        enqForm.staff,
+                        enqForm.staffOther,
+                        "staff",
+                        "staffOther",
+                        "Staff Member Taking Call",
+                        "Enter staff name",
+                        true,
+                        metaLoading,
+                        (val) => setEnqForm(f => ({ ...f, staff: val })),
+                        (val) => setEnqForm(f => ({ ...f, staffOther: val }))
+                      )}
+                      {metaLoading && (
+                        <div className="text-xs text-slate-400 mt-1">Loading options...</div>
+                      )}
+                      {metaError && (
+                        <div className="text-xs text-red-500 mt-1">{metaError}</div>
                       )}
                     </div>
                   </div>
                   <div>
-                    <label className="block text-xs font-semibold text-slate-600 mb-1">
-                      Where did you find us? (Referral source)
-                    </label>
-                    <input
-                      className="w-full border px-3 py-2 rounded"
-                      type="text"
-                      name="referralSource"
-                      value={enqForm.referralSource}
-                      onChange={e => setEnqForm(f => ({ ...f, referralSource: e.target.value }))}
-                      placeholder="e.g. Google, Doctor, Friend"
-                    />
+                    {buildDropdownField(
+                      findUsOptions,
+                      enqForm.referralSource,
+                      enqForm.referralSourceOther,
+                      "referralSource",
+                      "referralSourceOther",
+                      "Where did you find us? (Referral source)",
+                      "Enter source",
+                      true,
+                      metaLoading,
+                      (val) => setEnqForm(f => ({ ...f, referralSource: val })),
+                      (val) => setEnqForm(f => ({ ...f, referralSourceOther: val }))
+                    )}
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
@@ -1099,16 +1274,19 @@ export default function ConsultationsLeads() {
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">
-                        Relationship with Child
-                      </label>
-                      <input
-                        className="w-full border px-3 py-2 rounded"
-                        type="text"
-                        name="parentRelationship"
-                        value={enqForm.parentRelationship}
-                        onChange={e => setEnqForm(f => ({ ...f, parentRelationship: e.target.value }))}
-                      />
+                      {buildDropdownField(
+                        relationships,
+                        enqForm.parentRelationship,
+                        enqForm.parentRelationshipOther,
+                        "parentRelationship",
+                        "parentRelationshipOther",
+                        "Relationship with Child",
+                        "Enter relationship",
+                        true,
+                        metaLoading,
+                        (val) => setEnqForm(f => ({ ...f, parentRelationship: val })),
+                        (val) => setEnqForm(f => ({ ...f, parentRelationshipOther: val }))
+                      )}
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-slate-600 mb-1">
@@ -1122,6 +1300,9 @@ export default function ConsultationsLeads() {
                         onChange={e => setEnqForm(f => ({ ...f, parentMobile: e.target.value }))}
                         required
                       />
+                      {formErrors && formErrors.parentMobile && (
+                        <div className="text-xs text-red-600 mt-1">{formErrors.parentMobile}</div>
+                      )}
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-slate-600 mb-1">
@@ -1136,16 +1317,22 @@ export default function ConsultationsLeads() {
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-slate-600 mb-1">
-                        Area
-                      </label>
-                      <input
-                        className="w-full border px-3 py-2 rounded"
-                        type="text"
-                        name="parentArea"
-                        value={enqForm.parentArea}
-                        onChange={e => setEnqForm(f => ({ ...f, parentArea: e.target.value }))}
-                      />
+                      {buildDropdownField(
+                        pincodes,
+                        enqForm.parentArea,
+                        enqForm.parentAreaOther,
+                        "parentArea",
+                        "parentAreaOther",
+                        "Area / Pincode",
+                        "Enter area / pincode",
+                        true,
+                        metaLoading,
+                        (val) => setEnqForm(f => ({ ...f, parentArea: val })),
+                        (val) => setEnqForm(f => ({ ...f, parentAreaOther: val }))
+                      )}
+                      {formErrors && formErrors.parentArea && (
+                        <div className="text-xs text-red-600 mt-1">{formErrors.parentArea}</div>
+                      )}
                     </div>
                   </div>
                   <div className="mt-2 grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1162,7 +1349,6 @@ export default function ConsultationsLeads() {
                       />
                     </div>
                     <div>
-                      {/* Use CalendarInput for DOB */}
                       <CalendarInput
                         label="Date of Birth"
                         name="childDOB"
@@ -1176,6 +1362,7 @@ export default function ConsultationsLeads() {
                         showCalendar={showChildDOBCalendar}
                         setShowCalendar={setShowChildDOBCalendar}
                         placeholder="Select date"
+                        max={todayDateStr}
                       />
                     </div>
                     <div>
@@ -1240,7 +1427,6 @@ export default function ConsultationsLeads() {
                       </select>
                     </div>
                     <div>
-                      {/* Use CalendarInput for Appointment Date */}
                       <CalendarInput
                         label="Appointment Date"
                         name="appointmentDate"
@@ -1254,6 +1440,7 @@ export default function ConsultationsLeads() {
                         showCalendar={showAppointmentDateCalendar}
                         setShowCalendar={setShowAppointmentDateCalendar}
                         placeholder="Select date"
+                        min={tomorrowDateStr}
                       />
                     </div>
                     <div>
@@ -1304,6 +1491,11 @@ export default function ConsultationsLeads() {
                       {editingLeadId ? "Update" : "Submit"}
                     </button>
                   </div>
+                  {Object.values(formErrors).some(Boolean) && (
+                    <div className="pt-2 text-xs text-red-600">
+                      Please correct the marked field{Object.keys(formErrors).length > 1 ? "s" : ""} before submitting.
+                    </div>
+                  )}
                 </form>
               </motion.div>
             </div>
@@ -1328,11 +1520,14 @@ export default function ConsultationsLeads() {
               staff: "",
               staffOther: "",
               referralSource: "",
+              referralSourceOther: "",
               parentName: "",
               parentRelationship: "",
+              parentRelationshipOther: "",
               parentMobile: "",
               parentEmail: "",
               parentArea: "",
+              parentAreaOther: "",
               childName: "",
               childDOB: "",
               childGender: "",
@@ -1347,6 +1542,7 @@ export default function ConsultationsLeads() {
             setShowCallDateCalendar(false);
             setShowChildDOBCalendar(false);
             setShowAppointmentDateCalendar(false);
+            setFormErrors({});
           }}
         >
           New Inquiry
@@ -1426,7 +1622,6 @@ export default function ConsultationsLeads() {
         </AnimatePresence>
       </motion.div>
 
-      {/* Leads table with implemented pagination */}
       <LeadsTableSection
         search={search}
         filters={filters}

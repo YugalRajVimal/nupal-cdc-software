@@ -43,6 +43,7 @@ type Therapist = {
   bookedSlotCount?: { [date: string]: number };
 };
 type BookingSession = {
+  sessionId:string,
   date: string;
   slotId: string;
   therapistId?: string;
@@ -600,11 +601,11 @@ export default function AppointmentBookingSystemNew() {
           (p.patientId && (booking.patient as any)?.patientId && p.patientId === (booking.patient as any)?.patientId) ||
           (p.id && (booking.patient as any)?.id && p.id === (booking.patient as any)?.id);
         if (matches) {
-          console.log("handleEditBooking: found matching patient", p);
+          console.log("handleEditBooking: found matching children", p);
         }
         return matches;
       });
-      console.log("handleEditBooking: foundPatient:", foundPatient);
+      console.log("handleEditBooking: foundChildren:", foundPatient);
 
       setPatientId(foundPatient ? foundPatient.id : ((booking.patient as any)?.id || ""));
       setTherapyId((booking.therapy as any)?._id || "");
@@ -643,7 +644,16 @@ export default function AppointmentBookingSystemNew() {
             return result;
           })
         : [];
-      setSessions(mappedSessions);
+      setSessions(
+        mappedSessions.map((ms, idx) => ({
+          sessionId: (typeof booking.sessions?.[idx]?.sessionId === "string" && booking.sessions[idx].sessionId)
+            ? booking.sessions[idx].sessionId
+            : (typeof booking.sessions?.[idx]?._id === "string" && booking.sessions[idx]._id)
+              ? booking.sessions[idx]._id
+              : `${idx + 1}`,
+          ...ms
+        }))
+      );
 
       let couponObj: any = null;
       if (booking && booking.discountInfo && booking.discountInfo.coupon) {
@@ -989,14 +999,14 @@ export default function AppointmentBookingSystemNew() {
             return null;
           })()}
           {/* Patient */}
-          <label className="block text-sm mb-1 flex items-center gap-1"><FiUser /> Patient Name</label>
+          <label className="block text-sm mb-1 flex items-center gap-1"><FiUser /> Children Name</label>
           <select
             value={patientId}
             onChange={e => setPatientId(e.target.value)}
             className="w-full border rounded px-3 py-2 mb-3"
             disabled={!!editBookingId}
           >
-            <option value="">Select Patient</option>
+            <option value="">Select Children</option>
             {patients.map((patient: Patient) => (
               <option key={patient.id} value={patient.id}>{getPatientDisplayName(patient)}</option>
             ))}
@@ -1241,7 +1251,7 @@ function HeaderGuide({ guideOpen, setGuideOpen, editBookingId }: any) {
               </div>
               <ol className="list-decimal list-inside text-sm text-slate-600 space-y-1">
                 <li>Use the calendar to view and check bookings. Booked/Total slots for each day are shown.</li>
-                <li>Select patient, therapy, package. Each session can have its own therapist, therapy type, and time.</li>
+                <li>Select children, therapy, package. Each session can have its own therapist, therapy type, and time.</li>
                 <li>
                   You can set all sessions to same weekday and time using "Repeat Weekly" or pick sessions one-by-one (multiple slots on one day are allowed).
                 </li>
@@ -2305,7 +2315,7 @@ function BookingSummary({
                       <a
                         href={`/admin/children?patientId=${encodeURIComponent(booking.patient._id)}`}
                         className="text-blue-700 hover:underline"
-                        title="View patient details"
+                        title="View children details"
                         target="_blank"
                         rel="noopener noreferrer"
                         onClick={(e) => {
@@ -2380,10 +2390,11 @@ function BookingSummary({
                         {checkInError && checkInBooking && checkInBooking._id === booking._id && (
                           <div className="text-xs text-red-600 mb-2">{checkInError}</div>
                         )}
-                        <table className="min-w-[800px] w-fit border-collapse text-xs">
+                        <table className="min-w-[900px] w-fit border-collapse text-xs">
                           <thead>
                             <tr>
                               <th className="px-2 py-1 border border-slate-200 bg-slate-100 font-semibold text-left">#</th>
+                              <th className="px-2 py-1 border border-slate-200 bg-slate-100 font-semibold text-left">Session ID</th>
                               <th className="px-2 py-1 border border-slate-200 bg-slate-100 font-semibold text-left">Date</th>
                               <th className="px-2 py-1 border border-slate-200 bg-slate-100 font-semibold text-left">Time Slot</th>
                               <th className="px-2 py-1 border border-slate-200 bg-slate-100 font-semibold text-left">Therapist</th>
@@ -2405,6 +2416,9 @@ function BookingSummary({
                               return (
                                 <tr key={s._id || s.date + "-" + idx}>
                                   <td className="px-2 py-1 border border-slate-200 text-slate-400">{idx + 1}</td>
+                                  <td className="px-2 py-1 border border-slate-200 font-mono text-xs text-slate-600" title={s.sessionId}>
+                                    {s.sessionId || s._id || <span className="text-gray-400">—</span>}
+                                  </td>
                                   <td className="px-2 py-1 border border-slate-200">{s.date}</td>
                                   <td className="px-2 py-1 border border-slate-200 whitespace-nowrap">
                                     {slot
@@ -2445,7 +2459,7 @@ function BookingSummary({
                                         onClick={() => openCheckInModal(booking, s)}
                                         title="Check in this session"
                                       >
-                                        <FiCheckCircle /> Check In
+                                        <FiCheckCircle /> Mark Session Completed
                                       </button>
                                     )}
                                   </td>

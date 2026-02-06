@@ -14,21 +14,21 @@ const LayoutContent: React.FC<{
 
   return (
     <div
-      className="min-h-screen xl:flex"
-      style={{
-        background: "linear-gradient(135deg, #fdf4cc 0%, #ffe3ef 45%, #ced3f3 100%)",
-      }}
+    className="min-h-screen max-w-screen xl:flex overflow-hidden"
+    style={{
+      background:
+        "linear-gradient(135deg, #fdf4cc 0%, #ffe3ef 45%, #ced3f3 100%)",
+    }}
+  >
+    <div>
+      <SubAdminAppSidebar />
+      <SubAdminBackdrop />
+    </div>
+    <div
+      className={`flex-1 transition-all md:w-[80%] duration-300 ease-in-out ${
+        isExpanded || isHovered ? "lg:ml-[290px]" : "lg:ml-[90px]"
+      } ${isMobileOpen ? "ml-0" : ""}`}
     >
-      <div>
-        <SubAdminAppSidebar />
-        <SubAdminBackdrop />
-      </div>
-      <div
-        className={`transition-all duration-300 ease-in-out ${
-          isExpanded || isHovered ? "lg:ml-[290px]" : "lg:ml-[90px]"
-        } ${isMobileOpen ? "ml-0" : ""}`}
-        style={{ width: "100%" }}
-      >
         {isLoggedInViaSuperAdmin && (
           <div className="bg-yellow-100 text-yellow-900 text-xs px-3 py-2 rounded-b shadow mb-2 flex items-center gap-2 border-b border-yellow-200">
             <span className="font-semibold mr-2">

@@ -53,6 +53,7 @@ type BackendCalendarRecord = {
   session: {
     date: string;
     slotId: string;
+    sessionId?: string; // Add sessionId explicitly for clarity
     therapist?: Therapist;
     therapyTypeId?: TherapyType;
     isCheckedIn?: boolean;
@@ -67,6 +68,7 @@ type Session = {
   _id?: string;
   date: string;
   slotId: string;
+  sessionId?: string; // Add sessionId here
   isCheckedIn?: boolean;
   appointmentId?: string;
   patient?: { patientId: string; name: string };
@@ -93,7 +95,7 @@ function getPatientDisplayName(patient: any) {
   return resultName;
 }
 function processBackendSessionList(data: BackendCalendarRecord[]): Session[] {
-  // Only include: appointmentId, patient (id, name), session date, slotId, therapist, therapyTypeId, isCheckedIn, _id
+  // Only include: appointmentId, patient (id, name), session date, slotId, therapist, therapyTypeId, isCheckedIn, _id, sessionId
   return data.map((rec) => {
     const { appointmentId, patient, session } = rec;
     return {
@@ -105,6 +107,7 @@ function processBackendSessionList(data: BackendCalendarRecord[]): Session[] {
       },
       date: session.date,
       slotId: session.slotId,
+      sessionId: session.sessionId , // show sessionId (or fallback _id)
       therapist: session.therapist,
       therapyTypeId: session.therapyTypeId,
       isCheckedIn: session.isCheckedIn,
@@ -146,7 +149,15 @@ function AppointmentIdBox({ appointmentId }: { appointmentId: string }) {
   if (!appointmentId) return null;
   return (
     <div className="mb-1 px-1 rounded-full font-semibold text-[0.98em] bg-teal-100 text-teal-800 inline-block">
-      APT ID: {appointmentId}
+      Booking ID: {appointmentId}
+    </div>
+  );
+}
+function SessionIdBox({ sessionId }: { sessionId: string }) {
+  if (!sessionId) return null;
+  return (
+    <div className="mb-1 px-1 rounded-full font-semibold text-[0.92em] bg-blue-100 text-blue-800 inline-block">
+      Session ID: {sessionId}
     </div>
   );
 }
@@ -253,6 +264,7 @@ function CalendarSessionItem({
   const therapist = session.therapist;
   const therapyType = session.therapyTypeId;
   const isCheckedIn = !!session.isCheckedIn;
+  const sessionId = session.sessionId ;
 
   if (!showAllDetails) {
     return (
@@ -284,12 +296,18 @@ function CalendarSessionItem({
             <span className="ml-1 text-amber-600 font-semibold">(Limited)</span>
           )}
         </span>
+        {sessionId && (
+          <span className="text-[0.72em] text-blue-700 mt-1">
+            Session ID: <span className="font-mono">{sessionId}</span>
+          </span>
+        )}
       </div>
     );
   } else {
     return (
       <div className="mb-3 p-2 rounded border border-indigo-300 bg-slate-50 flex flex-col">
         {appointmentId && <AppointmentIdBox appointmentId={appointmentId} />}
+        {sessionId && <SessionIdBox sessionId={sessionId} />}
         <div className="mb-1 flex items-center gap-3">
           <span className="text-xs text-slate-700">{session.date}</span>
           <span

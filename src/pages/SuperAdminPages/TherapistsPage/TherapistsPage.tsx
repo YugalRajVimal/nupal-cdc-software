@@ -5,9 +5,13 @@ import {
   FiEye,
   FiChevronLeft,
   FiChevronRight,
+  FiDownload,
 } from "react-icons/fi";
 import { motion } from "framer-motion";
 import axios from "axios";
+
+// -- For zipping files client-side --
+import JSZip from "jszip";
 
 // ---- Added for search params ----
 function getQueryParam(name: string): string | null {
@@ -29,6 +33,7 @@ type TherapistProfile = {
     phoneVerified?: boolean;
     emailVerified?: boolean;
     status?: string;
+    manualSignUp?: boolean;
     role?: string;
     createdAt?: string;
     updatedAt?: string;
@@ -105,6 +110,8 @@ const FIELD_LIST: {
   { key: "name", label: "Name", render: (_, row) => row?.userId?.name || row?.name || "-" },
   { key: "email", label: "Email", type: "email", render: (_, row) => row?.userId?.email || row?.email || "-" },
   { key: "role", label: "Role", render: (_, row) => row?.userId?.role || row?.role || "-" },
+  // For editing/viewing, not main table:
+  { key: "manualSignUp", label: "Manual Sign Up", render: (_, row) => (row?.userId?.manualSignUp === true ? "Yes" : row?.userId?.manualSignUp === false ? "No" : "-") },
   { key: "fathersName", label: "Father's Name" },
   { key: "mobile1", label: "Mobile 1" },
   { key: "mobile2", label: "Mobile 2" },
@@ -218,6 +225,93 @@ function CalendarInput({
   );
 }
 
+// --------- Download ZIP helper ---------
+async function downloadFilesAsZip(selected: TherapistProfile) {
+  const { aadhaarFront, aadhaarBack, photo, resume, certificate, therapistId, name } = selected || {};
+  const fileFields = [
+    { key: "aadhaarFront", label: "AadhaarFront", value: aadhaarFront },
+    { key: "aadhaarBack", label: "AadhaarBack", value: aadhaarBack },
+    { key: "photo", label: "Photo", value: photo },
+    { key: "resume", label: "Resume", value: resume },
+    { key: "certificate", label: "Certificate", value: certificate },
+  ];
+
+  // Helper to resolve absolute URL for files (mirrors view logic)
+  function resolveFileUrl(val: any) {
+    if (!val) return null;
+    const uploadsUrl = import.meta.env.VITE_UPLOADS_URL || "";
+    if (typeof val === "string") {
+      const isFullUrl = /^(http|https):\/\//i.test(val);
+      return isFullUrl
+        ? val
+        : uploadsUrl
+        ? uploadsUrl.replace(/\/+$/, "") + "/" + val.replace(/^\/+/, "")
+        : val;
+    }
+    return null;
+  }
+
+  const jszip = new JSZip();
+
+  // For each file, if present, fetch it as blob and add to zip.
+  // Use therapistID or name for folder structure
+  const therapistFolderName = (therapistId || name || selected._id || "Therapist")
+    .toString()
+    .replace(/\s+/g, "_")
+    .replace(/[^a-zA-Z0-9_\-]/g, "");
+
+  async function fetchFileAsBlob(url: string) {
+    // Proxy fetch to handle CORS if needed? (for now, just fetch)
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`Failed to fetch file: ${url}`);
+    return await response.blob();
+  }
+
+  // Assemble download tasks
+  const fileTasks = fileFields
+    .filter(f => !!f.value && typeof f.value === "string")
+    .map(async f => {
+      const url = resolveFileUrl(f.value);
+      if (!url) return null;
+      try {
+        const blob = await fetchFileAsBlob(url);
+        // infer file extension from url, fallback .bin
+        const extMatch = url.match(/\.[a-zA-Z0-9]+(?=\?|$)/);
+        const ext = extMatch ? extMatch[0] : ".bin";
+        // Name: AadhaarFront.ext or AadhaarFront_therapistId.ext
+        const simpleTid = (therapistId || selected._id || "").toString();
+        let fileBaseName = f.label + (simpleTid ? `_${simpleTid}` : "") + ext;
+        // Remove any double _ or __ from baseName
+        fileBaseName = fileBaseName.replace(/__+/g, "_");
+        jszip.file(fileBaseName, blob);
+        return fileBaseName;
+      } catch (e) {
+        // Ignore missing/broken
+        return null;
+      }
+    });
+
+  try {
+    await Promise.all(fileTasks);
+    const content = await jszip.generateAsync({ type: "blob" });
+    // Name the zip file
+    const fileName = `${therapistFolderName}_files.zip`;
+    // Trigger download
+    const url = window.URL.createObjectURL(content);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    }, 150);
+  } catch (e) {
+    alert("Failed to download files as ZIP. One or more files could not be fetched.");
+  }
+}
+
 export default function SuperAdminTherapistsPage() {
   // Search and pagination states
   const [search, setSearch] = useState("");
@@ -248,6 +342,8 @@ export default function SuperAdminTherapistsPage() {
   const [payLoading, setPayLoading] = useState(false);
   const [payError, setPayError] = useState<string | null>(null);
   const [paySuccess, setPaySuccess] = useState<string | null>(null);
+
+  const [zipLoading, setZipLoading] = useState(false);
 
   const fetchTherapistById = useCallback(async (id: string) => {
     setLoading(true);
@@ -549,6 +645,16 @@ export default function SuperAdminTherapistsPage() {
         })
       : [];
 
+    // --- New: Download all files as zip ---
+    const zipFileFields = [
+      { key: "aadhaarFront", label: "AadhaarFront", value: selected.aadhaarFront },
+      { key: "aadhaarBack", label: "AadhaarBack", value: selected.aadhaarBack },
+      { key: "photo", label: "Photo", value: selected.photo },
+      { key: "resume", label: "Resume", value: selected.resume },
+      { key: "certificate", label: "Certificate", value: selected.certificate },
+    ];
+    const anyDownloadable = zipFileFields.some(f => !!f.value && typeof f.value === "string");
+
     return (
       <div className="fixed inset-0 z-30 bg-white/70 flex items-center justify-center">
         <div className="bg-white rounded-xl shadow-lg max-w-2xl w-full p-6 relative">
@@ -577,6 +683,7 @@ export default function SuperAdminTherapistsPage() {
               <span className="text-xs text-slate-500 font-semibold">Therapist ID: </span>
               <span className="text-sm text-slate-700">{selected.therapistId}</span>
             </div>
+           
             {selected.userId && (
               <div className="mb-4 border-b pb-2 text-md">
                 <div className="font-semibold mb-1 text-slate-800">User Account</div>
@@ -638,15 +745,39 @@ export default function SuperAdminTherapistsPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
               {FIELD_LIST.map(f => {
                 if (f.key === "therapistId") return null;
-                const value = f.render
-                  ? f.render(selected[f.key as keyof typeof selected], selected)
-                  : selected[f.key as keyof typeof selected];
+                let rawValue = selected[f.key as keyof typeof selected];
+                // If it's a file field, prefix with VITE_UPLOADS_URL if value looks like a relative path
+                let displayValue;
+                if (f.type === "file") {
+                  // If already a full URL or no value, skip prefixing
+                  const uploadsUrl = import.meta.env.VITE_UPLOADS_URL || "";
+                  if (typeof rawValue === "string" && rawValue) {
+                    const isFullUrl = /^(http|https):\/\//i.test(rawValue);
+                    const url = isFullUrl ? rawValue : (uploadsUrl ? uploadsUrl.replace(/\/+$/, "") + "/" + rawValue.replace(/^\/+/, "") : rawValue);
+                    // If it's an image, render <img>, otherwise show link
+                    const isImage = /\.(jpe?g|png|gif|bmp|webp)$/i.test(url);
+                    displayValue = isImage ? (
+                      <a href={url} target="_blank" rel="noopener noreferrer">
+                        <img src={url} alt={f.label} className="h-10 w-10 object-cover rounded shadow border" />
+                      </a>
+                    ) : (
+                      <a href={url} target="_blank" rel="noopener noreferrer" className="text-blue-700 underline">View File</a>
+                    );
+                  } else {
+                    displayValue = "-";
+                  }
+                } else if (f.render) {
+                  // If custom render is provided, use it (may take care of URL already)
+                  displayValue = f.render(rawValue, selected);
+                } else {
+                  displayValue = rawValue;
+                }
                 return (
                   <div key={f.key} className="flex flex-col">
                     <span className="text-xs text-slate-500">{f.label}</span>
                     <span className="text-base font-medium text-slate-800">
-                      {value !== undefined && value !== null && value !== ""
-                        ? value
+                      {displayValue !== undefined && displayValue !== null && displayValue !== ""
+                        ? displayValue
                         : (f.type === "file" ? "-" : "-")
                       }
                     </span>
@@ -701,7 +832,26 @@ export default function SuperAdminTherapistsPage() {
               </button>
             </div>
           </div>
-          <div className="mt-4 text-right flex justify-end gap-2">
+          <div className="mt-4 text-right flex justify-end items-center gap-2">
+             {/* New: All-files-download button */}
+             <div className="flex items-center gap-2">
+              <button
+                onClick={async () => {
+                  setZipLoading(true);
+                  await downloadFilesAsZip(selected);
+                  setZipLoading(false);
+                }}
+                disabled={zipLoading || !anyDownloadable}
+                className={`flex items-center gap-1 px-3 py-1 text-xs rounded shadow ${anyDownloadable ? "bg-blue-700 text-white" : "bg-slate-300 text-slate-400"} hover:bg-blue-800 transition`}
+                title="Download all documents as ZIP"
+                type="button"
+              >
+                <FiDownload /> {zipLoading ? "Preparing ZIP..." : "Download all files (ZIP)"}
+              </button>
+              {!anyDownloadable && (
+                <span className="text-xs text-gray-400">(No files uploaded)</span>
+              )}
+            </div>
             <button
               className={`ml-2 text-xs px-2 py-1 rounded border ${selected.userId?.isDisabled  ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}
               onClick={() => handleToggleDisable(selected._id, !selected.userId?.isDisabled )}
@@ -1070,11 +1220,12 @@ export default function SuperAdminTherapistsPage() {
     );
   }
 
-  const tableHeaders: { label: string; key: keyof TherapistProfile | "actions" }[] = [
+  const tableHeaders: { label: string; key: keyof TherapistProfile | "actions" | "manualSignUp" }[] = [
     { label: "Therapist ID", key: "_id" },
     { label: "Name", key: "name" },
     { label: "Email", key: "email" },
     { label: "Mobile1", key: "mobile1" },
+    { label: "Manual Sign Up", key: "manualSignUp" },
     { label: "Specializations", key: "specializations" },
     { label: "Experience", key: "experienceYears" },
     { label: "Enabled", key: "isDisabled" },
@@ -1173,6 +1324,12 @@ export default function SuperAdminTherapistsPage() {
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">{(t?.userId?.email || t.email) || "-"}</td>
                     <td className="px-4 py-3 whitespace-nowrap">{t.mobile1 || "-"}</td>
+                    {/* Manual Sign Up */}
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      {t.userId && typeof t.userId.manualSignUp === "boolean"
+                        ? (t.userId.manualSignUp ? "Yes" : "No")
+                        : "-"}
+                    </td>
                     <td className="px-4 py-3 whitespace-nowrap">{t.specializations?.trim() ? t.specializations : "-"}</td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       {typeof t.experienceYears === "number" && !isNaN(t.experienceYears)

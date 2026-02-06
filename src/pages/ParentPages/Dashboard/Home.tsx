@@ -51,7 +51,8 @@ interface UncheckedSession {
     date: string;
     slotId: string;
     therapist: UncheckedSessionTherapist | string | null;
-    _id: string;
+    _id: string; // this is currently used as the sessionId
+    sessionId:string,
     isCheckedIn?: boolean;
     [key: string]: any;
   };
@@ -245,11 +246,11 @@ const ParentDashboard: React.FC = () => {
       <div className="bg-white rounded-xl border p-6 mb-8">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-lg font-semibold text-gray-800">
-            Unchecked Sessions
+            Upcomming Sessions
           </h2>
-          <button className="text-blue-600 text-sm font-medium hover:underline">
+          {/* <button className="text-blue-600 text-sm font-medium hover:underline">
             View All
-          </button>
+          </button> */}
         </div>
         {uncheckedSessions.length === 0 ? (
           <div className="h-40 flex items-center justify-center text-gray-400">
@@ -260,6 +261,7 @@ const ParentDashboard: React.FC = () => {
             <table className="min-w-full text-sm">
               <thead>
                 <tr>
+                  <th className="px-3 py-2 text-left">Session ID</th>
                   <th className="px-3 py-2 text-left">Date</th>
                   <th className="px-3 py-2 text-left">Time Slot</th>
                   <th className="px-3 py-2 text-left">Patient</th>
@@ -270,6 +272,10 @@ const ParentDashboard: React.FC = () => {
               <tbody>
                 {uncheckedSessions.map((session, idx) => (
                   <tr key={session.notCheckedInSession._id || idx} className="border-t">
+                    {/* Show sessionId (from notCheckedInSession._id) */}
+                    <td className="px-3 py-2 font-mono">
+                      {session.notCheckedInSession.sessionId || "-"}
+                    </td>
                     <td className="px-3 py-2">
                       {session.notCheckedInSession.date
                         ? new Date(

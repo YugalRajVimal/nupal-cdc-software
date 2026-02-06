@@ -230,7 +230,7 @@ export default function BookingRequests() {
             type="text"
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
-            placeholder="Search requests, patients, appointment id..."
+            placeholder="Search requests, childrens, appointment id..."
             className="border rounded-md px-3 py-2 pl-9 text-sm focus:outline-none focus:border-blue-400 w-72"
             name="search"
             autoComplete="off"
@@ -280,7 +280,7 @@ export default function BookingRequests() {
                       </span>
                     ) : null}
                   </th>
-                  <th className="px-4 py-3 text-left">Patient</th>
+                  <th className="px-4 py-3 text-left">Children</th>
                   <th className="px-4 py-3 text-left">Therapy</th>
                   <th className="px-4 py-3 text-left">Package</th>
                   <th

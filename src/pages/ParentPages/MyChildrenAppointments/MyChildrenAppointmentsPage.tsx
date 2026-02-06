@@ -13,6 +13,7 @@ type TherapistType = {
 };
 type SessionType = {
   _id?: string;
+  sessionId?: string; // <-- Make room for explicit sessionId as per request (may be _id as well)
   date: string;
   time?: string;
   status?: string;
@@ -695,6 +696,7 @@ export default function MyChildrenAppointmentsPage() {
                 <thead className="bg-slate-50 border-b">
                   <tr>
                     <th className="px-3 py-2 text-left">#</th>
+                    <th className="px-3 py-2 text-left">Session ID</th>
                     <th className="px-3 py-2 text-left">Date</th>
                     <th className="px-3 py-2 text-left">Slot</th>
                     <th className="px-3 py-2 text-left">Therapist</th>
@@ -704,8 +706,12 @@ export default function MyChildrenAppointmentsPage() {
                 <tbody>
                   {(Array.isArray(viewAppointment.sessions) && viewAppointment.sessions.length > 0) ? (
                     viewAppointment.sessions.map((s, idx) => (
-                      <tr key={s._id || idx} className="border-t">
+                      <tr key={s._id || s.sessionId || idx} className="border-t">
                         <td className="px-3 py-2">{idx + 1}</td>
+                        <td className="px-3 py-2">
+                          {/* Show both sessionId and fallback to _id if present */}
+                          {s.sessionId || s._id || <span className="italic text-slate-400">N/A</span>}
+                        </td>
                         <td className="px-3 py-2">{s.date ? dayjs(s.date).format("YYYY-MM-DD") : "-"}</td>
                         <td className="px-3 py-2">
                           {SESSION_TIME_OPTIONS.find(opt => opt.id === s.slotId)?.label || s.slotId || "--"}
@@ -739,7 +745,7 @@ export default function MyChildrenAppointmentsPage() {
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={5} className="px-3 py-5 text-center text-slate-400">No session data</td>
+                      <td colSpan={6} className="px-3 py-5 text-center text-slate-400">No session data</td>
                     </tr>
                   )}
                 </tbody>

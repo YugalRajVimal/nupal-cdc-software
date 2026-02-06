@@ -1,165 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 
-// --- Styles (could be moved to CSS for real prod) ---
-const containerStyle: React.CSSProperties = {
-  background: '#fff',
-  borderRadius: 10,
-  padding: '30px 24px',
-  boxShadow: '0 2px 10px rgba(0,0,0,0.06)',
-  margin: '36px auto',
-  maxWidth: 1200,
-};
-
-const tableContainerStyle: React.CSSProperties = {
-  overflowX: 'auto',
-  marginTop: 24,
-  borderRadius: 8,
-  boxShadow: '0 0 0 1px #e7e7e7',
-  background: '#fcfcfc',
-};
-
-const tableStyle: React.CSSProperties = {
-  width: '100%',
-  borderCollapse: 'separate',
-  borderSpacing: 0,
-  fontSize: '15px',
-  minWidth: 850,
-};
-
-const thStyle: React.CSSProperties = {
-  background: '#f3f6fa',
-  padding: '12px 10px',
-  borderBottom: '2px solid #e5e5e5',
-  fontWeight: 600,
-  textAlign: 'center',
-};
-
-const tdStyle: React.CSSProperties = {
-  padding: '12px 10px',
-  borderBottom: '1px solid #ececec',
-  textAlign: 'center',
-  maxWidth: 250,
-  verticalAlign: 'top',
-};
-
-const badgeStyle = (role: string): React.CSSProperties => ({
-  display: 'inline-block',
-  padding: '2px 10px',
-  borderRadius: 14,
-  fontSize: 13,
-  fontWeight: 500,
-  background: {
-    superadmin: '#ffd60022',
-    admin: '#29b6f633',
-    therapist: '#81c78433',
-    patient: '#ff638433',
-  }[role] || '#eee',
-  color: {
-    superadmin: '#927900',
-    admin: '#0678a2',
-    therapist: '#236d30',
-    patient: '#a0202a',
-  }[role] || '#555',
-});
-
-const actionStyle: React.CSSProperties = {
-  fontWeight: 600,
-  fontSize: 15,
-  color: '#4183c4',
-};
-
-const detailSummaryButtonStyle: React.CSSProperties = {
-  cursor: 'pointer',
-  fontWeight: 500,
-  fontSize: '13px',
-  color: '#388e3c',
-  padding: 0,
-  background: 'none',
-  border: 'none',
-  outline: 'none',
-  textAlign: 'left',
-  textDecoration: 'underline',
-};
-
-const detailBoxStyle: React.CSSProperties = {
-  background: '#f9fbe7',
-  padding: 12,
-  borderRadius: 4,
-  fontSize: 13,
-  marginTop: 10,
-  maxHeight: 500,
-  overflowY: 'auto',
-};
-
-const timestampStyle: React.CSSProperties = {
-  fontSize: 13,
-  color: '#2f2f2f',
-  letterSpacing: '.01em',
-  background: '#f1f5fb',
-  padding: '4px 8px',
-  borderRadius: 5,
-  display: 'inline-block',
-};
-
-const resourceIdStyle: React.CSSProperties = {
-  fontSize: 13,
-  color: '#3949ab',
-  fontFamily: 'monospace',
-  wordBreak: 'break-all',
-};
-
-const errorStyle: React.CSSProperties = {
-  color: '#d32f2f',
-  background: '#fff5f5',
-  border: '1px solid #ffe2e2',
-  padding: '8px 18px',
-  borderRadius: 8,
-  marginTop: 20,
-  marginBottom: 16,
-};
-
-const modalBackdropStyle: React.CSSProperties = {
-  position: 'fixed',
-  left: 0,
-  top: 0,
-  width: '100vw',
-  height: '100vh',
-  background: 'rgba(31, 44, 55, 0.30)',
-  zIndex: 1011,
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center'
-};
-
-const modalContainerStyle: React.CSSProperties = {
-  background: '#fff',
-  borderRadius: 12,
-  boxShadow: '0 6px 32px 0 rgba(84, 90, 111, 0.12)',
-  padding: '27px 28px 25px 28px',
-  minWidth: 388,
-  maxWidth: '93vw',
-  maxHeight: '75vh',
-  overflowY: 'auto',
-  zIndex: 1013,
-  position: 'relative',
-};
-
-const closeButtonStyle: React.CSSProperties = {
-  position: 'absolute',
-  top: 12,
-  right: 16,
-  background: 'none',
-  border: 'none',
-  fontSize: 22,
-  color: '#2f4867',
-  cursor: 'pointer',
-  padding: 0,
-  zIndex: 1020,
-  fontWeight: 600,
-  lineHeight: 1,
-};
-
 interface AuditLog {
   _id: string;
   action: string;
@@ -167,7 +8,7 @@ interface AuditLog {
   role: string;
   resource?: string;
   resourceId?: string;
-  details?: any; // mixed type!
+  details?: any;
   ipAddress?: string | null;
   userAgent?: string | null;
   createdAt: string;
@@ -176,19 +17,34 @@ interface AuditLog {
 
 const API_URL = import.meta.env.VITE_API_URL;
 
+const roleBadgeClasses = (role: string) => {
+  switch (role) {
+    case 'superadmin':
+      return 'bg-yellow-100 text-yellow-800';
+    case 'admin':
+      return 'bg-cyan-100 text-cyan-800';
+    case 'therapist':
+      return 'bg-green-100 text-green-800';
+    case 'patient':
+      return 'bg-pink-100 text-pink-800';
+    default:
+      return 'bg-gray-100 text-gray-700';
+  }
+};
+
 const renderObject = (obj: any, level = 0) =>
   Object.entries(obj).map(([key, value]) => {
     if (value && typeof value === 'object' && !Array.isArray(value)) {
       return (
-        <div key={key} style={{ marginLeft: 14 * (level + 1) }}>
-          <span style={{ fontWeight: 500 }}>{key}:</span>
+        <div key={key} className={`ml-${(level + 1) * 3}`}>
+          <span className="font-medium">{key}:</span>
           <div>{renderObject(value, level + 1)}</div>
         </div>
       );
     } else if (Array.isArray(value)) {
       return (
-        <div key={key} style={{ marginLeft: 14 * (level + 1) }}>
-          <span style={{ fontWeight: 500 }}>{key}:</span> [
+        <div key={key} className={`ml-${(level + 1) * 3}`}>
+          <span className="font-medium">{key}:</span> [
           {value.map((v, i) => (
             <span key={i}>
               {typeof v === 'object' ? JSON.stringify(v, null, 1) : String(v)}
@@ -199,8 +55,8 @@ const renderObject = (obj: any, level = 0) =>
       );
     } else {
       return (
-        <div key={key} style={{ marginLeft: 14 * (level + 1) }}>
-          <span style={{ fontWeight: 500 }}>{key}:</span> {String(value)}
+        <div key={key} className={`ml-${(level + 1) * 3}`}>
+          <span className="font-medium">{key}:</span> {String(value)}
         </div>
       );
     }
@@ -210,40 +66,50 @@ const renderDetailsModalBody = (details: any) => {
   if (!details || typeof details !== 'object') {
     return <span>{String(details)}</span>;
   }
-  return <div style={detailBoxStyle}>{renderObject(details)}</div>;
-};
-
-const formatUser = (user: string | { _id: string, name?: string, email?: string }) => {
-  if (!user) return '-';
-  if (typeof user === 'string') {
-    return <span title={user}>{user.slice(0, 8) + (user.length > 8 ? '...' : '')}</span>;
-  }
   return (
-    <span title={user._id}>
-      {(user.name || user.email) && (
-        <span style={{ fontWeight: 500 }}>
-          {(user.name ? user.name : (user.email ? user.email : user._id))}
-        </span>
-      )}
-      {(user.name || user.email) ? (
-        <span style={{ color: '#999', fontSize: 13, marginLeft: 5 }}>
-          ({user._id.slice(0, 6)}...)
-        </span>
-      ) : user._id}
-    </span>
+    <div className="bg-lime-50 rounded px-3 py-2 text-sm mt-2 max-h-[500px] overflow-y-auto">
+      {renderObject(details)}
+    </div>
   );
 };
 
-const formatUserAgent = (ua: string | null | undefined) =>
-  ua
-    ? <span title={ua}>{ua.length > 32 ? ua.slice(0, 28) + '…' : ua}</span>
-    : '-';
+// const formatUser = (user: string | { _id: string, name?: string, email?: string }) => {
+//   if (!user) return '-';
+//   if (typeof user === 'string') {
+//     return <span title={user}>{user.slice(0, 8) + (user.length > 8 ? '...' : '')}</span>;
+//   }
+//   return (
+//     <span title={user._id}>
+//       {(user.name || user.email) && (
+//         <span className="font-medium">
+//           {user.name ? user.name : (user.email ? user.email : user._id)}
+//         </span>
+//       )}
+//       {(user.name || user.email) ? (
+//         <span className="text-gray-400 text-xs ml-1">
+//           ({user._id.slice(0, 6)}...)
+//         </span>
+//       ) : user._id}
+//     </span>
+//   );
+// };
+
+// const formatUserAgent = (ua: string | null | undefined) =>
+//   ua
+//     ? <span title={ua}>{ua.length > 32 ? ua.slice(0, 28) + '…' : ua}</span>
+//     : '-';
 
 const formatResourceId = (id: string | undefined) =>
-  id ? <span style={resourceIdStyle} title={id}>{id.slice(0, 9) + (id.length > 9 ? '...' : '')}</span> : '-';
+  id ?
+    <span className="text-indigo-700 font-mono break-all text-xs" title={id}>
+      {id.slice(0, 9) + (id.length > 9 ? '...' : '')}
+    </span>
+    : '-';
 
-const formatIP = (ip: string | null | undefined) =>
-  ip ? <span style={{ color: '#005c3c', fontFamily: 'monospace', background: '#e7fff6', borderRadius: 4, padding: '2px 7px', fontSize: 13 }}>{ip}</span> : '-';
+// const formatIP = (ip: string | null | undefined) =>
+//   ip ?
+//     <span className="text-emerald-800 font-mono bg-emerald-100 rounded px-2 py-[2px] text-xs">{ip}</span>
+//     : '-';
 
 const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
@@ -253,16 +119,27 @@ const DetailsModal: React.FC<{
   log?: AuditLog | null;
 }> = ({ show, onClose, log }) => {
   if (!show || !log) return null;
-
   return (
-    <div style={modalBackdropStyle}>
-      <div style={modalContainerStyle} tabIndex={-1}>
-        <button aria-label="Close" style={closeButtonStyle} onClick={onClose} title="Close">&times;</button>
-        <h3 style={{ fontWeight: 700, fontSize: 19, color: '#20497b', marginBottom: 7 }}>
-          Details for Action: <span style={{ color: '#2b6c2e' }}>{capitalize(log.action.replace(/_/g, ' '))}</span>
+    <div
+      className="fixed inset-0 flex items-center justify-center bg-black/30 z-[1011]"
+      tabIndex={-1}
+    >
+      <div className="bg-white rounded-xl shadow-2xl px-7 py-6 min-w-[388px] max-w-[93vw] max-h-[75vh] overflow-y-auto relative z-[1013]">
+        <button
+          aria-label="Close"
+          className="absolute top-3 right-4 text-2xl text-blue-900 font-bold z-[1020] hover:text-blue-700"
+          onClick={onClose}
+          title="Close"
+        >&times;</button>
+        <h3 className="font-bold text-lg text-blue-900 mb-2">
+          Details for Action:{' '}
+          <span className="text-green-800">{capitalize(log.action.replace(/_/g, ' '))}</span>
         </h3>
-        <div style={{ marginBottom: 11, color: '#888', fontSize: 14 }}>
-          Logged at: <span style={timestampStyle}>{new Date(log.createdAt).toLocaleString()}</span>
+        <div className="mb-3 text-gray-500 text-sm">
+          Logged at:{' '}
+          <span className="inline-block bg-blue-50 text-slate-700 text-xs rounded px-2 py-1 ml-1">
+            {new Date(log.createdAt).toLocaleString()}
+          </span>
         </div>
         {renderDetailsModalBody(log.details)}
       </div>
@@ -275,13 +152,11 @@ const AllLogs = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Modal state
-  const [modal, setModal] = useState<{show: boolean, log: AuditLog | null}>({
+  const [modal, setModal] = useState<{ show: boolean, log: AuditLog | null }>({
     show: false,
     log: null,
   });
 
-  // Close modal on ESC key
   React.useEffect(() => {
     if (!modal.show) return;
     const onKeyDown = (e: KeyboardEvent) => {
@@ -299,7 +174,6 @@ const AllLogs = () => {
         const response = await axios.get(`${API_URL}/api/super-admin/logs`);
         if (response.data && response.data.success) {
           setLogs(response.data.logs);
-          console.log(response.data);
         } else {
           setError('Failed to fetch logs.');
         }
@@ -314,12 +188,12 @@ const AllLogs = () => {
   }, []);
 
   return (
-    <div style={containerStyle}>
-      <h2 style={{ fontWeight: 800, fontSize: 28, marginBottom: 10, color: '#284293', letterSpacing: '-0.03em' }}>
-        <span role="img" aria-label="logs" style={{ fontSize: 23, marginRight: 11 }}>🗒️</span>
+    <div className="bg-white rounded-xl p-8 shadow-lg  mx-auto mt-9 mb-9">
+      <h2 className="font-extrabold text-3xl mb-3 text-blue-900 tracking-tight">
+        <span role="img" aria-label="logs" className="text-2xl mr-3">🗒️</span>
         Audit Logs
       </h2>
-      <div style={{ color: '#707070', fontSize: 17, marginBottom: loading || error ? 13 : 23, marginLeft: 2, letterSpacing: '0.01em' }}>
+      <div className={`text-gray-500 text-lg mb-${loading || error ? 3 : 6} ml-1 tracking-tight`}>
         Review all account, admin, and system activities. Click <b>Show Details</b> to see more info about any log.
       </div>
       <DetailsModal
@@ -329,87 +203,118 @@ const AllLogs = () => {
       />
 
       {loading ? (
-        <div style={{
-          padding: 18,
-          fontSize: 17,
-          fontWeight: 500,
-          color: '#276bbc',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 12
-        }}>
-          <span className="spinner" style={{
-            border: '3px solid #b5d3f3',
-            borderTop: '3px solid #1597e4',
-            borderRadius: '50%',
-            width: 22, height: 22,
-            display: 'inline-block',
-            animation: 'spin 1.1s linear infinite',
-            marginRight: 8,
-          }} />
+        <div className="flex items-center gap-3 py-4 text-blue-700 font-medium text-lg">
+          <span className="inline-block w-5 h-5 mr-2 border-4 border-blue-200 border-t-blue-500 rounded-full animate-spin" />
           Loading audit logs...
-          <style>
-            {`
-            @keyframes spin { to { transform: rotate(360deg); } }
-            `}
-          </style>
         </div>
       ) : error ? (
-        <div style={errorStyle}>Error: {error}</div>
+        <div className="text-red-700 bg-red-50 border border-red-200 px-5 py-2 rounded-lg mt-5 mb-4 font-medium">
+          Error: {error}
+        </div>
       ) : logs.length === 0 ? (
-        <div style={{
-          color: '#666', background: '#f4f8fc', borderRadius: 7,
-          padding: '18px 12px', marginTop: 15, border: '1px solid #eef4fc',
-          fontWeight: 500
-        }}>
+        <div className="text-gray-500 bg-blue-50 border border-blue-100 rounded-lg px-4 py-5 mt-4 font-medium">
           No audit logs found yet.
         </div>
       ) : (
-        <div style={tableContainerStyle}>
-          <table style={tableStyle}>
+        <div className="overflow-x-auto mt-6 rounded-lg shadow-sm bg-slate-50">
+          <table className="w-full border-separate border-spacing-0 text-[15px] min-w-[850px]">
             <thead>
               <tr>
-                <th style={thStyle}>Action</th>
-                <th style={thStyle}>User</th>
-                <th style={thStyle}>Role</th>
-                <th style={thStyle}>Resource</th>
-                <th style={thStyle}>Resource ID</th>
-                <th style={thStyle}>IP Address</th>
-                <th style={thStyle}>User Agent</th>
-                <th style={thStyle}>Timestamp</th>
-                <th style={thStyle}>Details</th>
+                <th className="bg-blue-50 px-3 py-2 border-b-2 border-blue-100 font-semibold text-center">Action</th>
+                <th className="bg-blue-50 px-3 py-2 border-b-2 border-blue-100 font-semibold text-center">User</th>
+                <th className="bg-blue-50 px-3 py-2 border-b-2 border-blue-100 font-semibold text-center">Role</th>
+                <th className="bg-blue-50 px-3 py-2 border-b-2 border-blue-100 font-semibold text-center">Resource</th>
+                <th className="bg-blue-50 px-3 py-2 border-b-2 border-blue-100 font-semibold text-center">Resource ID</th>
+                {/* <th className="bg-blue-50 px-3 py-2 border-b-2 border-blue-100 font-semibold text-center">IP Address</th>
+                <th className="bg-blue-50 px-3 py-2 border-b-2 border-blue-100 font-semibold text-center">User Agent</th> */}
+                <th className="bg-blue-50 px-3 py-2 border-b-2 border-blue-100 font-semibold text-center">Timestamp</th>
+                {/* <th className="bg-blue-50 px-3 py-2 border-b-2 border-blue-100 font-semibold text-center">Details</th> */}
               </tr>
             </thead>
             <tbody>
               {logs.map((log, idx) => (
-                <tr key={log._id} style={{ background: idx % 2 === 1 ? '#f8fafb' : undefined }}>
-                  <td style={{ ...tdStyle, ...actionStyle }}>{capitalize(log.action.replace(/_/g, ' '))}</td>
-                  <td style={tdStyle}>{formatUser(log.user)}</td>
-                  <td style={tdStyle}>
-                    <span style={badgeStyle(log.role)}>
+                <tr key={log._id} className={idx % 2 === 1 ? 'bg-slate-50' : ''}>
+                  <td className="py-3 px-3 text-center border-b border-slate-200 font-semibold text-blue-700 text-[15px]">
+                    {capitalize(log.action.replace(/_/g, ' '))}
+                  </td>
+                  <td className="py-3 px-3 text-center border-b border-slate-200  ">
+                    {(() => {
+                      const userVal = log.user;
+                      if (typeof userVal === "string") {
+                        // multiple users as comma separated string
+                        if (userVal.includes(",")) {
+                          return userVal.split(",").map((part, i, arr) => (
+                            <React.Fragment key={i}>
+                              {part.trim()}
+                              {i < arr.length - 1 && <br />}
+                            </React.Fragment>
+                          ));
+                        }
+                        return userVal;
+                      }
+                      // if it's an object with optional name/email
+                      if (
+                        userVal &&
+                        typeof userVal === "object" &&
+                        "_id" in userVal
+                      ) {
+                        return (
+                          <span>
+                            {userVal.name
+                              ? userVal.name
+                              : userVal.email
+                                ? userVal.email
+                                : userVal._id}
+                          </span>
+                        );
+                      }
+                      // fallback for anything else
+                      return "-";
+                    })()}
+                  </td>
+                  <td className="py-3 px-3 text-center border-b border-slate-200 max-w-[250px] align-top">
+                    <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${roleBadgeClasses(log.role)}`}>
                       {capitalize(log.role)}
                     </span>
                   </td>
-                  <td style={tdStyle}>
+                  <td className="py-3 px-3 text-center border-b border-slate-200 max-w-[250px] align-top">
                     {log.resource ? (
-                      <span style={{ fontWeight: 500 }}>{capitalize(log.resource.replace(/_/g, ' '))}</span>
-                    ) : <span style={{ color: '#bbb' }}>-</span>}
+                      <span className="font-medium">{capitalize(log.resource.replace(/_/g, ' '))}</span>
+                    ) : <span className="text-gray-300">-</span>}
                   </td>
-                  <td style={tdStyle}>{formatResourceId(log.resourceId)}</td>
-                  <td style={tdStyle}>{formatIP(log.ipAddress)}</td>
-                  <td style={tdStyle}>{formatUserAgent(log.userAgent)}</td>
-                  <td style={tdStyle}>
-                    <span style={timestampStyle}>{new Date(log.createdAt).toLocaleString()}</span>
+                  <td className="py-3 px-3 text-center border-b border-slate-200 max-w-[250px] align-top">
+                    {(() => {
+                      const resourceIdVal = log.resourceId;
+                      if (typeof resourceIdVal === "string") {
+                        if (resourceIdVal.includes(",")) {
+                          return resourceIdVal.split(",").map((part, i, arr) => (
+                            <React.Fragment key={i}>
+                              {formatResourceId(part.trim())}
+                              {i < arr.length - 1 && <br />}
+                            </React.Fragment>
+                          ));
+                        }
+                        return formatResourceId(resourceIdVal);
+                      }
+                      return formatResourceId(resourceIdVal);
+                    })()}
                   </td>
-                  <td style={{ ...tdStyle, maxWidth: 240, wordBreak: 'break-word', textAlign: 'left' }}>
+                  {/* <td className="py-3 px-3 text-center border-b border-slate-200">{formatIP(log.ipAddress)}</td>
+                  <td className="py-3 px-3 text-center border-b border-slate-200">{formatUserAgent(log.userAgent)}</td> */}
+                  <td className="py-3 px-3 text-center border-b border-slate-200">
+                    <span className="text-xs text-slate-800 bg-blue-50 px-2 py-1 rounded">
+                      {new Date(log.createdAt).toLocaleString()}
+                    </span>
+                  </td>
+                  {/* <td className="py-3 px-3 text-left border-b border-slate-200 max-w-[240px] word-break break-words">
                     <button
-                      style={detailSummaryButtonStyle}
+                      className="text-green-700 text-xs font-medium underline hover:text-green-800"
                       onClick={() => setModal({ show: true, log })}
                       type="button"
                     >
                       Show Details
                     </button>
-                  </td>
+                  </td> */}
                 </tr>
               ))}
             </tbody>

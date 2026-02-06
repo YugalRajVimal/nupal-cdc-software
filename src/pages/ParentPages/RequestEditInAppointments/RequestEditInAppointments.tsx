@@ -236,6 +236,7 @@ export default function RequestEditInAppointment() {
         const raw = await res.json();
         if (raw && raw.success && Array.isArray(raw.data)) {
           setAppointments(raw.data);
+          console.log(raw);
           setTotalCount(raw.total || raw.count || raw.data.length); // Make sure backend sends total count for pagination! (else fallback)
         } else {
           setAppointments([]);
@@ -557,6 +558,22 @@ export default function RequestEditInAppointment() {
     return {};
   }
 
+  // Utility to get the displayed SessionID matching for edit requests: match sessionId (in edit request) with _id (in sessions) and show original sessionId (from session)
+  function getMappedSessionIdForEditRequest(
+    erSessionId: string,
+    sessions: SessionType[]
+  ): string | null {
+    if (!erSessionId || !Array.isArray(sessions)) return null;
+    // Try to find session with _id (=== erSessionId), but show its sessionId (which may be different)
+    for (let s of sessions) {
+      if (s._id && s._id.toString() === erSessionId.toString()) {
+        return s.sessionId || "";
+      }
+    }
+    // fallback: return erSessionId as is if not found
+    return erSessionId;
+  }
+
   // --- UI ---
   return (
     <motion.div
@@ -824,7 +841,7 @@ export default function RequestEditInAppointment() {
                                   <thead>
                                     <tr>
                                       <th className="py-1 px-2 text-left">S. No.</th>
-                                      {/* <th className="py-1 px-2 text-left">Session ID</th> */}
+                                      <th className="py-1 px-2 text-left">Session ID</th>
                                       <th className="py-1 px-2 text-left">New Date</th>
                                       <th className="py-1 px-2 text-left">New Slot</th>
                                       <th className="py-1 px-2 text-left">Old Date</th>
@@ -850,12 +867,42 @@ export default function RequestEditInAppointment() {
                                           )
                                         : "";
 
+                                      // NEW LOGIC: If sessionId from edit req (sess.sessionId) does not match corresponding session's sessionId, show both
+                                      let displaySessionId: React.ReactNode = sess.sessionId || <span className="italic text-slate-400">N/A</span>;
+                                      if (
+                                        viewAppointment?.sessions &&
+                                        sess.sessionId
+                                      ) {
+                                        const mappedSessionId = getMappedSessionIdForEditRequest(
+                                          sess.sessionId,
+                                          viewAppointment.sessions
+                                        );
+                                        if (
+                                          mappedSessionId &&
+                                          mappedSessionId !== sess.sessionId
+                                        ) {
+                                          // Show as eg. [SessionID: mapped] (RequestId: sess.sessionId)
+                                          displaySessionId = (
+                                            <span>
+                                              {mappedSessionId ? (
+                                                <>
+                                                  <span className="font-mono">{mappedSessionId}</span>
+                                                  <span className="text-[10px] text-slate-500 ml-1">(request id: <span className="font-mono">{sess.sessionId}</span>)</span>
+                                                </>
+                                              ) : (
+                                                sess.sessionId
+                                              )}
+                                            </span>
+                                          );
+                                        }
+                                      }
+
                                       return (
                                         <tr key={sess.sessionId || sidx}>
                                           <td className="py-1 px-2">{sidx + 1}</td>
-                                          {/* <td className="py-1 px-2 font-mono">
-                                            {sess.sessionId}
-                                          </td> */}
+                                          <td className="py-1 px-2 font-mono text-slate-900">
+                                            {displaySessionId}
+                                          </td>
                                           <td className="py-1 px-2">
                                             {sess.newDate}
                                           </td>
@@ -900,6 +947,7 @@ export default function RequestEditInAppointment() {
                 <thead className="bg-slate-50 border-b">
                   <tr>
                     <th className="px-3 py-2 text-left">#</th>
+                    <th className="px-3 py-2 text-left">Session ID</th>
                     <th className="px-3 py-2 text-left">Date</th>
                     <th className="px-3 py-2 text-left">Slot</th>
                     <th className="px-3 py-2 text-left">Therapist</th>
@@ -954,6 +1002,10 @@ export default function RequestEditInAppointment() {
                         <tr key={key} className="border-t">
                           {/* Serial No. cell */}
                           <td className="px-3 py-2">{idx + 1}</td>
+                          {/* Session ID cell */}
+                          <td className="px-3 py-2 font-mono text-slate-900">
+                            {s.sessionId || <span className="italic text-slate-400">N/A</span>}
+                          </td>
                           {/* Date cell */}
                           <td className="px-3 py-2">
                             {editAllMode && !alreadyRequested ? (
@@ -1105,7 +1157,7 @@ export default function RequestEditInAppointment() {
                   ) : (
                     <tr>
                       <td
-                        colSpan={5}
+                        colSpan={6}
                         className="px-3 py-5 text-center text-slate-400"
                       >
                         No session data

@@ -58,12 +58,6 @@ type PaymentInfo = {
 
 const API_URL = import.meta.env.VITE_API_URL;
 
-// Utility and type for today session extraction
-// function getTodaySessionFromMainObj(obj: any) {
-//   if (!obj) return undefined;
-//   return obj.session;
-// }
-
 type CollectModalState = {
   visible: boolean,
   payment: PaymentInfo | null
@@ -95,14 +89,12 @@ export default function ReceptionDesk() {
     return undefined;
   }
 
-  // Get the total amount due for the invoice (total invoice amount)
   const getPaymentAmount = () => {
     if (!collectModal.payment?.paymentAmount && collectModal.payment?.paymentAmount !== 0) return undefined;
     let amount = collectModal.payment.paymentAmount;
     return toNumber(amount);
   };
 
-  // Get how much was already paid (if any)
   const getAmountPaid = () => {
     if (!collectModal.payment?.amountPaid && collectModal.payment?.amountPaid !== 0) return 0;
     let paid = collectModal.payment.amountPaid;
@@ -145,10 +137,8 @@ export default function ReceptionDesk() {
         setToday(data.today);
 
         // ---- Today's Appointments ----
-        // Each item: { _id, appointmentId, ..., session: { ... } }
         const todays: Appointment[] = (data.todaysBookings || []).map((booking: any) => {
           const session = booking.session;
-          // For therapist info, use session.therapist structure.
           let therapistName = "";
           let therapistId = "";
           let therapistUserId = "";
@@ -159,7 +149,6 @@ export default function ReceptionDesk() {
             therapistUserId = session.therapist._id ?? "";
           }
 
-          // Fallback: If session therapist not valid, try booking.therapist (in this API it's an id, not object)
           if (!therapistName && booking.therapist && typeof booking.therapist === "object" && booking.therapist._id) {
             therapistId = booking.therapist._id;
             therapistName = booking.therapist.name ?? "";
@@ -187,7 +176,6 @@ export default function ReceptionDesk() {
         });
 
         // ---- Pending Payments ----
-        // Each: { payment: { ... }, sessions: [], ... }
         const pendings: PaymentInfo[] = (data.pendingPaymentBookings || []).map((booking: any) => {
           let paymentRecord = booking.payment || {};
           let patientName = booking.patient?.name || "";
@@ -229,7 +217,6 @@ export default function ReceptionDesk() {
     };
   }, []);
 
-  // Handler to "check in" an appointment (actual POST to API)
   const handleCheckIn = async (_id: string, sessionId: string) => {
     const token = localStorage.getItem("admin-token");
     try {
@@ -244,7 +231,6 @@ export default function ReceptionDesk() {
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.message || "Failed check-in");
 
-      // Optimistic update: update session as checked-in and appointment status
       setAppointments((apps) =>
         apps.map((a) =>
           a._id === _id && a.sessionId === sessionId
@@ -263,20 +249,18 @@ export default function ReceptionDesk() {
     }
   };
 
-  // Handler to multi-check-in selected appointments
   const handleMultiCheckIn = async () => {
     const keys: string[] = Object.entries(selectedAppointments)
       .filter(([_, checked]) => checked)
       .map(([key]) => key);
 
     if (keys.length === 0) {
-      alert("Please select at least one appointment to check in.");
+      alert("Please select at least one appointment to mark session complete.");
       return;
     }
     setMultiCheckingIn(true);
     const token = localStorage.getItem("admin-token");
 
-    // Execute check-in for each selected appointment (one-after-another)
     for (const key of keys) {
       const [bookingId, sessionId] = key.split("||");
       if (!bookingId || !sessionId) continue;
@@ -290,8 +274,7 @@ export default function ReceptionDesk() {
           body: JSON.stringify({ bookingId, sessionId }),
         });
         const data = await res.json();
-        if (!res.ok || !data.success) throw new Error(data.message || "Failed check-in");
-        // Update one by one
+        if (!res.ok || !data.success) throw new Error(data.message || "Failed to mark session complete");
         setAppointments((apps) =>
           apps.map((a) =>
             a._id === bookingId && a.sessionId === sessionId
@@ -301,23 +284,19 @@ export default function ReceptionDesk() {
         );
       } catch (err) {
         alert(
-          "Failed check-in for Appt#: " + bookingId + ". " +
+          "Failed to mark session complete for Appt#: " + bookingId + ". " +
             (typeof err === "string"
               ? err
               : err instanceof Error
               ? err.message
-              : "Error checking in")
+              : "Error marking session complete")
         );
-        // Optionally break on failure, or keep going
-        // break;
       }
     }
     setMultiCheckingIn(false);
-    // Clear all selections after completion
     setSelectedAppointments({});
   };
 
-  // Toggle a single checkbox for appointment selection
   const toggleAppointmentSelection = (_id: string, sessionId: string) => {
     const key = `${_id}||${sessionId}`;
     setSelectedAppointments((prev) => ({
@@ -326,9 +305,7 @@ export default function ReceptionDesk() {
     }));
   };
 
-  // "Select All" functionality for remaining scheduled appointments
   const selectAllAppointments = () => {
-    // Only scheduled and not checked-in are selectable
     const newSelection: typeof selectedAppointments = {};
     appointments.forEach((a) => {
       if (a.status === "scheduled" && !a.isCheckedIn) {
@@ -539,7 +516,7 @@ export default function ReceptionDesk() {
               exit={{ height: 0, opacity: 0 }}
               transition={{ duration: 0.2, ease: "easeInOut" }}
               className="overflow-hidden"
-              onClick={(e) => e.stopPropagation()} // Prevent click on content area from toggling collapse
+              onClick={(e) => e.stopPropagation()}
             >
               <div className="px-6 pb-6">
                 <p className="text-sm text-blue-700 mb-4">
@@ -554,11 +531,11 @@ export default function ReceptionDesk() {
                       "Today’s Appointments".
                     </li>
                     <li>
-                      Click "Check In" to mark them as present. This notifies the
+                      Click "Session Completed" to mark them as present. This notifies the
                       therapist.
                     </li>
                     <li>
-                      You can select and check-in multiple appointments at once using the new multi-select feature.
+                      You can select and mark multiple sessions as completed at once using the new multi-select feature.
                     </li>
                     <li>
                       Check the "Pending Payments" list. Collect fees before or
@@ -575,7 +552,7 @@ export default function ReceptionDesk() {
                     <FiCheckCircle /> Pro Tips
                   </div>
                   <ul className="list-disc list-inside text-sm text-green-700 space-y-1">
-                    <li>Verify patient contact info during check-in.</li>
+                    <li>Verify patient contact info during session completion.</li>
                     <li>
                       Unpaid invoices from previous days remain until cleared.
                     </li>
@@ -699,7 +676,7 @@ export default function ReceptionDesk() {
                         placeholder="E.g. 800"
                         required
                         disabled={collectLoading}
-                        max={paymentDue ?? undefined} // Just for UI, but main check is in code
+                        max={paymentDue ?? undefined}
                       />
                       {isPartialOverDue && (
                         <div className="text-xs text-red-500 mt-1">
@@ -772,7 +749,7 @@ export default function ReceptionDesk() {
               tabIndex={-1}
               style={{ minWidth: 88 }}
             >
-              {multiCheckingIn ? "Checking In…" : "Check-In Selected"}
+              {multiCheckingIn ? "Marking as Completed…" : "Mark Session Completed"}
             </button>
             <span className="text-xs text-slate-400 ml-2">
               {Object.entries(selectedAppointments).filter(([_, v]) => v).length > 0
@@ -805,8 +782,8 @@ export default function ReceptionDesk() {
                         tabIndex={selectable ? 0 : -1}
                         aria-label={
                           selectable
-                            ? `Select appointment ${a.appointmentId} for check-in`
-                            : "Checked in or not selectable"
+                            ? `Select appointment ${a.appointmentId} for session completion`
+                            : "Session completed or not selectable"
                         }
                         style={{ width: 16, height: 16 }}
                       />
@@ -843,10 +820,14 @@ export default function ReceptionDesk() {
                                 ?? ""
                               }
                             </span>
+                            {/* Show sessionId to the right */}
+                            <span className="ml-3 text-xs text-slate-500 font-mono">
+                              Session ID: {a.sessionId ?? "—"}
+                            </span>
                           </span>
                           {(a.status === "checked-in" || a.isCheckedIn) && (
                             <span className="ml-2 text-green-600 text-xs bg-green-50 rounded px-2 py-0.5 font-semibold">
-                              Checked In
+                              Session Completed
                             </span>
                           )}
                         </div>
@@ -880,11 +861,11 @@ export default function ReceptionDesk() {
                           onClick={() => handleCheckIn(a._id, a.sessionId)}
                           className="rounded-md border border-blue-500 px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 transition"
                         >
-                          Check In
+                          Mark Session Completed
                         </button>
                       ) : (
                         <span className="rounded-md border border-green-500 px-3 py-1.5 text-xs font-semibold text-green-600 bg-green-50">
-                          Present
+                          Session Completed
                         </span>
                       )}
                     </div>

@@ -3,9 +3,13 @@ import {
   FiUser,
   FiEye,
   FiSearch,
+  FiDownload,
 } from "react-icons/fi";
 import { motion } from "framer-motion";
 import axios from "axios";
+
+// Import JSZip for zipping files
+import JSZip from "jszip";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "";
 
@@ -31,6 +35,7 @@ type TherapistProfile = {
     createdAt?: string;
     updatedAt?: string;
     isDisabled?: boolean;
+    manualSignUp?: boolean;
   };
   isPanelAccessible?: boolean;
   therapistId?: string;
@@ -122,7 +127,6 @@ const FIELD_LIST: {
   { key: "remarks", label: "Remarks" },
 ];
 
-// Simple calendar widget using native HTML, but gives overlay feel
 function CalendarInput({
   value,
   onChange,
@@ -177,7 +181,6 @@ function CalendarInput({
           <path d="M16 2v4M8 2v4" strokeWidth="2" stroke="currentColor" />
         </svg>
       </button>
-      {/* Native calendar overlays on click, if supported */}
       <input
         ref={ref}
         type="date"
@@ -208,7 +211,52 @@ function CalendarInput({
   );
 }
 
-// ------------ MAIN PAGE -----------------
+// Helper: fetch a blob by URL
+async function fetchFileBlob(url: string): Promise<Blob> {
+  // If already a blob URL (data URI), convert to blob
+  if (url.startsWith("data:")) {
+    const res = await fetch(url);
+    return await res.blob();
+  }
+  // For http(s) URLs
+  const resp = await fetch(url);
+  if (!resp.ok)
+    throw new Error(`Failed to fetch file: ${resp.statusText}`);
+  return await resp.blob();
+}
+
+// Helper: get download URLs for the files from the therapist profile (resolves full URLs)
+function getTherapistFileInfos(therapist: TherapistProfile): {
+  label: string;
+  url: string | null;
+  filename: string;
+}[] {
+  const uploadsUrl = import.meta.env.VITE_UPLOADS_URL || "";
+  const keysAndNames = [
+    ["aadhaarFront", "aadhaar-front"],
+    ["aadhaarBack", "aadhaar-back"],
+    ["photo", "photo"],
+    ["resume", "resume"],
+    ["certificate", "certificate"],
+  ] as const;
+  return keysAndNames.map(([key, base]) => {
+    let val = therapist[key as keyof TherapistProfile];
+    if (!val || typeof val !== "string") return { label: key, url: null, filename: "" };
+    const isFullUrl = /^(http|https):\/\//i.test(val);
+    const url = isFullUrl
+      ? val
+      : uploadsUrl
+      ? (uploadsUrl.replace(/\/+$/, "") + "/" + val.replace(/^\/+/, ""))
+      : val;
+    // Attempt to preserve extension
+    let ext = url.split("?")[0].split("#")[0].split(".").pop();
+    if (ext && ext.length <= 5) ext = "." + ext;
+    else ext = "";
+    const filename = `${base}${ext}`;
+    return { label: key, url, filename };
+  });
+}
+
 export default function TherapistsPage() {
   // Table state & filters
   const [therapists, setTherapists] = useState<TherapistProfile[]>([]);
@@ -225,6 +273,9 @@ export default function TherapistsPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedProfile, setSelectedProfile] = useState<TherapistProfile | null>(null);
 
+  // Download state for single therapist file zipping
+  const [downloadingZip, setDownloadingZip] = useState(false);
+
   // Search and pagination state
   const [searchText, setSearchText] = useState("");
   const [searchCommitted, setSearchCommitted] = useState(""); // Actual text applied to data fetch
@@ -235,12 +286,8 @@ export default function TherapistsPage() {
   const [totalPages, setTotalPages] = useState(1);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
 
-  // --- Query param checking for therapistId
-  // This ensures the effect for auto-view fires once on mount if the param is present,
-  // but doesn't re-trigger on state changes.
   const firstViewRef = useRef(false);
 
-  // ------------- Table Fetch API Logic -----------
   const fetchTherapists = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -279,7 +326,6 @@ export default function TherapistsPage() {
     }
   }, [page, searchCommitted, sortField, sortOrder]);
 
-  // Prevent search bar value reset on table ops. (see pattern in BookingRequests.tsx)
   function handleSearchInputChange(e: React.ChangeEvent<HTMLInputElement>) {
     setSearchText(e.target.value);
   }
@@ -311,23 +357,16 @@ export default function TherapistsPage() {
     // eslint-disable-next-line
   }, [fetchTherapists]);
 
-  // --- On mount, check for `therapistId` in query param and open that modal if possible
   useEffect(() => {
     if (firstViewRef.current) return;
     const searchParams = new URLSearchParams(window.location.search);
     const therapistId = searchParams.get("therapistId");
     if (therapistId) {
       firstViewRef.current = true;
-      // therapistId might be database _id or therapistId, so try both.
-      // Try to fetch therapist by that _id ("api/admin/therapist/:id") endpoint only.
-      // Let backend support both _id and therapistId for admin.
       fetchTherapistById(therapistId);
     }
-  // Only ever run once on mount
-  // eslint-disable-next-line
+    // eslint-disable-next-line
   }, []);
-
-  // ------------- MODALS & NON-Table functions (from original) -----------
 
   const fetchTherapistById = useCallback(async (id: string) => {
     setLoading(true);
@@ -469,9 +508,80 @@ export default function TherapistsPage() {
     }
   }
 
+  // Download ZIP handler for the 5 main files for therapist
+  async function handleDownloadAllFilesZip() {
+    if (!selectedProfile) return;
+    setDownloadingZip(true);
+    try {
+      const files = getTherapistFileInfos(selectedProfile);
+      const zip = new JSZip();
+      let hasFiles = false;
+      for (const file of files) {
+        if (!file.url) continue;
+        try {
+          const blob = await fetchFileBlob(file.url);
+          hasFiles = true;
+          zip.file(file.filename, blob);
+        } catch (err) {
+          // Could log error or continue
+        }
+      }
+      if (!hasFiles) throw new Error("No files to download.");
+      const content = await zip.generateAsync({ type: "blob" });
+      // Download zip
+      const a = document.createElement("a");
+      const url = URL.createObjectURL(content);
+      a.href = url;
+      a.download =
+        (selectedProfile?.userId?.name || selectedProfile?.therapistId || "therapist") +
+        "_files.zip";
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      }, 200);
+    } catch (err) {
+      alert(
+        "Failed to download files. Some files may not be accessible or no files present."
+      );
+    }
+    setDownloadingZip(false);
+  }
+
   function renderTherapistModal() {
     if (!selectedId || !selectedProfile) return null;
     const selected = selectedProfile;
+    // Prepare download file info for the five main files
+    const THERAPIST_MAIN_FILES = [
+      {
+        key: "aadhaarFront",
+        label: "Aadhaar Front",
+      },
+      {
+        key: "aadhaarBack",
+        label: "Aadhaar Back",
+      },
+      {
+        key: "photo",
+        label: "Photo",
+      },
+      {
+        key: "resume",
+        label: "Resume",
+      },
+      {
+        key: "certificate",
+        label: "Certificate",
+      },
+    ];
+
+    // Show download all button only if at least one of the five files is present
+    const filesPresent = THERAPIST_MAIN_FILES.some(({ key }) => {
+      const val = selected[key as keyof TherapistProfile];
+      return typeof val === "string" && !!val;
+    });
+
     return (
       <div className="fixed inset-0 z-30 bg-white/70 flex items-center justify-center">
         <div className="bg-white rounded-xl shadow-lg max-w-2xl w-full p-6 relative">
@@ -484,7 +594,23 @@ export default function TherapistsPage() {
           >
             ×
           </button>
-          <h2 className="text-xl font-bold mb-2">Therapist Details</h2>
+          <h2 className="text-xl font-bold mb-2">
+            Therapist Details
+          </h2>
+          {/* Download All 5 Files as ZIP Button */}
+          <div className="mb-4 flex flex-wrap gap-2 justify-end">
+            {filesPresent && (
+              <button
+                className="px-4 py-1 flex items-center gap-2 bg-blue-500 text-white rounded shadow hover:bg-blue-600 transition text-sm"
+                disabled={downloadingZip}
+                onClick={handleDownloadAllFilesZip}
+                title="Download all files as ZIP"
+              >
+                <FiDownload />
+                {downloadingZip ? "Preparing ZIP..." : "Download All Files (ZIP)"}
+              </button>
+            )}
+          </div>
           <div className="overflow-y-auto max-h-[70vh]">
             <div className="mb-2">
               <span className="text-xs text-slate-500 font-semibold">
@@ -596,20 +722,45 @@ export default function TherapistsPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
               {FIELD_LIST.map((f) => {
                 if (f.key === "therapistId") return null;
-                const value = f.render
-                  ? f.render(
-                      selected[f.key as keyof typeof selected],
-                      selected
-                    )
-                  : selected[f.key as keyof typeof selected];
+                let rawValue = selected[f.key as keyof typeof selected];
+                let value;
+
+                if (f.type === "file") {
+                  const uploadsUrl = import.meta.env.VITE_UPLOADS_URL || "";
+                  // Only handle if there's a value
+                  if (typeof rawValue === "string" && rawValue) {
+                    // Prepend uploads URL if not already a full URL
+                    const isFullUrl = /^(http|https):\/\//i.test(rawValue);
+                    const url = isFullUrl
+                      ? rawValue
+                      : (uploadsUrl ? uploadsUrl.replace(/\/+$/, "") + "/" + rawValue.replace(/^\/+/, "") : rawValue);
+
+                    // If it's an image, render an <img>, otherwise just a link to view
+                    const isImage = /\.(jpe?g|png|gif|bmp|webp)$/i.test(url);
+                    value = isImage ? (
+                      <a href={url} target="_blank" rel="noopener noreferrer">
+                        <img src={url} alt={f.label} className="h-10 w-10 object-cover rounded shadow border" />
+                      </a>
+                    ) : (
+                      <a href={url} target="_blank" rel="noopener noreferrer" className="text-blue-700 underline">
+                        View File
+                      </a>
+                    );
+                  } else {
+                    value = "-";
+                  }
+                } else if (f.render) {
+                  value = f.render(rawValue, selected);
+                } else {
+                  value = rawValue;
+                }
+
                 return (
                   <div key={f.key} className="flex flex-col">
                     <span className="text-xs text-slate-500">{f.label}</span>
                     <span className="text-base font-medium text-slate-800">
                       {value !== undefined && value !== null && value !== ""
                         ? value
-                        : f.type === "file"
-                        ? "-"
                         : "-"}
                     </span>
                   </div>
@@ -901,10 +1052,12 @@ export default function TherapistsPage() {
     );
   }
 
-  const tableHeaders: { label: string; key: keyof TherapistProfile | "actions" }[] = [
+  // Add "Manual" column to the table headers
+  const tableHeaders: { label: string; key: keyof TherapistProfile | "manualSignUp" | "actions" }[] = [
     { label: "Therapist ID", key: "_id" },
     { label: "Name", key: "name" },
     { label: "Email | Mobile1", key: "email" },
+    { label: "Manual", key: "manualSignUp" },
     { label: "Specializations", key: "specializations" },
     { label: "Experience", key: "experienceYears" },
     { label: "Enabled", key: "isDisabled" },
@@ -970,6 +1123,7 @@ export default function TherapistsPage() {
                       "_id",
                       "name",
                       "email | mobile1",
+                      "manualSignUp",
                       "specializations",
                       "experienceYears",
                       "isDisabled",
@@ -984,6 +1138,7 @@ export default function TherapistsPage() {
                       "_id",
                       "name",
                       "email | mobile1",
+                      "manualSignUp",
                       "specializations",
                       "experienceYears",
                       "isDisabled",
@@ -1036,6 +1191,10 @@ export default function TherapistsPage() {
                     : typeof t.panelAccess === "boolean"
                     ? t.panelAccess
                     : false;
+                const manualSignUp =
+                  t.userId && typeof t.userId.manualSignUp === "boolean"
+                    ? t.userId.manualSignUp
+                    : undefined;
                 return (
                   <tr key={t._id} className="hover:bg-slate-50 transition">
                     <td className="px-4 py-3 whitespace-nowrap text-slate-700 font-mono">
@@ -1050,9 +1209,14 @@ export default function TherapistsPage() {
                       <br/>
                       {t.mobile1 || "-"}
                     </td>
-                    {/* <td className="px-4 py-3 whitespace-nowrap">
-                      
-                    </td> */}
+                    {/* Manual Sign Up column */}
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      {manualSignUp === undefined
+                        ? "-"
+                        : manualSignUp
+                        ? "Yes"
+                        : "No"}
+                    </td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       {t.specializations?.trim()
                         ? t.specializations

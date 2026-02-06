@@ -34,6 +34,11 @@ const navItems: NavItem[] = [
   },
   {
     icon: <FileIcon />,
+    name: "All Upcoming Sessions",
+    path: "/admin/all-upcomming-sessions",
+  },
+  {
+    icon: <FileIcon />,
     name: "Leads & Consults",
     path: "/admin/leads-consults",
   },

@@ -86,6 +86,8 @@ import SuperAdminProfile from "./pages/SuperAdminPages/ProfilePage/SuperAdminPro
 import LogOutSuperAdmin from "./pages/SuperAdminPages/LogOutSuperAdmin";
 import SuperAdminFullCalendar from "./pages/SuperAdminPages/FullCalendar/SuperAdminFullCalendar";
 import AllLogs from "./pages/SuperAdminPages/Auditlogs/AllLogs";
+import AllUpcomingSessions from "./pages/AdminPages/ReceptionDesk/AllSessions";
+import TherapistIncomeComparison from "./pages/SuperAdminPages/TherapistIncomeComparison/TherapistIncomeComparison";
 
 
 export default function App() {
@@ -134,6 +136,8 @@ export default function App() {
             <Route path="/super-admin/finances" element={<FinancesSuperAdminPage/>} />
             <Route path="/super-admin/full-calendar" element={<SuperAdminFullCalendar/>} />
             <Route path="/super-admin/therapists" element={<SuperAdminTherapistsPage/>} />
+            <Route path="/super-admin/therapist-salary-comparison" element={<TherapistIncomeComparison/>} />
+
             <Route path="/super-admin/children" element={<PatientsPage/>} />
 
 
@@ -168,6 +172,8 @@ export default function App() {
             <Route path="/admin/register-therapist" element={<TherapistRegistration/>} />
             <Route path="/admin/register-patient" element={<PatientRegistration />} />
             <Route path="/admin/reception-desk" element={<ReceptionDesk/>} />
+            <Route path="/admin/all-upcomming-sessions" element={<AllUpcomingSessions/>} />
+
             <Route path="/admin/leads-consults" element={<ConsultationsLeads />} />
             <Route path="/admin/reports-analytics" element={<AnalyticsReports />} />
 

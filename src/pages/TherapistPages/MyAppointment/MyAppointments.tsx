@@ -84,6 +84,7 @@ const TherapistMyAppointments: React.FC = () => {
         if (!didCancel) {
           if (response.data && response.data.success) {
             setAppointments(Array.isArray(response.data.data) ? response.data.data : []);
+            console.log(response.data);
             setTotal(response.data.total || 0);
           } else {
             setError("Failed to fetch appointments");
@@ -220,11 +221,14 @@ const TherapistMyAppointments: React.FC = () => {
                 </div>
                 {/* Session Table - focus */}
                 <div className="overflow-x-auto">
-                  <table className="min-w-[640px] w-full border-collapse text-base">
+                  <table className="min-w-[700px] w-full border-collapse text-base">
                     <thead>
                       <tr>
                         <th className="px-4 py-3 border border-slate-200 bg-slate-100 font-semibold text-left">
                           #
+                        </th>
+                        <th className="px-4 py-3 border border-slate-200 bg-slate-100 font-semibold text-left">
+                          Session&nbsp;ID
                         </th>
                         <th className="px-4 py-3 border border-slate-200 bg-slate-100 font-semibold text-left">
                           Date
@@ -252,6 +256,9 @@ const TherapistMyAppointments: React.FC = () => {
                         >
                           <td className="px-4 py-3 border border-slate-200 text-slate-400">
                             {idx + 1}
+                          </td>
+                          <td className="px-4 py-3 border border-slate-200 font-mono text-blue-700">
+                            {rec.session?._id || rec.session?.sessionId || "-"}
                           </td>
                           <td className="px-4 py-3 border border-slate-200 text-blue-900 font-medium">
                             {formatShortDate(rec.session?.date)}

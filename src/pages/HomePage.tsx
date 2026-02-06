@@ -72,7 +72,7 @@ const HomePage = () => {
     },
     {
       title: "Therapist Portal",
-      desc: "Manage appointments, patient reports, and daily schedules.",
+      desc: "Manage appointments, children reports, and daily schedules.",
       to: "/therapist",
       icon: <FaStethoscope className="h-5 w-5 text-white" />,
       iconBg: "from-fuchsia-500 to-purple-600",
