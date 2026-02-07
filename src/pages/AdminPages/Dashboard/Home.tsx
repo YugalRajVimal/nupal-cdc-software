@@ -10,11 +10,17 @@ import {
   ResponsiveContainer,
   LineChart,
   Line,
+  Legend,
 } from "recharts";
+
+// --------- Calendar-picker integration --------
+import { DayPicker } from "react-day-picker";
+import "react-day-picker/dist/style.css";
 
 interface PerDayStat {
   date: string;
   sessionsCompleted?: number;
+  sessionsScheduled?: number;
   bookingsCreated?: number;
 }
 
@@ -32,15 +38,89 @@ interface DashboardData {
   pendingSessionEditRequests: number;
   pendingTherapistManualSignUp: number;
   sessionsCompletedPerDay: PerDayStat[];
+  sessionScheduledPerDay: PerDayStat[];
   bookingsCreatedPerDay: PerDayStat[];
 }
 
 const API_URL = import.meta.env.VITE_API_URL;
 
+function getDateRangeFromStats(stats: PerDayStat[] = []): [string, string] | null {
+  if (!stats.length) return null;
+  const sorted = [...stats].sort((a, b) => a.date.localeCompare(b.date));
+  return [sorted[0].date, sorted[sorted.length - 1].date];
+}
+
+function todayISODateStr() {
+  const today = new Date();
+  return today.toISOString().slice(0, 10);
+}
+
+function getDaysAgoISODateStr(days: number) {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return d.toISOString().slice(0, 10);
+}
+
+// For DayPicker (calendar), convert yyyy-mm-dd to Date and vice versa:
+function isoToDate(iso: string): Date | undefined {
+  if (!iso) return undefined;
+  const [y, m, d] = iso.split("-").map(Number);
+  if (!y || !m || !d) return undefined;
+  return new Date(y, m - 1, d);
+}
+function dateToIso(date?: Date): string {
+  if (!date) return "";
+  const y = date.getFullYear();
+  const m = (date.getMonth() + 1).toString().padStart(2, "0");
+  const d = date.getDate().toString().padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+// Helper to calculate date difference in days
+function dateDiffInDays(a: string, b: string) {
+  const d1 = new Date(a);
+  const d2 = new Date(b);
+  // 86400000 ms in a day
+  return Math.floor(Math.abs((d2.getTime() - d1.getTime()) / 86400000));
+}
+
 export default function AdminDashboardHome() {
   const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Date range state for filtering - using ISO strings for data filtering
+  const [startDate, setStartDate] = useState<string>(getDaysAgoISODateStr(7));
+  const [endDate, setEndDate] = useState<string>(todayISODateStr());
+
+  // Calendar popover visibility
+  const [showStartCal, setShowStartCal] = useState(false);
+  const [showEndCal, setShowEndCal] = useState(false);
+
+  // Set range after data loads
+  useEffect(() => {
+    if (dashboardData) {
+      const rangeStats =
+        dashboardData.sessionScheduledPerDay && dashboardData.sessionScheduledPerDay.length
+          ? dashboardData.sessionScheduledPerDay
+          : dashboardData.sessionsCompletedPerDay;
+      const range = getDateRangeFromStats(rangeStats);
+      if (range) {
+        const computedEnd = todayISODateStr() < range[1] ? todayISODateStr() : range[1];
+        const computedStart = (() => {
+          const date = new Date(computedEnd);
+          date.setDate(date.getDate() - 7);
+          const iso = date.toISOString().slice(0, 10);
+          return iso < range[0] ? range[0] : iso;
+        })();
+        setStartDate(computedStart);
+        setEndDate(computedEnd);
+      } else {
+        setStartDate(getDaysAgoISODateStr(7));
+        setEndDate(todayISODateStr());
+      }
+    }
+  }, [dashboardData]);
 
   useEffect(() => {
     setLoading(true);
@@ -74,7 +154,6 @@ export default function AdminDashboardHome() {
     return isNaN(num) ? undefined : num;
   }
 
-  // Stat card configs
   const statCardConfig = [
     {
       title: "PENDING PAYMENTS (ALL TIME)",
@@ -115,19 +194,78 @@ export default function AdminDashboardHome() {
     },
   ];
 
-  const sessionsPerDay =
-    dashboardData?.sessionsCompletedPerDay?.map(({ date, sessionsCompleted }) => ({
-      date,
-      value: sessionsCompleted,
-    })) ?? [];
+  function buildMergedSessionData(
+    completed: PerDayStat[] = [],
+    scheduled: PerDayStat[] = []
+  ) {
+    const dateMap: Record<
+      string,
+      { date: string; sessionsCompleted: number; sessionsScheduled: number }
+    > = {};
+    for (const obj of scheduled) {
+      const sessionsScheduled =
+        obj.sessionsScheduled !== undefined
+          ? obj.sessionsScheduled
+          : (obj as any).sessionScheduled;
+      dateMap[obj.date] = {
+        date: obj.date,
+        sessionsCompleted: 0,
+        sessionsScheduled: sessionsScheduled ?? 0,
+      };
+    }
+    for (const obj of completed) {
+      if (!dateMap[obj.date]) {
+        dateMap[obj.date] = {
+          date: obj.date,
+          sessionsCompleted: obj.sessionsCompleted ?? 0,
+          sessionsScheduled: 0,
+        };
+      } else {
+        dateMap[obj.date].sessionsCompleted = obj.sessionsCompleted ?? 0;
+      }
+    }
+    return Object.values(dateMap)
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map((d) => ({
+        ...d,
+        sessionsCompleted: d.sessionsCompleted ?? 0,
+        sessionsScheduled: d.sessionsScheduled ?? 0,
+      }));
+  }
 
-  const bookingsPerDay =
+  function filterMergedSessionDataByDate(
+    data: ReturnType<typeof buildMergedSessionData>
+  ) {
+    if (!startDate || !endDate) return [];
+    return data.filter(
+      (d) => d.date >= startDate && d.date <= endDate
+    );
+  }
+
+  function filterBookingsPerDayByDate(
+    data: { date: string; value: number }[]
+  ) {
+    if (!startDate || !endDate) return [];
+    return data.filter((d) => d.date >= startDate && d.date <= endDate);
+  }
+
+  const mergedSessionDataRaw = buildMergedSessionData(
+    dashboardData?.sessionsCompletedPerDay,
+    dashboardData?.sessionScheduledPerDay
+  );
+
+  const mergedSessionData = filterMergedSessionDataByDate(mergedSessionDataRaw);
+
+  const bookingsPerDayRaw =
     dashboardData?.bookingsCreatedPerDay?.map(({ date, bookingsCreated }) => ({
       date,
       value: bookingsCreated,
     })) ?? [];
 
-  // Utility: Show green circle if card value is 0, else red, at right and center vertically
+  const bookingsPerDay = filterBookingsPerDayByDate(
+    bookingsPerDayRaw.filter((b): b is { date: string; value: number } => typeof b.value === 'number')
+  );
+
   function StatusCircle({ value }: { value: any }) {
     const numValue = getValueAsNumber(value);
     const isGreen = numValue === 0;
@@ -143,6 +281,36 @@ export default function AdminDashboardHome() {
       ></span>
     );
   }
+
+  const sessionStatsRange = getDateRangeFromStats(
+    dashboardData?.sessionScheduledPerDay?.length
+      ? dashboardData.sessionScheduledPerDay
+      : dashboardData?.sessionsCompletedPerDay ?? []
+  );
+  const dateMin = sessionStatsRange ? sessionStatsRange[0] : "";
+  const dateMax = sessionStatsRange ? sessionStatsRange[1] : todayISODateStr();
+
+  // Calendar constraints so dates can be limited to available stats:
+  const minDateObj = isoToDate(dateMin);
+  const maxDateObj = isoToDate(dateMax);
+
+  // Calendar accessibility: close calendar on outside click/key
+  function closeStartCalendar() {
+    setShowStartCal(false);
+  }
+  function closeEndCalendar() {
+    setShowEndCal(false);
+  }
+
+  // Calculate the day difference for current filter range
+  const numDays =
+    startDate && endDate ? dateDiffInDays(startDate, endDate) + 1 : 1;
+
+  // Determine chart layout based on days difference: vertical (col) if >8, horizontal (row/left-right) if <=8
+  const isChartsStackedVertical = numDays > 8;
+  const chartsGridClass = isChartsStackedVertical
+    ? "grid grid-cols-1 gap-6 mb-8"
+    : "grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8";
 
   return (
     <div className="w-full">
@@ -186,42 +354,171 @@ export default function AdminDashboardHome() {
               ))}
             </div>
 
+            <div className="mb-3 flex flex-col md:flex-row md:items-center gap-2 relative">
+              {/* CALENDAR PICKERS (From/To) */}
+              <div className="relative">
+                <label
+                  htmlFor="startDate"
+                  className="text-gray-700 font-medium mr-2"
+                >
+                  From:
+                </label>
+                <button
+                  type="button"
+                  id="startDate"
+                  className="border border-gray-300 rounded px-2 py-1 min-w-[110px] text-left bg-white"
+                  onClick={() => setShowStartCal((s) => !s)}
+                >
+                  {startDate}
+                </button>
+                {/* Calendar for "from" */}
+                {showStartCal && (
+                  <div className="absolute z-20 mt-2 bg-white p-2 rounded shadow-lg border">
+                    <DayPicker
+                      mode="single"
+                      selected={isoToDate(startDate)}
+                      onSelect={d => {
+                        if (d) {
+                          const iso = dateToIso(d);
+                          setStartDate(iso);
+                          setShowStartCal(false);
+                          // If chosen start is after end, adjust endDate too
+                          if (iso > endDate) setEndDate(iso);
+                        }
+                      }}
+                      fromDate={minDateObj}
+                      toDate={maxDateObj}
+                      disabled={endDate && isoToDate(endDate) ? [{ after: isoToDate(endDate) as Date }] : undefined}
+                    />
+                    <button
+                      className="mt-2 text-xs text-blue-600 underline"
+                      onClick={closeStartCalendar}
+                      type="button"
+                    >
+                      Close
+                    </button>
+                  </div>
+                )}
+              </div>
+              <div className="relative">
+                <label
+                  htmlFor="endDate"
+                  className="text-gray-700 font-medium mr-2"
+                >
+                  To:
+                </label>
+                <button
+                  type="button"
+                  id="endDate"
+                  className="border border-gray-300 rounded px-2 py-1 min-w-[110px] text-left bg-white"
+                  onClick={() => setShowEndCal((s) => !s)}
+                >
+                  {endDate}
+                </button>
+                {/* Calendar for "to" */}
+                {showEndCal && (
+                  <div className="absolute z-20 mt-2 bg-white p-2 rounded shadow-lg border">
+                    <DayPicker
+                      mode="single"
+                      selected={isoToDate(endDate)}
+                      onSelect={d => {
+                        if (d) {
+                          const iso = dateToIso(d);
+                          setEndDate(iso);
+                          setShowEndCal(false);
+                          // If chosen end is before start, adjust startDate too
+                          if (iso < startDate) setStartDate(iso);
+                        }
+                      }}
+                      fromDate={minDateObj}
+                      toDate={maxDateObj}
+                      disabled={startDate && isoToDate(startDate) ? [{ before: isoToDate(startDate) as Date }] : undefined}
+                    />
+                    <button
+                      className="mt-2 text-xs text-blue-600 underline"
+                      onClick={closeEndCalendar}
+                      type="button"
+                    >
+                      Close
+                    </button>
+                  </div>
+                )}
+              </div>
+              <div className="text-xs text-gray-400 ml-1 mt-1 md:mt-0">
+                (Showing {mergedSessionData.length} days)
+              </div>
+            </div>
             {/* Charts Section */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-              {/* Left: Daily Check-ins (sessions completed per day) */}
+            <div className={chartsGridClass}>
+              {/* Check-Ins vs Scheduled Sessions, double bar, date filter on top */}
               <div className="bg-white rounded-xl border shadow p-5">
-                <h2 className="font-semibold text-lg mb-2">Check-Ins Per Day</h2>
-                <div className="h-64">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={sessionsPerDay}>
+                <h2 className="font-semibold text-lg mb-2">
+                  Check-Ins vs Scheduled Sessions Per Day
+                </h2>
+                <div className="h-64 w-full">
+                  <ResponsiveContainer width="100%" height={260}>
+                    <BarChart
+                      data={mergedSessionData}
+                      margin={{ top: 16, right: 24, left: 8, bottom: 32 }}
+                    >
                       <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="date" />
+                      <XAxis
+                        dataKey="date"
+                        angle={-40}
+                        textAnchor="end"
+                        height={60}
+                        interval={0}
+                        tick={{ fontSize: 12 }}
+                      />
                       <YAxis allowDecimals={false} />
                       <Tooltip />
-                      <Bar dataKey="value" name="Sessions Completed" fill="#48bb78" />
+                      <Legend />
+                      <Bar
+                        dataKey="sessionsCompleted"
+                        name="Sessions Completed"
+                        fill="#48bb78"
+                        barSize={18}
+                      />
+                      <Bar
+                        dataKey="sessionsScheduled"
+                        name="Sessions Scheduled"
+                        fill="#fbbf24"
+                        barSize={18}
+                      />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
               </div>
-              {/* Right: Bookings Per Day */}
+              {/* Bookings Created Per Day */}
               <div className="bg-white rounded-xl border shadow p-5">
-                <h2 className="font-semibold text-lg mb-2">Bookings Created Per Day</h2>
-                <div className="h-64">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={bookingsPerDay}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="date" />
-                      <YAxis allowDecimals={false} />
-                      <Tooltip />
-                      <Line
-                        type="monotone"
-                        dataKey="value"
-                        name="Bookings Created"
-                        stroke="#3182ce"
-                        strokeWidth={3}
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
+                <h2 className="font-semibold text-lg mb-2">
+                  Bookings Created Per Day
+                </h2>
+                <div className="h-64 w-full overflow-x-auto">
+                  <div style={{ minWidth: Math.max(600, bookingsPerDay.length * 50) }}>
+                    <ResponsiveContainer width="100%" height={260}>
+                      <LineChart data={bookingsPerDay}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis
+                          dataKey="date"
+                          angle={-40}
+                          textAnchor="end"
+                          height={60}
+                          interval={0}
+                          tick={{ fontSize: 12 }}
+                        />
+                        <YAxis allowDecimals={false} />
+                        <Tooltip />
+                        <Line
+                          type="monotone"
+                          dataKey="value"
+                          name="Bookings Created"
+                          stroke="#3182ce"
+                          strokeWidth={3}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
                 </div>
               </div>
             </div>
