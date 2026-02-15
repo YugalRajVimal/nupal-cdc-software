@@ -82,7 +82,7 @@ const groupPatientsByParentEmail = (patients: any[]): FamilyGroupPatient[] => {
         shortId: extractShortId(patient, 'patients'),
         name: displayParentName,
         parentEmail: parentEmail,
-        displayNames: '',
+        displayNames: '', // will be filled below
         familyPatients: [],
         role: patient.userId.role || 'patient',
         fromCollection: 'patients',
@@ -97,8 +97,8 @@ const groupPatientsByParentEmail = (patients: any[]): FamilyGroupPatient[] => {
     familyGroups[parentEmail].familyPatients.push(patient);
   }
 
+  // Old displayNames logic (will not use), but keeping just for shape
   Object.values(familyGroups).forEach(family => {
-    // REPLACE displayNames WITH linked children names/id
     family.displayNames = family.familyPatients.map(p => {
       const name = p.name || '-';
       const pid = p.patientId || '-';
@@ -217,30 +217,59 @@ type UserRowProps = {
   loggingInUserId?: string | null;
 };
 
+// New: Friendly expanded children list for patient families
+const PatientChildrenList: React.FC<{ familyPatients: any[] }> = ({ familyPatients }) => {
+  if (!Array.isArray(familyPatients) || familyPatients.length === 0) return null;
+
+  // Sort children by patientId or name if you want
+  const sortedChildren = [...familyPatients].sort((a, b) => {
+    if (a.name && b.name) return a.name.localeCompare(b.name);
+    if (a.patientId && b.patientId) return a.patientId.localeCompare(b.patientId);
+    return 0;
+  });
+
+  return (
+    <div>
+      <span className="font-semibold text-blue-600">Children:</span>
+      <ul className="list-disc list-inside pl-3 mt-1 text-xs text-blue-700 space-y-0.5">
+        {sortedChildren.map((child, idx) => (
+          <li key={child.patientId || idx} className="mb-0.5">
+            <a
+              href={`/super-admin/children?patientId=${encodeURIComponent(child.patientId || '')}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline hover:text-blue-900 whitespace-nowrap"
+              style={{ textDecoration: 'underline', fontWeight: 500 }}
+            >
+              {child.name || <span className="italic text-slate-600">Unknown Name</span>}
+            </a>
+            {child.patientId &&
+              <span className="text-gray-600 ml-2 px-1 rounded bg-gray-50 border border-slate-200 font-mono  whitespace-nowrap">
+                ID: {child.patientId}
+              </span>
+            }
+            {child.userId && child.userId.email && (
+              <span className="ml-2 text-purple-600">({child.userId.email})</span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+};
+
 const UserRow = ({
   user,
   onLoginAsUser,
   loggingInUserId,
 }: UserRowProps) => {
   // Determines if family children should be shown
-  const showFamilyChildren = user.fromCollection === 'patients' && user.displayNames;
-
-  // Generate links for patient family children
-  function renderChildrenDisplayNames(htmlString: string) {
-    // Return <span dangerouslySetInnerHTML ...> to interpret string as html links
-    return (
-      <span dangerouslySetInnerHTML={{ __html: htmlString }} />
-    );
-  }
+  const isPatientFamily = user.fromCollection === 'patients';
 
   // For therapists, if available, link name/id
   function renderTherapistName(name: string, user: FlattenedUser) {
-    // Try to find therapistId and therapist _id
-    // const therapistId = user.shortId || '';
-    // therapistRaw._id most reliable for therapist document id
     const therapistRaw = user.therapistRaw || {};
     const therapistObjId = therapistRaw._id || user._id || '';
-
     if (therapistObjId) {
       return (
         <a
@@ -261,7 +290,6 @@ const UserRow = ({
   function renderTherapistShortId(shortId: string, user: FlattenedUser) {
     const therapistRaw = user.therapistRaw || {};
     const therapistObjId = therapistRaw._id || user._id || '';
-
     if (therapistObjId && shortId) {
       return (
         <a
@@ -278,45 +306,42 @@ const UserRow = ({
     return shortId;
   }
 
-  // For patients (families), link children id
-  function renderPatientShortId(shortId: string, user: FlattenedUser) {
-    // Maybe multiple IDs, comma separated
-    if (!shortId) return null;
-    if (user.fromCollection !== "patients") return shortId;
-    // familyPatients: [{ patientId }]
-    const ids = shortId.split(/\s*,\s*/);
-    const familyPatients = Array.isArray(user.familyPatients) ? user.familyPatients : [];
+  // For patients (families), link children id(s) as user-friendly badges
+  function renderPatientShortIds(user: FlattenedUser) {
+    if (!user.shortId) return null;
+    if (user.fromCollection !== "patients") return user.shortId;
 
+    // familyPatients: [{ patientId }]
+    const familyPatients = Array.isArray(user.familyPatients) ? user.familyPatients : [];
+    if (familyPatients.length === 0) {
+      // fallback to previous logic
+      return (user.shortId || user._id);
+    }
+
+    // Render as a group of badges
     return (
-      <>
-        {ids.map((id, idx) => {
-          // Find actual patient object for this id, fallback just link with id
-          let patientObj = familyPatients.find((p: any) => ('' + p.patientId) === ('' + id));
-          if (!patientObj && familyPatients.length === 1) patientObj = familyPatients[0];
-          // Could be "-" if missing id
-          if (!id || id === "-") {
-            return <span key={id + idx}>-</span>;
-          }
-          return (
+      <div className="flex flex-wrap gap-1">
+        {familyPatients.map((child: any, idx: number) => {
+          const pid = child.patientId || "-";
+          return pid === "-" ? (
+            <span key={pid + idx} className="bg-gray-200 text-gray-600 rounded px-2 py-0.5 text-xs font-mono">
+              -
+            </span>
+          ) : (
             <a
-              key={id + idx}
-              href={`/super-admin/children?patientId=${encodeURIComponent(id)}`}
+              key={pid + idx}
+              href={`/super-admin/children?patientId=${encodeURIComponent(pid)}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-blue-700 underline hover:text-blue-900"
-              style={{ textDecoration: 'underline', marginRight: '0.25em' }}
+              className="bg-blue-50 border border-blue-200 rounded px-2 py-0.5 text-xs font-bold text-blue-700 hover:text-blue-900 font-mono underline"
+              style={{ display: "inline-block" }}
+              title="View child profile"
             >
-              {id}
+              {pid}
             </a>
           );
-        }).reduce<React.ReactNode[]>((acc, curr, i) => {
-          if (acc.length > 0) {
-            acc.push(<span key={`comma-${i}`}>, </span>);
-          }
-          acc.push(curr);
-          return acc;
-        }, [])}
-      </>
+        })}
+      </div>
     );
   }
 
@@ -329,8 +354,8 @@ const UserRow = ({
         <div className="flex items-center gap-2">
           <FiHash className="text-blue-400" />
           {/* User ID - LINK if patient/therapist */}
-          {user.fromCollection === "patients"
-            ? renderPatientShortId(user.shortId, user)
+          {isPatientFamily
+            ? renderPatientShortIds(user)
             : user.fromCollection === "therapists"
             ? renderTherapistShortId(user.shortId, user)
             : <span>{user.shortId || user._id}</span>
@@ -347,16 +372,14 @@ const UserRow = ({
               : user.name
             }
           </div>
-          {showFamilyChildren && (
-            <div className="text-xs mt-1 text-blue-500 font-mono">
-              <span>
-                Children:&nbsp;
-                {renderChildrenDisplayNames(user.displayNames)}
-              </span>
+          {isPatientFamily && Array.isArray(user.familyPatients) && user.familyPatients.length > 0 && (
+            <div className="text-sm mt-1 font-normal text-blue-800">
+              <PatientChildrenList familyPatients={user.familyPatients} />
             </div>
           )}
         </div>
       </TableCell>
+      {/* Modified Email+Phone Column */}
       <TableCell>
         <div className="flex flex-col">
           <div className="flex items-center gap-2">
@@ -368,6 +391,11 @@ const UserRow = ({
               Parent Email: {user.parentEmail}
             </div>
           )}
+          {/* Phone details (add always if available) */}
+          <div className="flex items-center gap-2 mt-1">
+            <FiPhone className="text-green-600" />
+            <span className="font-mono text-xs">{user.phone || '-'}</span>
+          </div>
         </div>
       </TableCell>
       <TableCell>
@@ -410,6 +438,7 @@ const UserRow = ({
           {user.fromCollection}
         </span>
       </TableCell>
+      {/* Remove phone column cell
       <TableCell>
         <div className="flex flex-col">
           <div className="flex items-center gap-2">
@@ -423,6 +452,7 @@ const UserRow = ({
           )}
         </div>
       </TableCell>
+      */}
       <TableCell>
         <button
           className="flex items-center gap-1 px-2.5 py-1.5 rounded bg-blue-100 text-blue-700 border border-blue-200 hover:bg-blue-200 hover:text-blue-900 text-xs font-semibold transition disabled:opacity-60 disabled:cursor-not-allowed"
@@ -473,7 +503,7 @@ const AllUsers: React.FC<AllUsersProps> = () => {
           limit: pageSize,
         };
         // ALWAYS send type for filtering, "all" as "all"
-        params.role = activeRole; // here, send patients, therapist, admin or all as role, per controller convention
+        params.role = activeRole;
         if (search) params.search = search;
 
         const res = await axios.get(`${API_BASE}/api/super-admin/users`, {
@@ -622,16 +652,13 @@ const AllUsers: React.FC<AllUsersProps> = () => {
     }
   };
 
-  // pagination etc
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
-  // Defensive: invalidate page if exceeding
   useEffect(() => {
     if (page > totalPages) setPage(1);
     // eslint-disable-next-line
   }, [totalPages]);
 
-  // Reset to first page on search/role/pageSize change
   useEffect(() => {
     setPage(1);
   }, [activeRole, pageSize, search]);
@@ -715,12 +742,14 @@ const AllUsers: React.FC<AllUsersProps> = () => {
               </TableHeadCell>
               <TableHeadCell>
                 {activeRole === 'patients'
-                  ? 'Parent/Child Email'
-                  : 'Email'}
+                  ? 'Parent/Child Email & Phone'
+                  : 'Email & Phone'}
               </TableHeadCell>
               <TableHeadCell>Role</TableHeadCell>
               <TableHeadCell>Type</TableHeadCell>
+              {/* Remove Phone Column
               <TableHeadCell>Phone</TableHeadCell>
+              */}
               <TableHeadCell>
                 <span className="flex items-center gap-1 justify-center">
                   <FiLogIn className="mb-0.5" />
@@ -732,19 +761,19 @@ const AllUsers: React.FC<AllUsersProps> = () => {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={7} className="py-6 text-center text-blue-600 font-medium">
+                <td colSpan={6} className="py-6 text-center text-blue-600 font-medium">
                   Loading users...
                 </td>
               </tr>
             ) : error ? (
               <tr>
-                <td colSpan={7} className="py-6 text-center text-red-600 font-semibold">
+                <td colSpan={6} className="py-6 text-center text-red-600 font-semibold">
                   {error}
                 </td>
               </tr>
             ) : users.length === 0 ? (
               <tr>
-                <td colSpan={7} className="py-6 text-center text-slate-500">
+                <td colSpan={6} className="py-6 text-center text-slate-500">
                   No{" "}
                   {activeRole === "all"
                     ? "users"

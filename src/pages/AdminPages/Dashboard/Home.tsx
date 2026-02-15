@@ -76,6 +76,14 @@ function dateToIso(date?: Date): string {
   return `${y}-${m}-${d}`;
 }
 
+// Format date from yyyy-mm-dd to dd/mm/yyyy
+function formatDateDDMMYYYY(iso: string): string {
+  if (!iso) return "";
+  const parts = iso.split("-");
+  if (parts.length !== 3) return iso;
+  return `${parts[2]}/${parts[1]}/${parts[0]}`;
+}
+
 // Helper to calculate date difference in days
 function dateDiffInDays(a: string, b: string) {
   const d1 = new Date(a);
@@ -249,12 +257,15 @@ export default function AdminDashboardHome() {
     return data.filter((d) => d.date >= startDate && d.date <= endDate);
   }
 
+  // Decorate session data with "displayDate" for frontend (DD/MM/YYYY)
   const mergedSessionDataRaw = buildMergedSessionData(
     dashboardData?.sessionsCompletedPerDay,
     dashboardData?.sessionScheduledPerDay
   );
-
-  const mergedSessionData = filterMergedSessionDataByDate(mergedSessionDataRaw);
+  const mergedSessionData = filterMergedSessionDataByDate(mergedSessionDataRaw).map((item) => ({
+    ...item,
+    displayDate: formatDateDDMMYYYY(item.date),
+  }));
 
   const bookingsPerDayRaw =
     dashboardData?.bookingsCreatedPerDay?.map(({ date, bookingsCreated }) => ({
@@ -262,9 +273,13 @@ export default function AdminDashboardHome() {
       value: bookingsCreated,
     })) ?? [];
 
+  // Also decorate bookings per day with displayDate
   const bookingsPerDay = filterBookingsPerDayByDate(
     bookingsPerDayRaw.filter((b): b is { date: string; value: number } => typeof b.value === 'number')
-  );
+  ).map((item) => ({
+    ...item,
+    displayDate: formatDateDDMMYYYY(item.date),
+  }));
 
   function StatusCircle({ value }: { value: any }) {
     const numValue = getValueAsNumber(value);
@@ -369,7 +384,8 @@ export default function AdminDashboardHome() {
                   className="border border-gray-300 rounded px-2 py-1 min-w-[110px] text-left bg-white"
                   onClick={() => setShowStartCal((s) => !s)}
                 >
-                  {startDate}
+                  {/* Display startDate in DD/MM/YYYY */}
+                  {formatDateDDMMYYYY(startDate)}
                 </button>
                 {/* Calendar for "from" */}
                 {showStartCal && (
@@ -413,7 +429,8 @@ export default function AdminDashboardHome() {
                   className="border border-gray-300 rounded px-2 py-1 min-w-[110px] text-left bg-white"
                   onClick={() => setShowEndCal((s) => !s)}
                 >
-                  {endDate}
+                  {/* Display endDate in DD/MM/YYYY */}
+                  {formatDateDDMMYYYY(endDate)}
                 </button>
                 {/* Calendar for "to" */}
                 {showEndCal && (
@@ -458,12 +475,13 @@ export default function AdminDashboardHome() {
                 <div className="h-64 w-full">
                   <ResponsiveContainer width="100%" height={260}>
                     <BarChart
+                      // Use mergedSessionData with displayDate for X axis
                       data={mergedSessionData}
                       margin={{ top: 16, right: 24, left: 8, bottom: 32 }}
                     >
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis
-                        dataKey="date"
+                        dataKey="displayDate"
                         angle={-40}
                         textAnchor="end"
                         height={60}
@@ -471,7 +489,14 @@ export default function AdminDashboardHome() {
                         tick={{ fontSize: 12 }}
                       />
                       <YAxis allowDecimals={false} />
-                      <Tooltip />
+                      <Tooltip 
+                        labelFormatter={(label) => {
+                          // Show "Date: DD/MM/YYYY" on hover
+                          return typeof label === 'string' || typeof label === 'number'
+                            ? `Date: ${label}`
+                            : '';
+                        }}
+                      />
                       <Legend />
                       <Bar
                         dataKey="sessionsCompleted"
@@ -490,17 +515,19 @@ export default function AdminDashboardHome() {
                 </div>
               </div>
               {/* Bookings Created Per Day */}
-              <div className="bg-white rounded-xl border shadow p-5">
+              <div className="bg-white rounded-xl border shadow p-5 w-full">
                 <h2 className="font-semibold text-lg mb-2">
                   Bookings Created Per Day
                 </h2>
-                <div className="h-64 w-full overflow-x-auto">
-                  <div style={{ minWidth: Math.max(600, bookingsPerDay.length * 50) }}>
+                <div className="h-64 w-full ">
+                  <div className="w-full">
                     <ResponsiveContainer width="100%" height={260}>
-                      <LineChart data={bookingsPerDay}>
+                      <LineChart 
+                        data={bookingsPerDay}
+                      >
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis
-                          dataKey="date"
+                          dataKey="displayDate"
                           angle={-40}
                           textAnchor="end"
                           height={60}
@@ -508,7 +535,14 @@ export default function AdminDashboardHome() {
                           tick={{ fontSize: 12 }}
                         />
                         <YAxis allowDecimals={false} />
-                        <Tooltip />
+                        <Tooltip
+                          labelFormatter={(label) => {
+                            // Show "Date: DD/MM/YYYY" on hover
+                            return typeof label === 'string' || typeof label === 'number'
+                              ? `Date: ${label}`
+                              : '';
+                          }}
+                        />
                         <Line
                           type="monotone"
                           dataKey="value"

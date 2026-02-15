@@ -75,6 +75,29 @@ type UpcomingSession = {
 
 const API_URL = import.meta.env.VITE_API_URL;
 
+// Helper to format date string as DD/MM/YYYY
+function formatDateDDMMYYYY(dateStr: string): string {
+  if (!dateStr) return "";
+  // Accepts YYYY-MM-DD, or YYYY/MM/DD, also fallback.
+  const match = dateStr.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
+  if (match) {
+    const [, yyyy, mm, dd] = match;
+    // Pad mm and dd to 2 digits as needed
+    const pad = (n: string) => n.length === 1 ? "0" + n : n;
+    return `${pad(dd)}/${pad(mm)}/${yyyy}`;
+  }
+  // Try to parse as Date object
+  const d = new Date(dateStr);
+  if (!isNaN(d.getTime())) {
+    // Date valid
+    const day = ("0" + d.getDate()).slice(-2);
+    const month = ("0" + (d.getMonth() + 1)).slice(-2);
+    return `${day}/${month}/${d.getFullYear()}`;
+  }
+  // As a fallback, just return original string
+  return dateStr;
+}
+
 export default function AllUpcomingSessions() {
   const [loading, setLoading] = useState(true);
   // const [guideOpen, setGuideOpen] = useState(false);
@@ -235,7 +258,7 @@ export default function AllUpcomingSessions() {
         <h1 className="text-2xl font-bold text-slate-800">
           All Sessions{" "}
           <span className="text-slate-400">
-            – {(shownDate && `Date: ${shownDate}`) || ""}
+            – {(shownDate && `Date: ${formatDateDDMMYYYY(shownDate)}`) || ""}
           </span>
         </h1>
       </div>
@@ -372,9 +395,9 @@ export default function AllUpcomingSessions() {
                           <span className="font-mono" title={s.session._id}>{s.session.sessionId}</span>
                         </td>
                         <td className="py-2 px-2">
-                          <span className="font-mono">{s.session.date}</span>
+                          <span className="font-mono">{formatDateDDMMYYYY(s.session.date)}</span>
                         </td>
-                        <td className="py-2 px-2">
+                        <td className="py-2 px-2 whitespace-nowrap">
                           <span>
                             {getSessionTimeLabel(s.session)}
                           </span>

@@ -17,11 +17,9 @@ import {
   FiSearch,
   FiChevronLeft,
   FiChevronRight,
-  FiCalendar,
 } from "react-icons/fi";
-import DatePicker from "react-date-picker";
-import "react-date-picker/dist/DatePicker.css";
-import "react-calendar/dist/Calendar.css";
+import ReactDatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "";
 
@@ -45,15 +43,17 @@ const appointmentTimes = [
   "05:00 PM",
 ];
 
+// Added leadId (not optional) to Lead, but left it as optional for backward compatibility
+// Should be string (may be empty string if not present), but always added by API mapping
 type Lead = {
   id: string;
+  leadId: string; // always present ("" if missing); not optional for clarity
   parent: string;
   child: string;
   phone: string;
   email: string;
   status: string;
   actions: string[];
-  leadId?: string;
   callDate?: string;
   staff?: string;
   staffOther?: string;
@@ -68,6 +68,7 @@ type Lead = {
   appointmentDate?: string;
   appointmentTime?: string;
   remarks?: string;
+  followUpDate?: string;
 };
 
 type LeadsApiResponse = {
@@ -162,8 +163,6 @@ function FilterSearchBar({
   );
 }
 
-// --- Pagination implementation and table ---
-// (Unchanged: Keep logic as is.)
 function LeadsTableSection({
   search,
   filters,
@@ -205,35 +204,38 @@ function LeadsTableSection({
         if (ignore) return;
         const uiLeads: Lead[] = Array.isArray(data.leads)
           ? data.leads.map((lead: any) => ({
-            id: lead._id,
-            leadId: lead.leadId || "",
-            parent: lead.parentName,
-            child: lead.childName,
-            phone: lead.parentMobile,
-            email: lead.parentEmail,
-            status: lead.status,
-            actions: [],
-            callDate: lead.callDate
-              ? new Date(lead.callDate).toISOString().slice(0, 16)
-              : "",
-            staff: lead.staff || "",
-            staffOther: lead.staffOther || "",
-            referralSource: lead.referralSource || "",
-            parentRelationship: lead.parentRelationship || "",
-            parentArea: lead.parentArea || "",
-            childDOB: lead.childDOB
-              ? new Date(lead.childDOB).toISOString().slice(0, 10)
-              : "",
-            childGender: lead.childGender || "",
-            therapistAlready: lead.therapistAlready || "",
-            diagnosis: lead.diagnosis || "",
-            visitFinalized: lead.visitFinalized || "",
-            appointmentDate: lead.appointmentDate
-              ? new Date(lead.appointmentDate).toISOString().slice(0, 10)
-              : "",
-            appointmentTime: lead.appointmentTime || "",
-            remarks: lead.remarks || "",
-          }))
+              id: lead._id,
+              leadId: lead.leadId || "",
+              parent: lead.parentName,
+              child: lead.childName,
+              phone: lead.parentMobile,
+              email: lead.parentEmail,
+              status: lead.status,
+              actions: [],
+              callDate: lead.callDate
+                ? new Date(lead.callDate).toISOString().slice(0, 16)
+                : "",
+              staff: lead.staff || "",
+              staffOther: lead.staffOther || "",
+              referralSource: lead.referralSource || "",
+              parentRelationship: lead.parentRelationship || "",
+              parentArea: lead.parentArea || "",
+              childDOB: lead.childDOB
+                ? new Date(lead.childDOB).toISOString().slice(0, 10)
+                : "",
+              childGender: lead.childGender || "",
+              therapistAlready: lead.therapistAlready || "",
+              diagnosis: lead.diagnosis || "",
+              visitFinalized: lead.visitFinalized || "",
+              appointmentDate: lead.appointmentDate
+                ? new Date(lead.appointmentDate).toISOString().slice(0, 10)
+                : "",
+              appointmentTime: lead.appointmentTime || "",
+              remarks: lead.remarks || "",
+              followUpDate: lead.followUpDate
+                ? new Date(lead.followUpDate).toISOString().slice(0, 10)
+                : "",
+            }))
           : [];
         setLeads(uiLeads);
         setTotal(data.total || 0);
@@ -317,6 +319,7 @@ function LeadsTableSection({
             },
         body: JSON.stringify({
           ...lead,
+          followUpDate:"",
           status: "converted",
         }),
       });
@@ -516,13 +519,14 @@ function LeadsTableSection({
                 <th className="px-4 py-3 text-left font-medium">Contact</th>
                 <th className="px-4 py-3 text-left font-medium">Status</th>
                 <th className="px-4 py-3 text-left font-medium">Remarks</th>
+                <th className="px-4 py-3 text-left font-medium">Follow-up Date</th>
                 <th className="px-4 py-3 text-right font-medium">Actions</th>
               </tr>
             </thead>
             <tbody>
               {leads.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center text-slate-400">
+                  <td colSpan={8} className="px-4 py-12 text-center text-slate-400">
                     No leads found.
                   </td>
                 </tr>
@@ -548,6 +552,20 @@ function LeadsTableSection({
                     {lead.remarks && lead.remarks.trim() !== "" ? (
                       <span className="block text-slate-700 break-words whitespace-pre-line">
                         {lead.remarks}
+                      </span>
+                    ) : (
+                      <span className="block text-slate-400 italic">—</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-4">
+                    {lead.followUpDate && lead.followUpDate.trim() !== "" ? (
+                      <span className="block text-slate-700 break-words whitespace-pre-line">
+                        {(() => {
+                          const d = new Date(lead.followUpDate);
+                          return isNaN(d.getTime())
+                            ? lead.followUpDate
+                            : d.toLocaleDateString();
+                        })()}
                       </span>
                     ) : (
                       <span className="block text-slate-400 italic">—</span>
@@ -589,7 +607,6 @@ function useLeadFormFields(reloadVal: number = 0) {
         });
         if (!res.ok) throw new Error("Failed to fetch form fields");
         const data = await res.json();
-        // Data format: { success: true, fields: { staffMembers: [], findUsOptions: [], relationships: [], pincodes: [] } }
         if (!cancelled && data.success && data.fields) {
           setStaffMembers(Array.isArray(data.fields.staffMembers) && data.fields.staffMembers.length > 0
             ? [...data.fields.staffMembers, "Other"]
@@ -628,6 +645,8 @@ function useLeadFormFields(reloadVal: number = 0) {
   return { staffMembers, findUsOptions, relationships, pincodes, loading, error };
 }
 
+// We need to track the database/document id for edit functionality
+// We'll add an extra state to track the current DB id for edit
 export default function ConsultationsLeads() {
   const [guideOpen, setGuideOpen] = useState(false);
 
@@ -662,30 +681,24 @@ export default function ConsultationsLeads() {
     appointmentTime: "",
     remarks: "",
     status: "pending",
+    followUpDate: "",
+    leadId: "", // allow storing leadId in form for edit modal
   });
 
-  const [editingLeadId, setEditingLeadId] = useState<string | null>(null);
+  // Now we need to track both the DB id (_id/id) for API update and the leadId shown (for display only)
+  const [editingLeadDbId, setEditingLeadDbId] = useState<string | null>(null); // _id from DB for PUT endpoint param
+  const [editingLeadId, setEditingLeadId] = useState<string | null>(null); // for UI display (leadId or fallback to id)
 
   const parentNameRef = useRef<HTMLInputElement | null>(null);
-
-  const [showCallDateCalendar, setShowCallDateCalendar] = useState(false);
-  const [showChildDOBCalendar, setShowChildDOBCalendar] = useState(false);
-  const [showAppointmentDateCalendar, setShowAppointmentDateCalendar] = useState(false);
 
   // Additional validation error state
   const [formErrors, setFormErrors] = useState<{[k: string]: string}>({});
 
-  //------------- START MOD: Refresh Form Fields on Add -------------
-
-  // Add a reload counter for the form fields
   const [formFieldsReload, setFormFieldsReload] = useState(0);
-
-  // Expose a reloadFormFields function for easy refresh
   const reloadFormFields = useCallback(() => {
     setFormFieldsReload(val => val + 1);
   }, []);
 
-  // Use updated hook
   const {
     staffMembers,
     findUsOptions,
@@ -695,18 +708,18 @@ export default function ConsultationsLeads() {
     error: metaError,
   } = useLeadFormFields(formFieldsReload);
 
-  //------------- END MOD -------------
-
   useEffect(() => {
-    if (enqModalOpen && !editingLeadId) {
+    if (enqModalOpen && !editingLeadDbId) {
       setEnqForm((prev) => ({
         ...prev,
         callDate: new Date().toISOString().slice(0, 16),
         status: "pending",
+        followUpDate: "",
+        leadId: "",
       }));
       setFormErrors({});
     }
-  }, [enqModalOpen, editingLeadId]);
+  }, [enqModalOpen, editingLeadDbId]);
 
   useEffect(() => {
     if (enqModalOpen && parentNameRef.current) {
@@ -714,7 +727,6 @@ export default function ConsultationsLeads() {
     }
   }, [enqModalOpen]);
 
-  // --- Autocomplete dropdown helpers
   function buildDropdownField(options: string[], value: string, otherValue: string, name: string, otherName: string, label: string, placeholder: string, required: boolean, disabled: boolean, onMainChange: (val: string) => void, onOtherChange: (val: string) => void) {
     return (
       <div>
@@ -726,7 +738,6 @@ export default function ConsultationsLeads() {
           onChange={e => {
             const vf = e.target.value;
             onMainChange(vf);
-            // If Other, show other input; else clear other
             if (vf !== "Other") onOtherChange("");
           }}
           required={required}
@@ -752,23 +763,17 @@ export default function ConsultationsLeads() {
     );
   }
 
-  // Validation helpers
+  // Validation helpers - same as previous
   function validateForm() {
     const errs: {[key: string]: string} = {};
-
-    // Phone 10 digit, no +91
     if(!/^[0-9]{10}$/.test(enqForm.parentMobile.trim())) {
       errs.parentMobile = "Enter a valid 10-digit phone number (without country code)";
     }
-
-    // Pincode numeric and 6 digits if selected (either from dropdown or free field)
     const pincodeValue =
       enqForm.parentArea === "Other" ? enqForm.parentAreaOther.trim() : enqForm.parentArea.trim();
     if (!/^\d{6}$/.test(pincodeValue)) {
       errs.parentArea = "Enter a valid 6-digit pincode";
     }
-
-    // DOB < today
     if (enqForm.childDOB) {
       const today = new Date();
       today.setHours(0,0,0,0);
@@ -779,8 +784,6 @@ export default function ConsultationsLeads() {
         errs.childDOB = "Date of birth must be before today";
       }
     }
-
-    // Appointment Date > today (if exists)
     if (enqForm.appointmentDate) {
       const today = new Date();
       today.setHours(0,0,0,0);
@@ -791,7 +794,16 @@ export default function ConsultationsLeads() {
         errs.appointmentDate = "Appointment date must be after today";
       }
     }
-
+    if (enqForm.followUpDate) {
+      const today = new Date();
+      today.setHours(0,0,0,0);
+      const fup = new Date(enqForm.followUpDate);
+      if (isNaN(fup.getTime())) {
+        errs.followUpDate = "Select a valid follow-up date";
+      } else if (fup <= today) {
+        errs.followUpDate = "Follow-up date must be after today";
+      }
+    }
     return errs;
   }
 
@@ -800,7 +812,6 @@ export default function ConsultationsLeads() {
     const validationErrors = validateForm();
     setFormErrors(validationErrors);
     if (Object.keys(validationErrors).length > 0) {
-      // Do not submit
       return;
     }
 
@@ -817,11 +828,13 @@ export default function ConsultationsLeads() {
           parentRelationship: relationshipOut,
           parentArea: parentAreaOut,
           status: enqForm.status || "pending",
+          followUpDate: enqForm.followUpDate || "",
         };
 
         let res;
-        if (editingLeadId) {
-          res = await fetch(`${API_BASE_URL}/api/admin/leads/${editingLeadId}`, {
+        if (editingLeadDbId) {
+          // Always use the DB id (_id/id), not leadId, for the edit API param
+          res = await fetch(`${API_BASE_URL}/api/admin/leads/${editingLeadDbId}`, {
             method: "PUT",
             headers: { 
               "Content-Type": "application/json",
@@ -842,8 +855,6 @@ export default function ConsultationsLeads() {
             body: JSON.stringify(payload),
           });
           if (!res.ok) throw new Error("Failed to submit lead");
-
-          // MOD: After adding, reload form field options (in case new staff/area etc were added)
           reloadFormFields();
         }
         setParentRefreshFlag((f) => !f);
@@ -851,7 +862,7 @@ export default function ConsultationsLeads() {
         handleModalClose();
       } catch (error) {
         alert(
-          editingLeadId
+          editingLeadDbId
             ? "Failed to update lead. Please try again."
             : "Failed to create lead. Please try again."
         );
@@ -884,14 +895,15 @@ export default function ConsultationsLeads() {
       appointmentTime: "",
       remarks: "",
       status: "pending",
+      followUpDate: "",
+      leadId: "",
     });
+    setEditingLeadDbId(null);
     setEditingLeadId(null);
-    setShowCallDateCalendar(false);
-    setShowChildDOBCalendar(false);
-    setShowAppointmentDateCalendar(false);
     setFormErrors({});
   }
 
+  // When Edit: track both db id (for API), and display leadId (or fallback to id)
   function handleEditModalOpen(lead: Lead) {
     const staffChoices = staffMembers.length ? staffMembers : ["Other"];
     const relationshipChoices = relationships.length ? relationships : ["Other"];
@@ -899,7 +911,12 @@ export default function ConsultationsLeads() {
     const pincodeChoices = pincodes.length ? pincodes : ["Other"];
 
     setEnqModalOpen(true);
-    setEditingLeadId(lead.id);
+
+    // editingLeadDbId: Always use the MONGO _id/id for edit API (for the PUT param)
+    setEditingLeadDbId(lead.id);
+
+    // editingLeadId: for display (show leadId if available, fallback to DB id)
+    setEditingLeadId(lead.leadId && lead.leadId !== "" ? lead.leadId : lead.id);
 
     const staffIsInOptions = staffChoices.includes(lead.staff ?? "");
     const relIsInOptions = relationshipChoices.includes(lead.parentRelationship ?? "");
@@ -929,9 +946,33 @@ export default function ConsultationsLeads() {
       appointmentTime: lead.appointmentTime || "",
       remarks: lead.remarks || "",
       status: lead.status || "pending",
+      followUpDate: lead.followUpDate || "",
+      leadId: lead.leadId || "", // Store for putting in the form, so submit handler can use
     });
     setFormErrors({});
   }
+
+  // Helper to parse string date -> Date object, gracefully handling empty string/invalid
+  function parseISODate(val?: string): Date | null {
+    if (!val) return null;
+    const d = new Date(val);
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  // Today's/next day's date strings for disables/mins, but now as JS Dates
+  const todayDate = (() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  })();
+  const tomorrowDate = (() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() + 1);
+    return d;
+  })();
+
+  // ------- Modified Date/DateTime input using react-datepicker -----------
 
   function CalendarInput({
     label,
@@ -941,105 +982,43 @@ export default function ConsultationsLeads() {
     placeholder,
     required,
     disabled,
-    showCalendar,
-    setShowCalendar,
     min,
     max,
   }: {
     label: string;
     name: string;
     value: string;
-    onChange: (e: React.ChangeEvent<HTMLInputElement> | Date) => void;
+    onChange: (e: { target: { name: string; value: string } }) => void;
     placeholder?: string;
     required?: boolean;
     disabled?: boolean;
-    readOnly?: boolean;
-    showCalendar: boolean;
-    setShowCalendar: (b: boolean) => void;
-    min?: string | Date;
-    max?: string | Date;
+    min?: Date;
+    max?: Date;
   }) {
-    const parsedValue = value && /^\d{4}-\d{2}-\d{2}$/.test(value)
-      ? new Date(value + "T12:00:00")
-      : null;
-    useEffect(() => {}, []);
     return (
       <div style={{ position: "relative" }}>
         <label className="block text-xs font-semibold text-slate-600 mb-1">
           {label}
         </label>
-        <div className="relative">
-          <input
-            type="text"
-            className="w-full border px-3 py-2 rounded bg-white cursor-pointer"
-            name={name}
-            value={value}
-            placeholder={placeholder}
-            readOnly
-            required={required}
-            disabled={disabled}
-            onFocus={() => setShowCalendar(true)}
-            onClick={() => setShowCalendar(true)}
-            style={{ paddingRight: "2rem" }}
-            autoComplete="off"
-          />
-          <button
-            type="button"
-            className="absolute top-1/2 -translate-y-1/2 right-2 text-slate-400 hover:text-blue-700 focus:outline-none"
-            tabIndex={-1}
-            onClick={() => setShowCalendar(true)}
-            aria-label="Show calendar"
-          >
-            <FiCalendar />
-          </button>
-          <div style={{
-            position: "absolute",
-            left: 0,
-            zIndex: 20,
-            background: "white",
-            boxShadow: "0 4px 20px rgba(0,0,0,.08)",
-            borderRadius: "8px",
-            marginTop: "4px"
-          }}>
-            <AnimatePresence>
-              {showCalendar && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10, scale: 0.96 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 10, scale: 0.96 }}
-                  transition={{ duration: 0.14 }}
-                >
-                  <DatePicker
-                    value={parsedValue}
-                    onChange={(value: any) => {
-                      let selectedDate: Date | null = null;
-                      if (value instanceof Date) selectedDate = value;
-                      else if (typeof value === "string" && value) {
-                        selectedDate = new Date(value);
-                        if (isNaN(selectedDate.getTime())) selectedDate = null;
-                      } else if (Array.isArray(value) && value[0] instanceof Date) {
-                        selectedDate = value[0];
-                      }
-
-                      if (selectedDate) {
-                        const iso = selectedDate.toISOString().slice(0, 10);
-                        onChange({
-                          target: { name, value: iso }
-                        } as any);
-                      }
-                      setShowCalendar(false);
-                    }}
-                    onCalendarClose={() => setShowCalendar(false)}
-                    calendarIcon={null}
-                    clearIcon={null}
-                    minDate={min ? (typeof min === "string" ? new Date(min) : min) : undefined}
-                    maxDate={max ? (typeof max === "string" ? new Date(max) : max) : undefined}
-                  />
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        </div>
+        <ReactDatePicker
+          selected={parseISODate(value)}
+          onChange={(date: Date | null) => {
+            const v = date instanceof Date && !isNaN(date.getTime())
+              ? date.toISOString().slice(0, 10)
+              : "";
+            onChange({ target: { name, value: v } });
+          }}
+          minDate={min}
+          maxDate={max}
+          disabled={disabled}
+          required={required}
+          placeholderText={placeholder}
+          className="w-full border px-3 py-2 rounded bg-white"
+          dateFormat="yyyy-MM-dd"
+          showPopperArrow={false}
+          autoComplete="off"
+          isClearable
+        />
         {formErrors && formErrors[name] && (
           <div className="text-xs text-red-600 mt-1">{formErrors[name]}</div>
         )}
@@ -1052,94 +1031,68 @@ export default function ConsultationsLeads() {
     name,
     value,
     onChange,
-    required,
     disabled,
     readOnly,
-    showCalendar,
-    setShowCalendar,
-    min,
-    max
   }: {
     label: string;
     name: string;
     value: string;
-    onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+    onChange: (e: { target: { name: string; value: string } }) => void;
     required?: boolean;
     disabled?: boolean;
     readOnly?: boolean;
-    showCalendar: boolean;
-    setShowCalendar: (b: boolean) => void;
-    min?: string;
-    max?: string;
   }) {
-    const inputRef = useRef<HTMLInputElement>(null);
-    function formatToReadableDateTime(val: string) {
-      if (!val) return "";
-      const d = new Date(val);
-      if (isNaN(d.getTime())) return val;
-      const opts: Intl.DateTimeFormatOptions = {
-        year: "numeric", month: "short", day: "2-digit",
-        hour: "2-digit", minute: "2-digit"
-      };
-      return d.toLocaleString(undefined, opts);
-    }
+    // Parse value as Date, for "YYYY-MM-DDTHH:mm" or ISO string
+    const parseDateTime = (val: string): Date | null => {
+      if (!val) return null;
+      // Try parsing as local/ISO string
+      let d = new Date(val);
+      if (!isNaN(d.getTime())) return d;
+      return null;
+    };
     return (
       <div style={{ position: "relative" }}>
         <label className="block text-xs font-semibold text-slate-600 mb-1">
           {label}
         </label>
-        {!showCalendar ? (
-          <input
-            type="text"
-            className="w-full border px-3 py-2 rounded cursor-pointer bg-white"
-            name={name}
-            value={formatToReadableDateTime(value)}
-            onFocus={() => setShowCalendar(true)}
-            onClick={() => setShowCalendar(true)}
-            onChange={() => {}}
-            placeholder="Select date & time"
-            required={required}
-            disabled={disabled}
-            readOnly={readOnly}
-            autoComplete="off"
-          />
-        ) : (
-          <input
-            ref={inputRef}
-            type="datetime-local"
-            className="w-full border px-3 py-2 rounded bg-white"
-            name={name}
-            value={value}
-            autoFocus
-            onChange={(e) => {
-              onChange(e);
-              setShowCalendar(false);
-            }}
-            onBlur={() => setTimeout(() => setShowCalendar(false), 150)}
-            min={min}
-            max={max}
-            required={required}
-            disabled={disabled}
-            readOnly={readOnly}
-          />
+        <ReactDatePicker
+          selected={parseDateTime(value)}
+          onChange={(date: Date | null) => {
+            let v = "";
+            if (date instanceof Date && !isNaN(date.getTime())) {
+              // Store as "YYYY-MM-DDTHH:mm"
+              const pad = (n: number) => n.toString().padStart(2, "0");
+              v =
+                date.getFullYear() +
+                "-" +
+                pad(date.getMonth() + 1) +
+                "-" +
+                pad(date.getDate()) +
+                "T" +
+                pad(date.getHours()) +
+                ":" +
+                pad(date.getMinutes());
+            }
+            onChange({ target: { name, value: v } });
+          }}
+          showTimeSelect
+          timeFormat="HH:mm"
+          timeIntervals={15}
+          dateFormat="yyyy-MM-dd HH:mm"
+          timeCaption="Time"
+          disabled={disabled || readOnly}
+          placeholderText="Select date & time"
+          className="w-full border px-3 py-2 rounded bg-white"
+          showPopperArrow={false}
+          autoComplete="off"
+          isClearable
+        />
+        {formErrors && formErrors[name] && (
+          <div className="text-xs text-red-600 mt-1">{formErrors[name]}</div>
         )}
       </div>
     );
   }
-
-  // Today's date for validation disables
-  const todayDateStr = (() => {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    return d.toISOString().slice(0, 10);
-  })();
-
-  const tomorrowDateStr = (() => {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    d.setDate(d.getDate() + 1);
-    return d.toISOString().slice(0, 10);
-  })();
 
   return (
     <motion.div
@@ -1198,11 +1151,12 @@ export default function ConsultationsLeads() {
                       <label className="block text-xs font-semibold text-slate-600 mb-1">
                         Lead ID
                       </label>
+                      {/* Show the actual leadId if present (otherwise fallback to id) */}
                       <input
                         type="text"
                         className="w-full border px-3 py-2 rounded bg-slate-100 text-slate-600"
                         name="leadId"
-                        value={editingLeadId}
+                        value={enqForm.leadId && enqForm.leadId !== "" ? enqForm.leadId : editingLeadId}
                         readOnly
                         disabled
                       />
@@ -1217,8 +1171,6 @@ export default function ConsultationsLeads() {
                         onChange={e => setEnqForm(f => ({ ...f, [e.target.name]: e.target.value }))}
                         readOnly={!!editingLeadId}
                         disabled={!!editingLeadId}
-                        showCalendar={showCallDateCalendar}
-                        setShowCalendar={setShowCallDateCalendar}
                       />
                     </div>
                     <div className="flex-1 mb-2 md:mb-0">
@@ -1356,13 +1308,11 @@ export default function ConsultationsLeads() {
                         onChange={e =>
                           setEnqForm(f => ({
                             ...f,
-                            childDOB: (e as any).target.value,
+                            childDOB: e.target.value,
                           }))
                         }
-                        showCalendar={showChildDOBCalendar}
-                        setShowCalendar={setShowChildDOBCalendar}
                         placeholder="Select date"
-                        max={todayDateStr}
+                        max={todayDate}
                       />
                     </div>
                     <div>
@@ -1434,13 +1384,11 @@ export default function ConsultationsLeads() {
                         onChange={e =>
                           setEnqForm(f => ({
                             ...f,
-                            appointmentDate: (e as any).target.value,
+                            appointmentDate: e.target.value,
                           }))
                         }
-                        showCalendar={showAppointmentDateCalendar}
-                        setShowCalendar={setShowAppointmentDateCalendar}
                         placeholder="Select date"
-                        min={tomorrowDateStr}
+                        min={tomorrowDate}
                       />
                     </div>
                     <div>
@@ -1475,6 +1423,24 @@ export default function ConsultationsLeads() {
                       rows={2}
                     />
                   </div>
+                  <div>
+                    <CalendarInput
+                      label="Follow-up Date"
+                      name="followUpDate"
+                      value={enqForm.followUpDate}
+                      onChange={e =>
+                        setEnqForm(f => ({
+                          ...f,
+                          followUpDate: e.target.value,
+                        }))
+                      }
+                      placeholder="Select follow-up date"
+                      min={tomorrowDate}
+                    />
+                    {formErrors && formErrors.followUpDate && (
+                      <div className="text-xs text-red-600 mt-1">{formErrors.followUpDate}</div>
+                    )}
+                  </div>
                   <input type="hidden" name="status" value={enqForm.status || "pending"} />
                   <div className="flex gap-2 justify-end pt-6">
                     <button
@@ -1503,7 +1469,6 @@ export default function ConsultationsLeads() {
         )}
       </AnimatePresence>
 
-      {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-6">
         <div className="flex items-center gap-2">
           <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
@@ -1514,6 +1479,7 @@ export default function ConsultationsLeads() {
           className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition"
           onClick={() => {
             setEnqModalOpen(true);
+            setEditingLeadDbId(null);
             setEditingLeadId(null);
             setEnqForm({
               callDate: new Date().toISOString().slice(0, 16),
@@ -1538,10 +1504,9 @@ export default function ConsultationsLeads() {
               appointmentTime: "",
               remarks: "",
               status: "pending",
+              followUpDate: "",
+              leadId: "",
             });
-            setShowCallDateCalendar(false);
-            setShowChildDOBCalendar(false);
-            setShowAppointmentDateCalendar(false);
             setFormErrors({});
           }}
         >

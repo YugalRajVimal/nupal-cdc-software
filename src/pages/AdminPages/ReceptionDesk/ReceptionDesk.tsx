@@ -63,6 +63,17 @@ type CollectModalState = {
   payment: PaymentInfo | null
 };
 
+// --- UTILITY: DD/MM/YYYY formatting ---
+function formatDateDDMMYYYY(dateString: string | undefined): string {
+  if (!dateString) return "";
+  // Handle only date portion (YYYY-MM-DD) or full ISO string
+  let d = dateString;
+  if (d.length > 10) d = d.slice(0, 10);
+  const [yyyy, mm, dd] = d.split("-");
+  if (!yyyy || !mm || !dd) return dateString;
+  return `${dd}/${mm}/${yyyy}`;
+}
+
 export default function ReceptionDesk() {
   const [loading, setLoading] = useState(true);
   const [guideOpen, setGuideOpen] = useState(false);
@@ -478,7 +489,7 @@ export default function ReceptionDesk() {
         <h1 className="text-2xl font-bold text-slate-800">
           Reception Desk{" "}
           <span className="text-slate-400">
-            – {today || new Date().toISOString().slice(0, 10)}
+            – {today ? formatDateDDMMYYYY(today) : formatDateDDMMYYYY(new Date().toISOString().slice(0, 10))}
           </span>
         </h1>
       </div>

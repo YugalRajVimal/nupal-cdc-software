@@ -9,7 +9,6 @@ import {
   FiPhone,
   FiCheckCircle,
   FiCalendar,
-  FiDollarSign,
   FiGift,
   FiUserCheck,
   FiChevronRight,
@@ -183,7 +182,7 @@ const AppointmentCard = ({
                     : "bg-slate-200 text-slate-700"
                 }`}
               >
-                <FiDollarSign className="mr-1" /> Payment:{" "}
+                ₹ Payment:{" "}
                 {booking.payment.status}
               </span>
             )}
@@ -431,7 +430,7 @@ const AppointmentCard = ({
             {booking.payment && (
               <div className="bg-green-50 border-green-200 rounded p-2 mt-2 text-xs w-fit">
                 <span className="font-semibold flex items-center text-green-800 gap-2">
-                  <FiDollarSign className="inline" />
+                ₹
                   Payment:&nbsp;{" "}
                   <span className="text-green-700">
                     ₹{booking.payment.amount}
