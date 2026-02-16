@@ -837,7 +837,7 @@ export default function ReceptionDesk() {
                             </span>
                           </span>
                           {(a.status === "checked-in" || a.isCheckedIn) && (
-                            <span className="ml-2 text-green-600 text-xs bg-green-50 rounded px-2 py-0.5 font-semibold">
+                            <span className="ml-2 text-green-600 text-xs bg-green-50 rounded px-2 py-0.5 font-semibold whitespace-nowrap">
                               Session Completed
                             </span>
                           )}
@@ -875,7 +875,7 @@ export default function ReceptionDesk() {
                           Mark Session Completed
                         </button>
                       ) : (
-                        <span className="rounded-md border border-green-500 px-3 py-1.5 text-xs font-semibold text-green-600 bg-green-50">
+                        <span className="rounded-md border border-green-500 px-3 py-1.5 text-xs font-semibold text-green-600 bg-green-50 whitespace-nowrap">
                           Session Completed
                         </span>
                       )}

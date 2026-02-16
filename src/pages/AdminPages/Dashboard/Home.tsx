@@ -26,6 +26,7 @@ interface PerDayStat {
 
 interface DashboardData {
   activeChildren: number;
+  activeParents: number;
   activeTherapists: number;
   totalSessions: number;
   todaysTotalSessions: number;
@@ -93,7 +94,9 @@ function dateDiffInDays(a: string, b: string) {
 }
 
 export default function AdminDashboardHome() {
-  const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
+  const [dashboardData, setDashboardData] = useState<DashboardData | null>(
+    null
+  );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -161,6 +164,50 @@ export default function AdminDashboardHome() {
     const num = typeof val === "string" ? parseInt(val, 10) : val;
     return isNaN(num) ? undefined : num;
   }
+
+  // Path mappings - try to match relevant pages
+  const statCardLinkConfig: Record<string, string | undefined> = {
+    allTimePendingPayments: "/admin/reception-desk",
+    thisMonthsPendingPayments: "/admin/reception-desk",
+    pendingTasks: "/admin/leads-consults",
+    todaysPendingSessions: "/admin/reception-desk",
+  };
+
+  const quickStatsLinkConfig: Record<
+    string,
+    { to: string; colorClass: string }
+  > = {
+    activeTherapists: {
+      to: "/admin/therapists",
+      colorClass: "text-blue-600",
+    },
+    activeParents: {
+      to: "/admin/children",
+      colorClass: "text-green-600",
+    },
+    activeChildren: {
+      to: "/admin/children",
+      colorClass: "text-purple-600",
+    },
+  };
+
+  const systemAlertsLinkConfig: Record<
+    string,
+    { to: string; label: string }
+  > = {
+    pendingBookingRequests: {
+      to: "/admin/booking-requests",
+      label: "Pending Booking Requests",
+    },
+    pendingSessionEditRequests: {
+      to: "/admin/session-edit-requests",
+      label: "Pending Session Edit Requests",
+    },
+    pendingTherapistManualSignUp: {
+      to: "/admin/therapists",
+      label: "Pending Therapist Approvals",
+    },
+  };
 
   const statCardConfig = [
     {
@@ -262,7 +309,9 @@ export default function AdminDashboardHome() {
     dashboardData?.sessionsCompletedPerDay,
     dashboardData?.sessionScheduledPerDay
   );
-  const mergedSessionData = filterMergedSessionDataByDate(mergedSessionDataRaw).map((item) => ({
+  const mergedSessionData = filterMergedSessionDataByDate(
+    mergedSessionDataRaw
+  ).map((item) => ({
     ...item,
     displayDate: formatDateDDMMYYYY(item.date),
   }));
@@ -275,7 +324,9 @@ export default function AdminDashboardHome() {
 
   // Also decorate bookings per day with displayDate
   const bookingsPerDay = filterBookingsPerDayByDate(
-    bookingsPerDayRaw.filter((b): b is { date: string; value: number } => typeof b.value === 'number')
+    bookingsPerDayRaw.filter(
+      (b): b is { date: string; value: number } => typeof b.value === "number"
+    )
   ).map((item) => ({
     ...item,
     displayDate: formatDateDDMMYYYY(item.date),
@@ -327,6 +378,68 @@ export default function AdminDashboardHome() {
     ? "grid grid-cols-1 gap-6 mb-8"
     : "grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8";
 
+  // "Card" wrappers for links: for SSR/client error avoidance, use <a> with href for all cards. 
+  // You can later replace with <Link> if/when router context is ensured.
+  const CardLink = ({
+    href,
+    children,
+    className = "",
+    ...props
+  }: React.PropsWithChildren<{ href: string; className?: string }>) => (
+    <a
+      href={href}
+      className={className + " block hover:bg-blue-50 focus:bg-blue-50 focus:outline-none transition"}
+      tabIndex={0}
+      {...props}
+    >
+      {children}
+    </a>
+  );
+
+  const QuickStatsLink = ({
+    href,
+    children,
+    className,
+    ...props
+  }: React.PropsWithChildren<{ href: string; className?: string }>) => (
+    <a
+      href={href}
+      className={
+        (className || "") +
+        " flex justify-between items-center p-3 hover:bg-opacity-90 focus:bg-opacity-90 focus:outline-none rounded-lg transition"
+      }
+      tabIndex={0}
+      {...props}
+    >
+      {children}
+    </a>
+  );
+
+  const SystemAlertLink = ({
+    href,
+    icon,
+    children,
+    className,
+    ...props
+  }: React.PropsWithChildren<{
+    href: string;
+    icon: React.ReactNode;
+    className?: string;
+  }>) => (
+    <a
+      href={href}
+      className={
+        (className || "") +
+        " p-3 border rounded-lg text-sm flex items-center hover:bg-opacity-90 focus:bg-opacity-90 focus:outline-none transition"
+      }
+      tabIndex={0}
+      {...props}
+    >
+      {icon}
+      <span>{children}</span>
+    </a>
+  );
+
   return (
     <div className="w-full">
       <PageMeta
@@ -346,27 +459,41 @@ export default function AdminDashboardHome() {
           <>
             {/* Top Cards */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-5 mb-8">
-              {statCardConfig.map((card, i) => (
-                <div
-                  key={i}
-                  className={`bg-white rounded-xl border-l-4 ${card.color} p-5 shadow-sm flex items-center`}
-                >
-                  <div className="flex-1">
-                    <h3 className="text-xs font-bold text-red-600 mb-2">
-                      {card.title}
-                    </h3>
-                    <div className="text-2xl font-bold text-gray-800">
-                      {card.value}
+              {statCardConfig.map((card, i) => {
+                const href = statCardLinkConfig[card.key];
+                const cardContent = (
+                  <div className="flex justify-between items-center">
+                    <div className="flex-1 h-full">
+                      <h3 className="text-xs font-bold text-red-600 mb-2">
+                        {card.title}
+                      </h3>
+                      <div className="text-2xl font-bold text-gray-800">
+                        {card.value}
+                      </div>
+                      {card.sub && (
+                        <p className="text-sm text-gray-500 mt-1">
+                          {card.sub}
+                        </p>
+                      )}
                     </div>
-                    {card.sub && (
-                      <p className="text-sm text-gray-500 mt-1">{card.sub}</p>
+                    <div className="flex items-center h-full justify-center ml-2">
+                      <StatusCircle value={card.value} />
+                    </div>
+                  </div>
+                );
+                return (
+                  <div
+                    key={i}
+                    className={`bg-white rounded-xl border-l-4 ${card.color} p-5 shadow-sm flex items-center`}
+                  >
+                    {href ? (
+                      <CardLink href={href}>{cardContent}</CardLink>
+                    ) : (
+                      cardContent
                     )}
                   </div>
-                  <div className="flex items-center h-full justify-center ml-2">
-                    <StatusCircle value={card.value} />
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             <div className="mb-3 flex flex-col md:flex-row md:items-center gap-2 relative">
@@ -393,7 +520,7 @@ export default function AdminDashboardHome() {
                     <DayPicker
                       mode="single"
                       selected={isoToDate(startDate)}
-                      onSelect={d => {
+                      onSelect={(d) => {
                         if (d) {
                           const iso = dateToIso(d);
                           setStartDate(iso);
@@ -404,7 +531,11 @@ export default function AdminDashboardHome() {
                       }}
                       fromDate={minDateObj}
                       toDate={maxDateObj}
-                      disabled={endDate && isoToDate(endDate) ? [{ after: isoToDate(endDate) as Date }] : undefined}
+                      disabled={
+                        endDate && isoToDate(endDate)
+                          ? [{ after: isoToDate(endDate) as Date }]
+                          : undefined
+                      }
                     />
                     <button
                       className="mt-2 text-xs text-blue-600 underline"
@@ -438,7 +569,7 @@ export default function AdminDashboardHome() {
                     <DayPicker
                       mode="single"
                       selected={isoToDate(endDate)}
-                      onSelect={d => {
+                      onSelect={(d) => {
                         if (d) {
                           const iso = dateToIso(d);
                           setEndDate(iso);
@@ -449,7 +580,11 @@ export default function AdminDashboardHome() {
                       }}
                       fromDate={minDateObj}
                       toDate={maxDateObj}
-                      disabled={startDate && isoToDate(startDate) ? [{ before: isoToDate(startDate) as Date }] : undefined}
+                      disabled={
+                        startDate && isoToDate(startDate)
+                          ? [{ before: isoToDate(startDate) as Date }]
+                          : undefined
+                      }
                     />
                     <button
                       className="mt-2 text-xs text-blue-600 underline"
@@ -477,7 +612,12 @@ export default function AdminDashboardHome() {
                     <BarChart
                       // Use mergedSessionData with displayDate for X axis
                       data={mergedSessionData}
-                      margin={{ top: 16, right: 24, left: 8, bottom: 32 }}
+                      margin={{
+                        top: 16,
+                        right: 24,
+                        left: 8,
+                        bottom: 32,
+                      }}
                     >
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis
@@ -489,12 +629,12 @@ export default function AdminDashboardHome() {
                         tick={{ fontSize: 12 }}
                       />
                       <YAxis allowDecimals={false} />
-                      <Tooltip 
+                      <Tooltip
                         labelFormatter={(label) => {
                           // Show "Date: DD/MM/YYYY" on hover
-                          return typeof label === 'string' || typeof label === 'number'
+                          return typeof label === "string" || typeof label === "number"
                             ? `Date: ${label}`
-                            : '';
+                            : "";
                         }}
                       />
                       <Legend />
@@ -522,9 +662,7 @@ export default function AdminDashboardHome() {
                 <div className="h-64 w-full ">
                   <div className="w-full">
                     <ResponsiveContainer width="100%" height={260}>
-                      <LineChart 
-                        data={bookingsPerDay}
-                      >
+                      <LineChart data={bookingsPerDay}>
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis
                           dataKey="displayDate"
@@ -538,9 +676,9 @@ export default function AdminDashboardHome() {
                         <Tooltip
                           labelFormatter={(label) => {
                             // Show "Date: DD/MM/YYYY" on hover
-                            return typeof label === 'string' || typeof label === 'number'
+                            return typeof label === "string" || typeof label === "number"
                               ? `Date: ${label}`
-                              : '';
+                              : "";
                           }}
                         />
                         <Line
@@ -564,19 +702,57 @@ export default function AdminDashboardHome() {
                 <h2 className="font-semibold text-lg mb-4">Quick Stats</h2>
 
                 <div className="space-y-4">
-                  <div className="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
-                    <span>Active Therapists</span>
-                    <span className="font-bold text-blue-600">
-                      {dashboardData?.activeTherapists ?? "--"}
-                    </span>
-                  </div>
-
-                  <div className="flex justify-between items-center p-3 bg-purple-50 rounded-lg">
-                    <span>Active Parents</span>
-                    <span className="font-bold text-purple-600">
-                      {dashboardData?.activeChildren ?? "--"}
-                    </span>
-                  </div>
+                  {([
+                    {
+                      label: "Active Therapists",
+                      value: dashboardData?.activeTherapists ?? "--",
+                      key: "activeTherapists",
+                      href: quickStatsLinkConfig.activeTherapists?.to,
+                      colorClass: quickStatsLinkConfig.activeTherapists?.colorClass,
+                      bgClass: "bg-blue-50",
+                    },
+                    {
+                      label: "Active Parents",
+                      value: dashboardData?.activeParents ?? "--",
+                      key: "activeParents",
+                      href: quickStatsLinkConfig.activeParents?.to,
+                      colorClass: quickStatsLinkConfig.activeParents?.colorClass,
+                      bgClass: "bg-green-50",
+                    },
+                    {
+                      label: "Active Childrens",
+                      value: dashboardData?.activeChildren ?? "--",
+                      key: "activeChildren",
+                      href: quickStatsLinkConfig.activeChildren?.to,
+                      colorClass: quickStatsLinkConfig.activeChildren?.colorClass,
+                      bgClass: "bg-purple-50",
+                    },
+                  ] as const).map((item) => {
+                    const content = (
+                      <>
+                        <span>{item.label}</span>
+                        <span className={`font-bold ${item.colorClass}`}>
+                          {item.value}
+                        </span>
+                      </>
+                    );
+                    return item.href ? (
+                      <QuickStatsLink
+                        key={item.key}
+                        href={item.href}
+                        className={item.bgClass}
+                      >
+                        {content}
+                      </QuickStatsLink>
+                    ) : (
+                      <div
+                        key={item.key}
+                        className={`flex justify-between items-center p-3 rounded-lg ${item.bgClass}`}
+                      >
+                        {content}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -585,24 +761,33 @@ export default function AdminDashboardHome() {
                 <h2 className="font-semibold text-lg mb-4">System Alerts</h2>
 
                 <div className="space-y-3">
-                  <div className="p-3 bg-orange-50 border border-orange-200 rounded-lg text-sm text-orange-700 flex items-center">
-                    <span className="mr-2">⚠</span>
-                    <span>
-                      {dashboardData?.pendingBookingRequests ?? "--"} Pending Booking Requests
-                    </span>
-                  </div>
-                  <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-700 flex items-center">
-                    <span className="mr-2">📝</span>
-                    <span>
-                      {dashboardData?.pendingSessionEditRequests ?? "--"} Pending Session Edit Requests
-                    </span>
-                  </div>
-                  <div className="p-3 bg-purple-50 border border-purple-200 rounded-lg text-sm text-purple-700 flex items-center">
-                    <span className="mr-2">🕑</span>
-                    <span>
-                      {dashboardData?.pendingTherapistManualSignUp ?? "--"} Pending Therapist Approvals
-                    </span>
-                  </div>
+                  {/* Pending Booking Requests */}
+                  <SystemAlertLink
+                    href={systemAlertsLinkConfig.pendingBookingRequests.to}
+                    icon={<span className="mr-2">⚠</span>}
+                    className="bg-orange-50 border-orange-200 text-orange-700"
+                  >
+                    {dashboardData?.pendingBookingRequests ?? "--"}{" "}
+                    {systemAlertsLinkConfig.pendingBookingRequests.label}
+                  </SystemAlertLink>
+                  {/* Pending Session Edit Requests */}
+                  <SystemAlertLink
+                    href={systemAlertsLinkConfig.pendingSessionEditRequests.to}
+                    icon={<span className="mr-2">📝</span>}
+                    className="bg-yellow-50 border-yellow-200 text-yellow-700"
+                  >
+                    {dashboardData?.pendingSessionEditRequests ?? "--"}{" "}
+                    {systemAlertsLinkConfig.pendingSessionEditRequests.label}
+                  </SystemAlertLink>
+                  {/* Pending Therapist Approvals */}
+                  <SystemAlertLink
+                    href={systemAlertsLinkConfig.pendingTherapistManualSignUp.to}
+                    icon={<span className="mr-2">🕑</span>}
+                    className="bg-purple-50 border-purple-200 text-purple-700"
+                  >
+                    {dashboardData?.pendingTherapistManualSignUp ?? "--"}{" "}
+                    {systemAlertsLinkConfig.pendingTherapistManualSignUp.label}
+                  </SystemAlertLink>
                 </div>
               </div>
             </div>

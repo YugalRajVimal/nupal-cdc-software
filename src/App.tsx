@@ -88,6 +88,7 @@ import SuperAdminFullCalendar from "./pages/SuperAdminPages/FullCalendar/SuperAd
 import AllLogs from "./pages/SuperAdminPages/Auditlogs/AllLogs";
 import AllUpcomingSessions from "./pages/AdminPages/ReceptionDesk/AllSessions";
 import TherapistIncomeComparison from "./pages/SuperAdminPages/TherapistIncomeComparison/TherapistIncomeComparison";
+import SuperAdminDashboardHome from "./pages/SuperAdminPages/Dashboard/Home";
 
 
 export default function App() {
@@ -124,7 +125,7 @@ export default function App() {
               8. Audit Logs -> /super-admin/audit-logs
               (Admin custom routes below these, as before...)
             */}
-            <Route index path="/super-admin" element={<SubAdminHome />} />
+            <Route index path="/super-admin" element={<SuperAdminDashboardHome />} />
             <Route path="/super-admin/all-users" element={<AllUsers />} />
             <Route path="/super-admin/all-appointments" element={<AllAppointments />} />
             {/* <Route path="/super-admin/finances" element={<FinancesPage/>} /> */}
