@@ -34,6 +34,11 @@ const navItems: NavItem[] = [
   },
   {
     icon: <FileIcon />,
+    name: "Consultation Booking",
+    path: "/parent/consultation-booking",
+  },
+  {
+    icon: <FileIcon />,
     name: "Request Appointment",
     path: "/parent/request-appointment",
   },
@@ -53,10 +58,16 @@ const navItems: NavItem[] = [
     path: "/parent/invoices-payments",
   },
   {
+    icon: <FileIcon />,
+    name: "Raise Ticket",
+    path: "/parent/raise-ticket",
+  },
+  {
     icon: <UserCircleIcon />,
     name: "My Profile",
     path: "/parent/profile",
   },
+
   // LOGOUT REMOVED FROM HERE - WILL RENDER SEPARATELY AT THE BOTTOM
 ];
 

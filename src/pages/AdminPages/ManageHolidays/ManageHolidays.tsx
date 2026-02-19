@@ -50,13 +50,20 @@ type TherapistProfile = {
 
 type ModalMode = "none" | "full" | "partial";
 
+// Util to format date string YYYY-MM-DD to DD/MM/YYYY
+function formatDateDDMMYYYY(dateStr: string | undefined): string {
+    if (!dateStr) return "";
+    // Accepts only ISO (YYYY-MM-DD), converts to DD/MM/YYYY
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    const day = String(d.getDate()).padStart(2, "0");
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const year = d.getFullYear();
+    return `${day}/${month}/${year}`;
+}
+
 // Util for therapistId link
 function TherapistIdLink({ therapist }: { therapist: TherapistProfile }) {
-    // FullCalendar.tsx 174-183 logic reference:
-    // therapistId is shown if present, link is opened with therapistUserId
-    // therapistUserId = therapist._id
-    // display = name
-
     if (!therapist.therapistId) return <span>-</span>;
     const therapistUserId = therapist._id;
     return (
@@ -75,7 +82,6 @@ function TherapistIdLink({ therapist }: { therapist: TherapistProfile }) {
 
 // Util for therapist name link
 function TherapistNameLink({ therapist }: { therapist: TherapistProfile }) {
-    // If there is no name, show "-"
     const display = therapist?.userId?.name || therapist.name || "-";
     if (display === "-") return <span>-</span>;
     const therapistUserId = therapist._id;
@@ -221,6 +227,7 @@ function CalendarPopup({
     );
 }
 
+// Wrap DateInputWithPopup to show value in DD/MM/YYYY but output value remains ISO
 function DateInputWithPopup({
     value,
     onChange,
@@ -238,6 +245,8 @@ function DateInputWithPopup({
 }) {
     const [showCal, setShowCal] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
+    // show formatted in DD/MM/YYYY if value present
+    const shownValue = value ? formatDateDDMMYYYY(value) : "";
     return (
         <div className="relative">
             <input
@@ -245,7 +254,7 @@ function DateInputWithPopup({
                 type="text"
                 className={className || "border px-3 py-2 rounded w-full"}
                 placeholder={placeholder || "Select date"}
-                value={value}
+                value={shownValue}
                 readOnly
                 onClick={() => !disabled && setShowCal(true)}
                 onFocus={() => !disabled && setShowCal(true)}
@@ -269,7 +278,7 @@ function DateInputWithPopup({
                 <CalendarPopup
                     value={value}
                     onChange={(date: string) => {
-                        onChange(date);
+                        onChange(date); // send ISO up
                         setShowCal(false);
                     }}
                     minDate={min}
@@ -306,7 +315,7 @@ function HolidayList({
                 <tbody>
                     {sortedHolidays.map((h) => (
                         <tr key={h._id || h.date}>
-                            <td className="p-1 font-mono">{h.date}</td>
+                            <td className="p-1 font-mono">{formatDateDDMMYYYY(h.date)}</td>
                             <td className="p-1">
                                 {h.isFullDay ? (
                                     <span className="inline-block px-2 py-0.5 rounded bg-green-200 text-green-800 font-semibold">Full Day</span>
@@ -701,18 +710,14 @@ export default function ManageHolidays() {
     // Pagination - page number clamp and slice logic
     const numPages = Math.max(1, Math.ceil(totalFiltered / pageSize));
     useEffect(() => {
-        // Clamp page to valid when filter/search/pagination changes
         if (page > numPages) setPage(numPages);
         if (page < 1 && numPages > 0) setPage(1);
-        // Do NOT reset search/page on data reload/refresh, per requirements
-        // eslint-disable-next-line
     }, [numPages]);
     const pagedTherapists = useMemo(() => {
         const startIdx = (page - 1) * pageSize;
         return filteredTherapists.slice(startIdx, startIdx + pageSize);
     }, [filteredTherapists, page, pageSize]);
 
-    // Table modal logic
     function openHolidayModal(therapist: TherapistProfile) {
         setSelectedTherapist(therapist);
         setHolidayModalOpen(true);
@@ -730,11 +735,11 @@ export default function ManageHolidays() {
     // Handlers for pagination/search
     function onSearchValueChange(v: string) {
         setSearchValue(v);
-        setPage(1); // Reset page on new search
+        setPage(1);
     }
     function onChangePageSize(sz: number) {
         setPageSize(sz);
-        setPage(1); // Reset page on page size change
+        setPage(1);
     }
     function onChangePage(p: number) {
         setPage(Math.max(1, Math.min(numPages, p)));
@@ -743,7 +748,6 @@ export default function ManageHolidays() {
     return (
         <div className="min-h-screen p-8">
             <h1 className="text-2xl font-bold text-slate-800 mb-6">Therapists</h1>
-            {/* Search, Pagination controls (always outside table, invariant on data reloads) */}
             <TherapistSearchAndPagination
                 searchValue={searchValue}
                 onSearchValueChange={onSearchValueChange}

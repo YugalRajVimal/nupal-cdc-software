@@ -42,6 +42,11 @@ const navItems: NavItem[] = [
     name: "Leads & Consults",
     path: "/admin/leads-consults",
   },
+  {
+    icon: <FileIcon />,
+    name: "Raised Tickets",
+    path: "/admin/raised-tickets",
+  },
   // {
   //   icon: <FileIcon />,
   //   name: "Reports & Analytics",
@@ -51,6 +56,11 @@ const navItems: NavItem[] = [
     icon: <FileIcon />,
     name: "Full Calendar",
     path: "/admin/full-calendar",
+  },
+  {
+    icon: <FileIcon />,
+    name: "Consultation Bookings",
+    path: "/admin/consultation-bookings",
   },
   {
     icon: <FileIcon />,

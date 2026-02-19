@@ -4,6 +4,24 @@ import { Link } from "react-router";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL as string;
 
+// Helper to format date as DD/MM/YYYY
+function formatDate_DDMMYYYY(dateInput?: string | Date | null): string {
+  if (!dateInput) return "";
+  let d: Date;
+  if (typeof dateInput === "string") {
+    d = new Date(dateInput);
+    if (isNaN(d.getTime())) return "";
+  } else if (dateInput instanceof Date) {
+    d = dateInput;
+  } else {
+    return "";
+  }
+  const day = d.getDate().toString().padStart(2, "0");
+  const month = (d.getMonth() + 1).toString().padStart(2, "0");
+  const year = d.getFullYear().toString();
+  return `${day}/${month}/${year}`;
+}
+
 // Types for booking request data
 type BookingRequest = {
   _id: string;
@@ -386,7 +404,7 @@ export default function BookingRequests() {
                                 }
                                 {req.patient?.childDOB && (
                                   <span className="ml-2">
-                                    DOB: {new Date(req.patient.childDOB).toLocaleDateString()}
+                                    DOB: {formatDate_DDMMYYYY(req.patient.childDOB)}
                                   </span>
                                 )}
                               </div>
@@ -477,7 +495,7 @@ export default function BookingRequests() {
                         {/* Created At */}
                         <td className="px-4 py-4 text-slate-700">
                           {req.createdAt
-                            ? new Date(req.createdAt).toLocaleString()
+                            ? formatDate_DDMMYYYY(req.createdAt) + " " + new Date(req.createdAt).toLocaleTimeString()
                             : <span className="italic text-slate-400">N/A</span>}
                         </td>
                         {/* Actions */}
@@ -517,7 +535,7 @@ export default function BookingRequests() {
                             <ul className="list-disc pl-6 space-y-1">
                               {req.sessions!.map((s, idx) => (
                                 <li key={idx}>
-                                  <span className="font-mono">{s.date}</span>
+                                  <span className="font-mono">{formatDate_DDMMYYYY(s.date)}</span>
                                   {s.time && <span className="ml-1 text-slate-500">@ {s.time}</span>}
                                   {s.slotId && <span className="ml-1 text-slate-400">[{s.slotId}]</span>}
                                 </li>

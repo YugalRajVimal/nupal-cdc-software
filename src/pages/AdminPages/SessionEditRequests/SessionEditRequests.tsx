@@ -97,6 +97,14 @@ type TableFilterState = {
 
 const PAGE_SIZE = 10;
 
+// Helper to format dates as DD/MM/YYYY
+function formatDateDMY(dateStr?: string | null): string {
+  if (!dateStr) return "";
+  const d = dayjs(dateStr);
+  if (!d.isValid()) return "";
+  return d.format("DD/MM/YYYY");
+}
+
 export default function SessionEditRequestsAdmin() {
   // Data and fetch state
   const [editRequests, setEditRequests] = useState<SessionEditRequest[]>([]);
@@ -463,7 +471,7 @@ export default function SessionEditRequestsAdmin() {
                                       state={{ sessionEditRequest: req }}
                                       className="inline-flex items-center gap-1 rounded-md border border-green-600 bg-green-50 px-4 py-2 text-sm text-green-700 hover:bg-green-100 transition"
                                     >
-                                      <FiCheck /> Proceed with changes
+                                      <FiCheck /> Mark Approved
                                     </Link>
                                   </div>
                                 </div>
@@ -603,7 +611,7 @@ function SessionEditsTable({
                   {shownSessionId || <span className="italic text-slate-400">-</span>}
                 </td>
                 <td className="px-3 py-2">
-                  {session?.date ? dayjs(session.date).format("YYYY-MM-DD") : <span className="italic text-slate-400">N/A</span>}
+                  {session?.date ? formatDateDMY(session.date) : <span className="italic text-slate-400">N/A</span>}
                 </td>
                 <td className="px-3 py-2">
                   {session?.slotId
@@ -622,7 +630,7 @@ function SessionEditsTable({
                     }
                   >
                     {edit.newDate
-                      ? dayjs(edit.newDate).format("YYYY-MM-DD")
+                      ? formatDateDMY(edit.newDate)
                       : <span className="italic text-slate-400">N/A</span>}
                   </span>
                   {dateChanged && (

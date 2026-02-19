@@ -52,10 +52,42 @@ interface UncheckedSession {
     slotId: string;
     therapist: UncheckedSessionTherapist | string | null;
     _id: string; // this is currently used as the sessionId
-    sessionId:string,
+    sessionId: string;
     isCheckedIn?: boolean;
     [key: string]: any;
   };
+}
+
+// New: ConsultationBooking interfaces
+interface ConsultationBookingClient {
+  _id: string;
+  userId: {
+    _id: string;
+    name: string;
+  };
+  name: string;
+  patientId: string;
+}
+
+interface ConsultationBookingTherapy {
+  _id: string;
+  name: string;
+}
+
+interface ConsultationBooking {
+  _id: string;
+  consultationAppointmentId: string;
+  client: ConsultationBookingClient;
+  therapy: ConsultationBookingTherapy;
+  scheduledAt: string;
+  time: string;
+  durationMinutes: number;
+  sessionType: string;
+  status: string;
+  remark?: string;
+  createdAt: string;
+  updatedAt: string;
+  __v: number;
 }
 
 interface DashboardApiData {
@@ -63,6 +95,7 @@ interface DashboardApiData {
   totalAppointments: number;
   pendingPayments: PaymentDetail[];
   uncheckedSessions: UncheckedSession[];
+  consultationBookings?: ConsultationBooking[]; // Add this as optional for backward compatibility
 }
 
 function getSlotLabel(slotId: string): string {
@@ -102,6 +135,10 @@ const ParentDashboard: React.FC = () => {
   const uncheckedSessionsRaw: UncheckedSession[] =
     dashboard?.uncheckedSessions ?? [];
 
+  // Show consultation bookings if present
+  const consultationBookings: ConsultationBooking[] =
+    dashboard?.consultationBookings ?? [];
+
   // Sort unchecked sessions by date (oldest first)
   const uncheckedSessions: UncheckedSession[] = [...uncheckedSessionsRaw].sort(
     (a, b) => {
@@ -112,6 +149,15 @@ const ParentDashboard: React.FC = () => {
         ? new Date(b.notCheckedInSession.date).getTime()
         : 0;
       return dateA - dateB;
+    }
+  );
+
+  // Sort consultation bookings as well (if any, by scheduledAt desc)
+  const sortedConsultationBookings: ConsultationBooking[] = [...consultationBookings].sort(
+    (a, b) => {
+      const dateA = a.scheduledAt ? new Date(a.scheduledAt).getTime() : 0;
+      const dateB = b.scheduledAt ? new Date(b.scheduledAt).getTime() : 0;
+      return dateB - dateA; // Latest first
     }
   );
 
@@ -233,6 +279,73 @@ const ParentDashboard: React.FC = () => {
                     </td>
                     <td className="px-3 py-2 text-right">
                       ₹{Number(payment.amount).toLocaleString("en-IN")}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Consultation Bookings Section */}
+      <div className="bg-white rounded-xl border p-6 mb-8">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-lg font-semibold text-gray-800">
+            Consultation Bookings
+          </h2>
+          {/* Optionally link to full consultations list */}
+        </div>
+        {sortedConsultationBookings.length === 0 ? (
+          <div className="h-40 flex items-center justify-center text-gray-400">
+            No consultation bookings found.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr>
+                  <th className="px-3 py-2 text-left">Booking ID</th>
+                  <th className="px-3 py-2 text-left">Date/Time</th>
+                  <th className="px-3 py-2 text-left">Patient</th>
+                  <th className="px-3 py-2 text-left">Therapy</th>
+                  <th className="px-3 py-2 text-left">Session Type</th>
+                  <th className="px-3 py-2 text-left">Status</th>
+                  <th className="px-3 py-2 text-left">Remark</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sortedConsultationBookings.map((consultation) => (
+                  <tr key={consultation._id} className="border-t">
+                    <td className="px-3 py-2 font-mono">
+                      {consultation.consultationAppointmentId}
+                    </td>
+                    <td className="px-3 py-2">
+                      {consultation.scheduledAt
+                        ? new Date(consultation.scheduledAt).toLocaleString("en-GB", {
+                            day: "2-digit",
+                            month: "2-digit",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })
+                        : "-"}
+                    </td>
+                    <td className="px-3 py-2">
+                      {consultation.client?.name} ({consultation.client?.patientId})<br />
+                      <span className="text-xs text-gray-400">{consultation.client?.userId?.name}</span>
+                    </td>
+                    <td className="px-3 py-2">
+                      {consultation.therapy?.name || "-"}
+                    </td>
+                    <td className="px-3 py-2">
+                      {consultation.sessionType}
+                    </td>
+                    <td className="px-3 py-2">
+                      {consultation.status.charAt(0).toUpperCase() + consultation.status.slice(1)}
+                    </td>
+                    <td className="px-3 py-2">
+                      {consultation.remark || "-"}
                     </td>
                   </tr>
                 ))}

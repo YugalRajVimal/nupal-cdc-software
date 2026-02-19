@@ -89,6 +89,11 @@ import AllLogs from "./pages/SuperAdminPages/Auditlogs/AllLogs";
 import AllUpcomingSessions from "./pages/AdminPages/ReceptionDesk/AllSessions";
 import TherapistIncomeComparison from "./pages/SuperAdminPages/TherapistIncomeComparison/TherapistIncomeComparison";
 import SuperAdminDashboardHome from "./pages/SuperAdminPages/Dashboard/Home";
+import RaiseTickets from "./pages/ParentPages/RaiseTickets/RaiseTickets";
+import RaiseTicketsTherapist from "./pages/TherapistPages/RaiseTickets/RaiseTickets";
+import RaisedTickets from "./pages/AdminPages/RaisedTickets/RaisedTickets";
+import ConsultationBooking from "./pages/ParentPages/ConsultationBooking/ConsultationBooking";
+import ConsultationBookingsAdmin from "./pages/AdminPages/ConsultationBookings/ConsultationBookings";
 
 
 export default function App() {
@@ -195,6 +200,11 @@ export default function App() {
             <Route path="/admin/manage-holidays" element={<ManageHolidays />} />
             <Route path="/admin/full-calendar" element={<FullCalendar/>} />
 
+            <Route path="/admin/raised-tickets" element={<RaisedTickets />} />
+
+
+            <Route path="/admin/consultation-bookings" element={<ConsultationBookingsAdmin />} />
+
 
 
             {/* Others Page */}
@@ -209,6 +219,8 @@ export default function App() {
             <Route path="/therapist/earnings" element={<MyEarningsTherapist/>} />
             <Route path="/therapist/profile" element={<TherpaistProfile />} />
             <Route path="/therapist/earnings" element={<MyEarningsTherapist/>} />
+          <Route path="/therapist/raise-ticket" element={<RaiseTicketsTherapist />} />
+
           
 
           </Route>
@@ -227,6 +239,9 @@ export default function App() {
             <Route path="/parent/profile" element={<ParentProfile />} />
             <Route path="/parent/request-appointment" element={<RequestAppointment />} />
             <Route path="/parent/request-edit-appointment" element={<RequestEditAppointments />} />
+
+          <Route path="/parent/consultation-booking" element={<ConsultationBooking />} />
+          <Route path="/parent/raise-ticket" element={<RaiseTickets />} />
           <Route path="/parent/logout" element={<LogOutParent />} />
 
 

@@ -85,6 +85,18 @@ function getDaysInMonth(year: number, month: number) { return new Date(year, mon
 function getStartDay(year: number, month: number) { return new Date(year, month, 1).getDay(); }
 // function getDayIndex(dayShort: string): number { const idx = DAYS.findIndex(d => d === dayShort.toUpperCase()); return idx >= 0 ? idx : 0; }
 
+// Utility function for formatting date as DD/MM/YYYY
+function formatDateDDMMYYYY(dateStr: string): string {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr; // fallback to original if invalid
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
+  return `${day}/${month}/${year}`;
+}
+
+
 export default function AppointmentBookingSystemNew() {
   const location = useLocation();
 
@@ -1282,9 +1294,14 @@ function CalendarPanel({
   year, month, changeMonth, startDay, daysInMonth,
   sessions, toggleDate, getDaySlotSummary, maxSelectableDates
 }: any) {
+  // Access the local date formatting util as required by instruction.
+  // This is the function at AppointmentBookingSystemNew.tsx lines 89-97
+  // function formatDateDDMMYYYY(dateStr: string): string {...}
+
   const getSessionCountForDate = (dateKey: string) =>
     sessions.filter((s: any) => s.date === dateKey).length;
 
+  // Use the imported/inline formatDateDDMMYYYY function where a date is user-facing
   return (
     <div className="flex-2 lg:col-span-2 bg-white border rounded-lg">
       <div className="flex items-center justify-between p-4 border-b">
@@ -1333,6 +1350,9 @@ function CalendarPanel({
                 </div>
                 {selectedCount > 0 && (
                   <div className="mt-1 text-xs text-blue-700 font-medium">
+                    {/* Use the DD/MM/YYYY formatting for the selected date if you ever display the date! */}
+                    {/* Example: */}
+                    {/* {formatDateDDMMYYYY(dateKey)} */}
                     Selected ({selectedCount})
                   </div>
                 )}
@@ -1529,7 +1549,7 @@ function SessionDatesTimesTable({
 
                 return (
                   <tr key={s.date + ':' + idx} className="text-sm">
-                    <td className="px-2 py-1 border border-slate-200 font-mono">{s.date}</td>
+                    <td className="px-2 py-1 border border-slate-200 font-mono">{formatDateDDMMYYYY(s.date)}</td>
                     <td className="px-2 py-1 border border-slate-200 whitespace-nowrap">
                       <select
                         value={s.slotId}
@@ -2020,6 +2040,8 @@ function CollectPaymentModal({
 // ...other imports...
 
 // CheckIn Modal component
+
+
 function CheckInConfirmationModal({ open, onClose, onConfirm, session, booking }: any) {
   if (!open) return null;
   return (
@@ -2033,7 +2055,7 @@ function CheckInConfirmationModal({ open, onClose, onConfirm, session, booking }
           Are you sure you want to check in this session?
           <div className="mt-2 text-xs p-2 rounded bg-blue-50 border border-blue-100">
             <div>
-              <b>Date:</b> {session.date}
+              <b>Date:</b> {session && session.date ? formatDateDDMMYYYY(session.date) : ''}
             </div>
             <div>
               <b>Booking ID:</b> {booking.appointmentId}
@@ -2419,7 +2441,7 @@ function BookingSummary({
                                   <td className="px-2 py-1 border border-slate-200 font-mono text-xs text-slate-600" title={s.sessionId}>
                                     {s.sessionId || s._id || <span className="text-gray-400">—</span>}
                                   </td>
-                                  <td className="px-2 py-1 border border-slate-200">{s.date}</td>
+                                  <td className="px-2 py-1 border border-slate-200">{s.date ? formatDateDDMMYYYY(s.date) : ''}</td>
                                   <td className="px-2 py-1 border border-slate-200 whitespace-nowrap">
                                     {slot
                                       ? (<>

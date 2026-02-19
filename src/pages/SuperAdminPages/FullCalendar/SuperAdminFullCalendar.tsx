@@ -76,6 +76,7 @@ type Session = {
   therapyTypeId?: TherapyType;
 };
 const API_BASE_URL = import.meta.env.VITE_API_URL as string;
+
 // --- Helpers ---
 
 function getDaysInMonth(year: number, month: number) {
@@ -113,6 +114,17 @@ function processBackendSessionList(data: BackendCalendarRecord[]): Session[] {
       isCheckedIn: session.isCheckedIn,
     };
   });
+}
+
+// --- Date Formatting Helper ---
+function formatDateDDMMYYYY(dateStr: string): string {
+  if (!dateStr) return "";
+  const d = new Date(dateStr);
+  if (isNaN(d as any)) return dateStr;
+  const day = String(d.getDate()).padStart(2, "0");
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const year = d.getFullYear();
+  return `${day}/${month}/${year}`;
 }
 
 // --- UI Atomic Components (using <a> for external routing, like ReceptionDesk) ---
@@ -302,7 +314,7 @@ function CalendarSessionItem({
       <div className="mb-3 p-2 rounded border border-indigo-300 bg-slate-50 flex flex-col">
         {appointmentId && <AppointmentIdBox appointmentId={appointmentId} />}
         <div className="mb-1 flex items-center gap-3 flex-wrap">
-          <span className="text-xs text-slate-700">{session.date}</span>
+          <span className="text-xs text-slate-700">{formatDateDDMMYYYY(session.date)}</span>
           <span
             className={`inline-block rounded px-2 py-0.5 mr-1 text-xs font-semibold ${
               slot && slot.limited
@@ -714,6 +726,15 @@ export default function SuperAdminFullCalendar() {
     );
   }
 
+  // --- Format modal title date as DD/MM/YYYY ---
+  function formatModalDayTitle(year: number, month: number, day: number) {
+    const d = new Date(year, month, day);
+    const dd = String(d.getDate()).padStart(2, "0");
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const yyyy = d.getFullYear();
+    return `${dd}/${mm}/${yyyy}`;
+  }
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -784,9 +805,7 @@ export default function SuperAdminFullCalendar() {
         }}
         title={
           modalDay
-            ? `All Sessions on ${year}-${String(month + 1).padStart(2, "0")}-${String(
-                modalDay
-              ).padStart(2, "0")}`
+            ? `All Sessions on ${formatModalDayTitle(year, month, modalDay)}`
             : undefined
         }
       >

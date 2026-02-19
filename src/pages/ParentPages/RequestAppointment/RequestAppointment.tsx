@@ -11,7 +11,6 @@ import {
   FiPackage,
   FiX,
   FiHash,
-  FiRepeat,
   FiEdit2,
   FiTrash2,
   FiSearch
@@ -113,10 +112,10 @@ function getStartDay(year: number, month: number) {
   return new Date(year, month, 1).getDay();
 }
 const API_BASE_URL = import.meta.env.VITE_API_URL as string;
-function getDayIndex(dayShort: string): number {
-  const idx = DAYS.findIndex((d) => d === dayShort.toUpperCase());
-  return idx >= 0 ? idx : 0;
-}
+// function getDayIndex(dayShort: string): number {
+//   const idx = DAYS.findIndex((d) => d === dayShort.toUpperCase());
+//   return idx >= 0 ? idx : 0;
+// }
 
 // --- SEARCH & PAGINATION state for Request list ---
 const DEFAULT_PAGE_SIZE = 5;
@@ -142,11 +141,11 @@ export default function RequestAppointment() {
   const [bookingError, setBookingError] = useState<string | null>(null);
   const [bookingSuccess, setBookingSuccess] = useState<string | null>(null);
   const [editBookingId, setEditBookingId] = useState<string | null>(null);
-  const [repeatDay, setRepeatDay] = useState<string>("");
-  const [repeatStartDate, setRepeatStartDate] = useState<string>("");
-  const [repeatSlotId, setRepeatSlotId] = useState<string>("");
-  const [repeatError, setRepeatError] = useState<string | null>(null);
-  const [repeatConflictInfo, setRepeatConflictInfo] = useState<{ [date: string]: string }>({});
+  // const [repeatDay, setRepeatDay] = useState<string>("");
+  // const [repeatStartDate, setRepeatStartDate] = useState<string>("");
+  // const [repeatSlotId, setRepeatSlotId] = useState<string>("");
+  // const [repeatError, setRepeatError] = useState<string | null>(null);
+  // const [repeatConflictInfo, setRepeatConflictInfo] = useState<{ [date: string]: string }>({});
 
   // New: Requested bookings (pending requests)
   const [requestedBookings, setRequestedBookings] = useState<Booking[]>([]);
@@ -469,11 +468,11 @@ export default function RequestAppointment() {
     setEditBookingId(null);
     setBookingError(null);
     setBookingSuccess(null);
-    setRepeatDay("");
-    setRepeatStartDate("");
-    setRepeatSlotId("");
-    setRepeatError(null);
-    setRepeatConflictInfo({});
+    // setRepeatDay("");
+    // setRepeatStartDate("");
+    // setRepeatSlotId("");
+    // setRepeatError(null);
+    // setRepeatConflictInfo({});
   }
 
   // Delete booking request
@@ -701,63 +700,63 @@ export default function RequestAppointment() {
     resetForm();
   }
 
-  function getNextNDatesWeekly(
-    startDate: Date,
-    sessionCount: number,
-    dayOfWeek: number
-  ): string[] {
-    let dates: string[] = [];
-    let date = new Date(startDate);
-    while (date.getDay() !== dayOfWeek) {
-      date.setDate(date.getDate() + 1);
-    }
-    while (dates.length < sessionCount) {
-      const dateKey = `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
-      dates.push(dateKey);
-      date.setDate(date.getDate() + 7);
-    }
-    return dates;
-  }
-  function handleRepeatApply() {
-    setRepeatError(null);
-    setRepeatConflictInfo({});
-    if (!repeatDay || !repeatStartDate || !repeatSlotId) {
-      setRepeatError("Please select start date, weekday, and time slot.");
-      return;
-    }
-    if (!maxSelectableDates || !selectedPackage) {
-      setRepeatError("Please select a package.");
-      return;
-    }
-    const start = new Date(repeatStartDate);
-    const wantedDayNum = getDayIndex(repeatDay);
-    while (start.getDay() !== wantedDayNum) {
-      start.setDate(start.getDate() + 1);
-    }
-    const sessionsOnTargetDay = getNextNDatesWeekly(start, maxSelectableDates, wantedDayNum);
+  // function getNextNDatesWeekly(
+  //   startDate: Date,
+  //   sessionCount: number,
+  //   dayOfWeek: number
+  // ): string[] {
+  //   let dates: string[] = [];
+  //   let date = new Date(startDate);
+  //   while (date.getDay() !== dayOfWeek) {
+  //     date.setDate(date.getDate() + 1);
+  //   }
+  //   while (dates.length < sessionCount) {
+  //     const dateKey = `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+  //     dates.push(dateKey);
+  //     date.setDate(date.getDate() + 7);
+  //   }
+  //   return dates;
+  // }
+  // function handleRepeatApply() {
+  //   setRepeatError(null);
+  //   setRepeatConflictInfo({});
+  //   if (!repeatDay || !repeatStartDate || !repeatSlotId) {
+  //     setRepeatError("Please select start date, weekday, and time slot.");
+  //     return;
+  //   }
+  //   if (!maxSelectableDates || !selectedPackage) {
+  //     setRepeatError("Please select a package.");
+  //     return;
+  //   }
+  //   const start = new Date(repeatStartDate);
+  //   const wantedDayNum = getDayIndex(repeatDay);
+  //   while (start.getDay() !== wantedDayNum) {
+  //     start.setDate(start.getDate() + 1);
+  //   }
+  //   const sessionsOnTargetDay = getNextNDatesWeekly(start, maxSelectableDates, wantedDayNum);
 
-    const repeatNewSessions = sessionsOnTargetDay.map((dateStr) => {
-      return { date: dateStr, slotId: repeatSlotId };
-    });
-    const willConflict = repeatNewSessions.some((ns) =>
-      sessions.some((s) => s.date === ns.date && s.slotId === ns.slotId)
-    );
-    if (willConflict) {
-      setRepeatError("One or more sessions already use this slot for these dates.");
-      return;
-    }
-    setRepeatError(null);
-    setRepeatConflictInfo({});
-    setSessions(repeatNewSessions);
-  }
-  function handleRepeatClear() {
-    setRepeatDay("");
-    setRepeatStartDate("");
-    setRepeatSlotId("");
-    setRepeatError(null);
-    setRepeatConflictInfo({});
-    setSessions([]);
-  }
+  //   const repeatNewSessions = sessionsOnTargetDay.map((dateStr) => {
+  //     return { date: dateStr, slotId: repeatSlotId };
+  //   });
+  //   const willConflict = repeatNewSessions.some((ns) =>
+  //     sessions.some((s) => s.date === ns.date && s.slotId === ns.slotId)
+  //   );
+  //   if (willConflict) {
+  //     setRepeatError("One or more sessions already use this slot for these dates.");
+  //     return;
+  //   }
+  //   setRepeatError(null);
+  //   setRepeatConflictInfo({});
+  //   setSessions(repeatNewSessions);
+  // }
+  // function handleRepeatClear() {
+  //   setRepeatDay("");
+  //   setRepeatStartDate("");
+  //   setRepeatSlotId("");
+  //   setRepeatError(null);
+  //   setRepeatConflictInfo({});
+  //   setSessions([]);
+  // }
 
   // ------- RENDER --------
 
@@ -937,7 +936,7 @@ export default function RequestAppointment() {
           </select>
 
           {/* Repeat Weekly Controls */}
-          {!editBookingId && (
+          {/* {!editBookingId && (
             <div className="mb-6 space-y-2 bg-blue-50 border border-blue-100 rounded p-3">
               <div className="flex items-center gap-2 font-medium text-blue-700">
                 <FiRepeat className="text-blue-500" /> Repeat weekly (set all sessions to same day/time)
@@ -1035,7 +1034,7 @@ export default function RequestAppointment() {
                 </div>
               )}
             </div>
-          )}
+          )} */}
 
           {/* Session Dates & Times */}
           {sessions.length > 0 && (

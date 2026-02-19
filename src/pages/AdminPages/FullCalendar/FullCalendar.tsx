@@ -76,6 +76,7 @@ type Session = {
   therapyTypeId?: TherapyType;
 };
 const API_BASE_URL = import.meta.env.VITE_API_URL as string;
+
 // --- Helpers ---
 
 function getDaysInMonth(year: number, month: number) {
@@ -113,6 +114,31 @@ function processBackendSessionList(data: BackendCalendarRecord[]): Session[] {
       isCheckedIn: session.isCheckedIn,
     };
   });
+}
+
+/**
+ * Format a date string (YYYY-MM-DD) as DD/MM/YYYY.
+ * Returns empty string for invalid input.
+ */
+function formatDateForDisplay(dateStr: string | Date): string {
+  if (!dateStr) return '';
+  let d: Date;
+  if (typeof dateStr === "string") {
+    if (dateStr.length === 10 && dateStr.includes("-")) {
+      // "YYYY-MM-DD"
+      const [y, m, d0] = dateStr.split("-");
+      return `${d0.padStart(2, "0")}/${m.padStart(2, "0")}/${y}`;
+    }
+    d = new Date(dateStr);
+  } else if (dateStr instanceof Date) {
+    d = dateStr;
+  } else {
+    return '';
+  }
+  if (isNaN(d.getTime())) return '';
+  return `${String(d.getDate()).padStart(2, "0")}/${String(
+    d.getMonth() + 1
+  ).padStart(2, "0")}/${d.getFullYear()}`;
 }
 
 // --- UI Atomic Components (using <a> for external routing, like ReceptionDesk) ---
@@ -309,7 +335,7 @@ function CalendarSessionItem({
         {appointmentId && <AppointmentIdBox appointmentId={appointmentId} />}
         {sessionId && <SessionIdBox sessionId={sessionId} />}
         <div className="mb-1 flex items-center gap-3">
-          <span className="text-xs text-slate-700">{session.date}</span>
+          <span className="text-xs text-slate-700">{formatDateForDisplay(session.date)}</span>
           <span
             className={`inline-block rounded px-2 py-0.5 mr-1 text-xs font-semibold ${
               slot && slot.limited
@@ -786,9 +812,9 @@ export default function FullCalendar() {
         }}
         title={
           modalDay
-            ? `All Sessions on ${year}-${String(month + 1).padStart(2, "0")}-${String(
-                modalDay
-              ).padStart(2, "0")}`
+            ? `All Sessions on ${formatDateForDisplay(`${year}-${String(month + 1).padStart(2, "0")}-${String(
+                  modalDay
+                ).padStart(2, "0")}`)}`
             : undefined
         }
       >
