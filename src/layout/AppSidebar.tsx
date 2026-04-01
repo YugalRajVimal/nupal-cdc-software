@@ -46,6 +46,11 @@ const navItems: NavItem[] = [
       },
     ],
   },
+  {
+    icon: <UserCircleIcon />,
+    name: "Onboard Admin",
+    path: "/super-admin/onboard-admin",
+  },
 
   {
     icon: <ChevronDownIcon />,

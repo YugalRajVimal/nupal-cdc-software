@@ -94,6 +94,7 @@ import RaiseTicketsTherapist from "./pages/TherapistPages/RaiseTickets/RaiseTick
 import RaisedTickets from "./pages/AdminPages/RaisedTickets/RaisedTickets";
 import ConsultationBooking from "./pages/ParentPages/ConsultationBooking/ConsultationBooking";
 import ConsultationBookingsAdmin from "./pages/AdminPages/ConsultationBookings/ConsultationBookings";
+import OnboardAdmin from "./pages/SuperAdminPages/OnboardAdmin/OnboardAdmin";
 
 
 export default function App() {
@@ -143,6 +144,8 @@ export default function App() {
             <Route path="/super-admin/full-calendar" element={<SuperAdminFullCalendar/>} />
             <Route path="/super-admin/therapists" element={<SuperAdminTherapistsPage/>} />
             <Route path="/super-admin/therapist-salary-comparison" element={<TherapistIncomeComparison/>} />
+            <Route path="/super-admin/onboard-admin" element={<OnboardAdmin/>} />
+
 
             <Route path="/super-admin/children" element={<PatientsPage/>} />
 
