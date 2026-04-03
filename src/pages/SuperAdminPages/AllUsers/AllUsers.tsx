@@ -13,8 +13,25 @@ import {
 } from "react-icons/fi";
 import { useNavigate } from "react-router-dom";
 
+// === Design tokens ===
+const COLORS = {
+  bgCard: "bg-white",
+  bgTable: "bg-slate-50",
+  border: "border-gray-200",
+  accent: "text-blue-700",
+  accentBg: "bg-blue-100",
+  shadow: "shadow-md",
+  textLabel: "text-slate-600",
+  textValue: "text-slate-800",
+  error: "text-red-600",
+  info: "text-blue-600",
+  success: "text-green-600",
+}
+
+// API base
 const API_BASE = import.meta.env.VITE_API_URL;
 
+// === Data Types ===
 type FlattenedUser = {
   _id: string;
   shortId: string;
@@ -43,6 +60,7 @@ type FamilyGroupPatient = {
   areaName?: string;
 };
 
+// === Helpers ===
 const extractShortId = (user: any, type: string): string => {
   if (type === 'therapists' && user.therapistId) return user.therapistId;
   if (type === 'patients' && user.patientId) return user.patientId;
@@ -82,7 +100,7 @@ const groupPatientsByParentEmail = (patients: any[]): FamilyGroupPatient[] => {
         shortId: extractShortId(patient, 'patients'),
         name: displayParentName,
         parentEmail: parentEmail,
-        displayNames: '', // will be filled below
+        displayNames: '',
         familyPatients: [],
         role: patient.userId.role || 'patient',
         fromCollection: 'patients',
@@ -97,7 +115,6 @@ const groupPatientsByParentEmail = (patients: any[]): FamilyGroupPatient[] => {
     familyGroups[parentEmail].familyPatients.push(patient);
   }
 
-  // Old displayNames logic (will not use), but keeping just for shape
   Object.values(familyGroups).forEach(family => {
     family.displayNames = family.familyPatients.map(p => {
       const name = p.name || '-';
@@ -133,7 +150,7 @@ const extractUsersFromResponse = (data: any): FlattenedUser[] => {
           role: therapist.userId.role || 'therapist',
           fromCollection: 'therapists',
           phone: therapist.userId.phone || therapist.mobile1 || '',
-          therapistRaw: therapist, // Pass full therapist object for linking
+          therapistRaw: therapist,
         });
       }
     });
@@ -177,36 +194,33 @@ const extractUsersFromResponse = (data: any): FlattenedUser[] => {
   return users;
 };
 
-// Here, map UI role switches to api role
+// Role filter tabs
 const ROLE_OPTIONS = [
   { label: "All Users", value: "all", apiRole: "all" },
-  { label: "All Patients", value: "patients", apiRole: "patients" },
-  { label: "All Therapist", value: "therapists", apiRole: "therapists" },
-  { label: "All Admin", value: "admin", apiRole: "admin" },
+  { label: "Patients", value: "patients", apiRole: "patients" },
+  { label: "Therapists", value: "therapists", apiRole: "therapists" },
+  { label: "Admins", value: "admin", apiRole: "admin" },
 ];
 
-const TableHeadCell = ({
-  children,
-}: {
-  children: React.ReactNode;
-}) => (
-  <th className="py-3 px-4 text-sm font-semibold text-slate-600 bg-slate-100 border-b border-slate-200 whitespace-nowrap">
+const roleTypeColor = (role: string) => 
+  role === "admin" ? "bg-purple-50 text-purple-700"
+  : role === "therapist" ? "bg-blue-50 text-blue-700"
+  : "bg-yellow-50 text-yellow-700";
+
+const typeColor = (type: string) => 
+  type === "therapists" ? "bg-blue-50 text-blue-700"
+  : type === "patients" ? "bg-amber-50 text-yellow-700"
+  : type === "admin" ? "bg-purple-50 text-purple-700"
+  : "bg-slate-100 text-slate-600";
+
+const TableHeadCell: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <th className="py-3 px-4 text-xs uppercase tracking-wide font-bold text-slate-500 bg-slate-100 border-b border-slate-200 whitespace-nowrap">
     {children}
   </th>
 );
 
-const TableCell = ({
-  children,
-  className = "",
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) => (
-  <td
-    className={
-      "py-2.5 px-4 border-b border-slate-100 text-sm " + className
-    }
-  >
+const TableCell: React.FC<{ children: React.ReactNode, className?: string }> = ({ children, className = "" }) => (
+  <td className={"py-2.5 px-4 border-b border-slate-100 text-sm align-top " + className}>
     {children}
   </td>
 );
@@ -217,11 +231,9 @@ type UserRowProps = {
   loggingInUserId?: string | null;
 };
 
-// New: Friendly expanded children list for patient families
 const PatientChildrenList: React.FC<{ familyPatients: any[] }> = ({ familyPatients }) => {
   if (!Array.isArray(familyPatients) || familyPatients.length === 0) return null;
 
-  // Sort children by patientId or name if you want
   const sortedChildren = [...familyPatients].sort((a, b) => {
     if (a.name && b.name) return a.name.localeCompare(b.name);
     if (a.patientId && b.patientId) return a.patientId.localeCompare(b.patientId);
@@ -229,45 +241,36 @@ const PatientChildrenList: React.FC<{ familyPatients: any[] }> = ({ familyPatien
   });
 
   return (
-    <div>
-      <span className="font-semibold text-blue-600">Children:</span>
-      <ul className="list-disc list-inside pl-3 mt-1 text-xs text-blue-700 space-y-0.5">
+    <div className="space-y-1">
+      <span className="block font-semibold text-blue-700 mb-1">Children</span>
+      <div className="flex flex-wrap gap-2">
         {sortedChildren.map((child, idx) => (
-          <li key={child.patientId || idx} className="mb-0.5">
+          <span key={child.patientId || idx} className="flex items-center gap-1 border border-blue-100 px-2 py-0.5 bg-blue-50 rounded-md shadow-sm">
             <a
               href={`/super-admin/children?patientId=${encodeURIComponent(child.patientId || '')}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="underline hover:text-blue-900 whitespace-nowrap"
-              style={{ textDecoration: 'underline', fontWeight: 500 }}
+              className="underline font-bold text-blue-700 hover:text-blue-900"
+              title="View child profile"
             >
-              {child.name || <span className="italic text-slate-600">Unknown Name</span>}
+              {child.name || <span className="italic text-slate-600">Unknown</span>}
             </a>
-            {child.patientId &&
-              <span className="text-gray-600 ml-2 px-1 rounded bg-gray-50 border border-slate-200 font-mono  whitespace-nowrap">
-                ID: {child.patientId}
-              </span>
-            }
-            {child.userId && child.userId.email && (
-              <span className="ml-2 text-purple-600">({child.userId.email})</span>
+            {child.patientId && (
+              <span className="font-mono text-xs text-blue-900 ml-1">({child.patientId})</span>
             )}
-          </li>
+            {child.userId?.email && (
+              <span className="ml-2 text-xs text-slate-700">{child.userId.email}</span>
+            )}
+          </span>
         ))}
-      </ul>
+      </div>
     </div>
   );
 };
 
-const UserRow = ({
-  user,
-  onLoginAsUser,
-  loggingInUserId,
-}: UserRowProps) => {
-  // Determines if family children should be shown
+const UserRow = ({ user, onLoginAsUser, loggingInUserId }: UserRowProps) => {
   const isPatientFamily = user.fromCollection === 'patients';
-
-  // For therapists, if available, link name/id
-  function renderTherapistName(name: string, user: FlattenedUser) {
+  const renderTherapistName = (name: string, user: FlattenedUser) => {
     const therapistRaw = user.therapistRaw || {};
     const therapistObjId = therapistRaw._id || user._id || '';
     if (therapistObjId) {
@@ -276,18 +279,16 @@ const UserRow = ({
           href={`/super-admin/therapists?therapist=${encodeURIComponent(therapistObjId)}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-blue-700 underline hover:text-blue-900"
-          style={{ textDecoration: 'underline' }}
+          className="underline hover:text-blue-900 text-blue-700"
         >
           {name}
         </a>
       );
     }
     return name;
-  }
+  };
 
-  // For therapists, link id
-  function renderTherapistShortId(shortId: string, user: FlattenedUser) {
+  const renderTherapistShortId = (shortId: string, user: FlattenedUser) => {
     const therapistRaw = user.therapistRaw || {};
     const therapistObjId = therapistRaw._id || user._id || '';
     if (therapistObjId && shortId) {
@@ -296,29 +297,22 @@ const UserRow = ({
           href={`/super-admin/therapists?therapist=${encodeURIComponent(therapistObjId)}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-blue-700 underline hover:text-blue-900"
-          style={{ textDecoration: 'underline' }}
+          className="underline hover:text-blue-900 text-blue-700"
         >
           {shortId}
         </a>
       );
     }
     return shortId;
-  }
+  };
 
-  // For patients (families), link children id(s) as user-friendly badges
-  function renderPatientShortIds(user: FlattenedUser) {
+  const renderPatientShortIds = (user: FlattenedUser) => {
     if (!user.shortId) return null;
     if (user.fromCollection !== "patients") return user.shortId;
-
-    // familyPatients: [{ patientId }]
     const familyPatients = Array.isArray(user.familyPatients) ? user.familyPatients : [];
     if (familyPatients.length === 0) {
-      // fallback to previous logic
       return (user.shortId || user._id);
     }
-
-    // Render as a group of badges
     return (
       <div className="flex flex-wrap gap-1">
         {familyPatients.map((child: any, idx: number) => {
@@ -334,7 +328,6 @@ const UserRow = ({
               target="_blank"
               rel="noopener noreferrer"
               className="bg-blue-50 border border-blue-200 rounded px-2 py-0.5 text-xs font-bold text-blue-700 hover:text-blue-900 font-mono underline"
-              style={{ display: "inline-block" }}
               title="View child profile"
             >
               {pid}
@@ -343,119 +336,73 @@ const UserRow = ({
         })}
       </div>
     );
-  }
+  };
 
   return (
-    <tr
-      className="hover:bg-blue-50 transition"
-      key={`${user._id}-${user.fromCollection}`}
-    >
-      <TableCell className="font-mono text-blue-900 font-bold">
+    <tr className="group hover:bg-blue-50 transition">
+      <TableCell className="font-mono text-blue-900 font-bold min-w-[100px]">
         <div className="flex items-center gap-2">
           <FiHash className="text-blue-400" />
-          {/* User ID - LINK if patient/therapist */}
           {isPatientFamily
             ? renderPatientShortIds(user)
             : user.fromCollection === "therapists"
             ? renderTherapistShortId(user.shortId, user)
-            : <span>{user.shortId || user._id}</span>
-          }
+            : <span>{user.shortId || user._id}</span>}
         </div>
       </TableCell>
-      <TableCell className="font-semibold text-slate-700">
-        <div className="flex flex-col">
+      <TableCell className="font-semibold text-slate-800 w-[240px] min-w-[180px]">
+        <div className="flex flex-col gap-0.5">
           <div className="flex items-center gap-2">
             <FiUser className="text-blue-600" />
-            {/* Name - link if therapist, for family just text */}
             {user.fromCollection === "therapists"
               ? renderTherapistName(user.name, user)
-              : user.name
-            }
+              : <span>{user.name}</span>}
           </div>
           {isPatientFamily && Array.isArray(user.familyPatients) && user.familyPatients.length > 0 && (
-            <div className="text-sm mt-1 font-normal text-blue-800">
+            <div className="mt-1">
               <PatientChildrenList familyPatients={user.familyPatients} />
             </div>
           )}
         </div>
       </TableCell>
-      {/* Modified Email+Phone Column */}
       <TableCell>
-        <div className="flex flex-col">
+        <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2">
             <FiMail className="text-slate-500" />
             <span className="font-mono text-xs">{user.email}</span>
           </div>
           {user.fromCollection === "patients" && user.parentEmail && (
-            <div className="text-xs text-purple-600 mt-0.5">
-              Parent Email: {user.parentEmail}
+            <div className="text-xs text-purple-700">
+              Parent: <span className="font-mono">{user.parentEmail}</span>
             </div>
           )}
-          {/* Phone details (add always if available) */}
-          <div className="flex items-center gap-2 mt-1">
+          <div className="flex items-center gap-2">
             <FiPhone className="text-green-600" />
             <span className="font-mono text-xs">{user.phone || '-'}</span>
           </div>
         </div>
       </TableCell>
       <TableCell>
-        <span className="
-          inline-flex items-center gap-2 
-          px-2 rounded-full text-xs font-medium
-          " 
-          style={{
-            background:
-              user.role === "admin"
-                ? "#f3e8ff"
-                : user.role === "therapist"
-                ? "#e0f2fe"
-                : "#fef9c3",
-            color:
-              user.role === "admin"
-                ? "#7c3aed"
-                : user.role === "therapist"
-                ? "#0ea5e9"
-                : "#eab308",
-          }}
+        <span className={
+          "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold border " + roleTypeColor(user.role)
+          }
         >
-          <FiTag />
-          {user.role}
+          <FiTag /> {user.role}
         </span>
       </TableCell>
       <TableCell>
         <span
           className={
-            "capitalize px-2 py-1 rounded text-xs font-semibold " +
-            (user.fromCollection === "therapists"
-              ? "bg-blue-100 text-blue-700"
-              : user.fromCollection === "patients"
-              ? "bg-yellow-100 text-yellow-700"
-              : user.fromCollection === "admin"
-              ? "bg-purple-100 text-purple-700"
-              : "bg-slate-100 text-slate-600")
+            "capitalize px-2 py-0.5 rounded text-xs font-bold border " +
+            typeColor(user.fromCollection)
           }
         >
           {user.fromCollection}
         </span>
       </TableCell>
-      {/* Remove phone column cell
-      <TableCell>
-        <div className="flex flex-col">
-          <div className="flex items-center gap-2">
-            <FiPhone className="text-green-600" />
-            <span className="font-mono">{user.phone || '-'}</span>
-          </div>
-          {user.fromCollection === "patients" && user.address && (
-            <div className="text-xs text-slate-500 mt-0.5">
-              Address: {user.address}
-            </div>
-          )}
-        </div>
-      </TableCell>
-      */}
       <TableCell>
         <button
-          className="flex items-center gap-1 px-2.5 py-1.5 rounded bg-blue-100 text-blue-700 border border-blue-200 hover:bg-blue-200 hover:text-blue-900 text-xs font-semibold transition disabled:opacity-60 disabled:cursor-not-allowed"
+          className="flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-semibold transition border border-blue-200 bg-blue-50 hover:bg-blue-200 hover:text-blue-900 text-blue-700 disabled:opacity-60 disabled:cursor-not-allowed"
           onClick={() => onLoginAsUser(user)}
           disabled={loggingInUserId === user._id}
           title="Log In As This User"
@@ -469,13 +416,9 @@ const UserRow = ({
   );
 };
 
-type AllUsersProps = {
-  navigate?: ReturnType<typeof useNavigate>;
-};
-
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
 
-const AllUsers: React.FC<AllUsersProps> = () => {
+const AllUsers: React.FC = () => {
   const [users, setUsers] = useState<FlattenedUser[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -486,11 +429,12 @@ const AllUsers: React.FC<AllUsersProps> = () => {
   const [page, setPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(25);
   const [total, setTotal] = useState<number>(0);
+  const [serverTotalRaw, setServerTotalRaw] = useState<number>(0);  // Store backend-reported total for fallback
   const [search, setSearch] = useState<string>('');
   const [searchInput, setSearchInput] = useState<string>('');
   const searchTimeout = useRef<any>(null);
 
-  // Fetch users from server with role, search, pagination
+  // Fetch data
   useEffect(() => {
     let controller = new AbortController();
     setLoading(true);
@@ -498,12 +442,15 @@ const AllUsers: React.FC<AllUsersProps> = () => {
 
     async function fetchUsers() {
       try {
-        const params: any = {
-          page,
-          limit: pageSize,
-        };
-        // ALWAYS send type for filtering, "all" as "all"
+        const params: any = {};
         params.role = activeRole;
+        if (activeRole === "patients") {
+          params.page = 1;
+          params.limit = 10000; // get all for frontend slicing
+        } else {
+          params.page = page;
+          params.limit = pageSize;
+        }
         if (search) params.search = search;
 
         const res = await axios.get(`${API_BASE}/api/super-admin/users`, {
@@ -512,44 +459,69 @@ const AllUsers: React.FC<AllUsersProps> = () => {
         });
 
         const { data } = res;
-
         let extractedUsers: FlattenedUser[] = [];
-        let totalUsers: number =
-          typeof data.total === 'number'
-            ? data.total
-            : Array.isArray(data.therapists)
-            ? data.therapistsTotal ?? data.therapists.length
-            : Array.isArray(data.patients)
-            ? data.patientsTotal ?? data.patients.length
-            : Array.isArray(data.admins)
-            ? data.adminsTotal ?? data.admins.length
-            : Array.isArray(data.users)
-            ? data.total ?? data.users.length
-            : Array.isArray(data)
-            ? data.length
-            : 0;
-
+        let totalUsers: number = 0;
         if (
           typeof data === 'object' &&
           (Array.isArray(data.therapists) ||
             Array.isArray(data.patients) ||
             Array.isArray(data.admins))
         ) {
-          extractedUsers = extractUsersFromResponse(data);
+          if (activeRole === "patients" && Array.isArray(data.patients)) {
+            const families = groupPatientsByParentEmail(data.patients);
+            totalUsers = families.length;
+            setServerTotalRaw(families.length);
+            const startIndex = (page - 1) * pageSize;
+            const endIndex = startIndex + pageSize;
+            extractedUsers = families.slice(startIndex, endIndex).map(family => ({
+              _id: family._id,
+              shortId: family.shortId,
+              name: family.name,
+              email: family.userEmail || family.parentEmail,
+              parentEmail: family.parentEmail,
+              displayNames: family.displayNames,
+              role: family.role,
+              fromCollection: 'patients',
+              phone: family.phone,
+              familyPatients: family.familyPatients,
+              fatherFullName: family.fatherFullName,
+              motherFullName: family.motherFullName,
+              address: family.address,
+              areaName: family.areaName,
+            }));
+          } else {
+            extractedUsers = extractUsersFromResponse(data);
+            if (Array.isArray(data.therapists) && activeRole === "therapists") {
+              totalUsers = typeof data.therapistsTotal === "number" ? data.therapistsTotal : data.therapists.length;
+              setServerTotalRaw(totalUsers);
+            } else if (Array.isArray(data.admins) && activeRole === "admin") {
+              totalUsers = typeof data.adminsTotal === "number" ? data.adminsTotal : data.admins.length;
+              setServerTotalRaw(totalUsers);
+            } else if (activeRole === "all" && typeof data.total === "number") {
+              totalUsers = data.total;
+              setServerTotalRaw(totalUsers);
+            } else {
+              totalUsers = extractedUsers.length;
+              setServerTotalRaw(totalUsers);
+            }
+          }
         } else if (Array.isArray(data.users)) {
           extractedUsers = data.users.map((u: any) => ({
             ...u,
             fromCollection: u.fromCollection || 'unknown',
             shortId: u.shortId || u._id,
           }));
+          totalUsers = Array.isArray(data.users) ? data.users.length : 0;
+          setServerTotalRaw(totalUsers);
         } else if (Array.isArray(data)) {
           extractedUsers = data.map(u => ({
             ...u,
             fromCollection: 'unknown',
             shortId: u._id,
           }));
+          totalUsers = data.length;
+          setServerTotalRaw(totalUsers);
         }
-
         setUsers(extractedUsers);
         setTotal(totalUsers);
       } catch (err: unknown) {
@@ -575,6 +547,7 @@ const AllUsers: React.FC<AllUsersProps> = () => {
         setError(errMessage);
         setUsers([]);
         setTotal(0);
+        setServerTotalRaw(0);
       } finally {
         setLoading(false);
       }
@@ -582,9 +555,10 @@ const AllUsers: React.FC<AllUsersProps> = () => {
 
     fetchUsers();
     return () => controller.abort();
+    // eslint-disable-next-line
   }, [activeRole, page, pageSize, search]);
 
-  // Debounced search input -> search param
+  // Debounced search
   useEffect(() => {
     if (searchTimeout.current) clearTimeout(searchTimeout.current);
     searchTimeout.current = setTimeout(() => {
@@ -601,7 +575,6 @@ const AllUsers: React.FC<AllUsersProps> = () => {
     if (!user || !user._id) return;
     setLoggingInUserId(user._id);
     setError(null);
-
     try {
       const superAdminToken = localStorage.getItem('super-admin-token');
       const res = await axios.post(
@@ -615,9 +588,7 @@ const AllUsers: React.FC<AllUsersProps> = () => {
         }
       );
       const { token, role, user: userData } = res.data;
-
       localStorage.setItem("isLogInViaSuperAdmin", "true");
-
       if (role === "patient") {
         localStorage.setItem("patient-token", token);
         window.location.href = "/parent";
@@ -652,7 +623,8 @@ const AllUsers: React.FC<AllUsersProps> = () => {
     }
   };
 
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const currentTotal = activeRole === "patients" ? serverTotalRaw : total;
+  const totalPages = Math.max(1, Math.ceil(currentTotal / pageSize));
 
   useEffect(() => {
     if (page > totalPages) setPage(1);
@@ -664,9 +636,10 @@ const AllUsers: React.FC<AllUsersProps> = () => {
   }, [activeRole, pageSize, search]);
 
   return (
-    <div className="w-full px-5 py-4">
-      <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-        <h1 className="text-xl md:text-2xl font-semibold tracking-tight text-blue-900">
+    <div className={`w-full max-w-7xl mx-auto px-4 md:px-8 py-8 ${COLORS.bgCard} ${COLORS.shadow} ${COLORS.border} rounded-xl`}>
+      {/* Header actions */}
+      <div className="flex flex-col md:flex-row items-center justify-between mb-4 gap-2">
+        <h1 className="text-xl md:text-2xl font-bold tracking-tight text-blue-900 mb-2 md:mb-0">
           All Users
         </h1>
         <form
@@ -677,16 +650,16 @@ const AllUsers: React.FC<AllUsersProps> = () => {
           }}
           className="flex items-center gap-2"
         >
-          <div className="relative flex items-center">
-            <span className="absolute left-3 text-slate-400">
+          <div className="relative">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-400">
               <FiSearch />
             </span>
             <input
               type="text"
               value={searchInput}
               onChange={e => setSearchInput(e.target.value)}
-              placeholder="Search by name, email, phone, id..."
-              className="pl-9 pr-3 py-2 text-sm w-64 rounded-md border border-slate-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-200 outline-none"
+              placeholder="Search by name, email, phone, ID"
+              className="pl-9 pr-3 py-2 text-sm w-60 rounded-md border border-slate-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-200 outline-none transition"
               autoCorrect="off"
               spellCheck={false}
             />
@@ -707,9 +680,8 @@ const AllUsers: React.FC<AllUsersProps> = () => {
           )}
         </form>
       </div>
-
-      {/* Tab Switches */}
-      <div className="flex gap-2 flex-wrap mb-3">
+      {/* Filter Tabs */}
+      <div className="flex gap-2 mb-6 border-b border-slate-200 pb-2 overflow-x-auto">
         {ROLE_OPTIONS.map(opt => (
           <button
             key={opt.value}
@@ -718,20 +690,22 @@ const AllUsers: React.FC<AllUsersProps> = () => {
               setPage(1);
             }}
             className={
-              "text-sm font-semibold px-4 py-2 rounded-full transition border border-blue-300" +
+              "px-4 py-2 text-sm font-bold rounded-t-lg border-b-2 transition-all " +
               (activeRole === opt.apiRole
-                ? " bg-blue-600 text-white border-blue-700 shadow"
-                : " bg-white text-blue-700 hover:bg-blue-50")
+                ? "text-blue-800 bg-slate-100 border-blue-700 border-b-4"
+                : "text-slate-500 border-transparent hover:text-blue-700 hover:bg-slate-50")
             }
+            style={{
+              minWidth: 120,
+            }}
           >
             {opt.label}
           </button>
         ))}
       </div>
-
-      {/* Table Section */}
-      <div className="overflow-x-auto bg-white rounded-xl shadow border border-gray-200">
-        <table className="min-w-[800px] w-full">
+      {/* Table */}
+      <div className={`overflow-x-auto ${COLORS.bgTable} rounded-xl border border-slate-200`}>
+        <table className="w-full min-w-[820px]">
           <thead>
             <tr>
               <TableHeadCell>User ID</TableHeadCell>
@@ -747,9 +721,6 @@ const AllUsers: React.FC<AllUsersProps> = () => {
               </TableHeadCell>
               <TableHeadCell>Role</TableHeadCell>
               <TableHeadCell>Type</TableHeadCell>
-              {/* Remove Phone Column
-              <TableHeadCell>Phone</TableHeadCell>
-              */}
               <TableHeadCell>
                 <span className="flex items-center gap-1 justify-center">
                   <FiLogIn className="mb-0.5" />
@@ -761,28 +732,27 @@ const AllUsers: React.FC<AllUsersProps> = () => {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={6} className="py-6 text-center text-blue-600 font-medium">
-                  Loading users...
+                <td colSpan={6} className="py-10 text-center text-blue-500 font-medium bg-slate-50">
+                  <span className="inline-flex gap-2 items-center animate-pulse">
+                    <FiUser className="animate-spin text-blue-400" />
+                    Loading users...
+                  </span>
                 </td>
               </tr>
             ) : error ? (
               <tr>
-                <td colSpan={6} className="py-6 text-center text-red-600 font-semibold">
-                  {error}
-                </td>
+                <td colSpan={6} className="py-10 text-center font-bold text-rose-700 bg-rose-50 rounded">{error}</td>
               </tr>
             ) : users.length === 0 ? (
               <tr>
-                <td colSpan={6} className="py-6 text-center text-slate-500">
-                  No{" "}
-                  {activeRole === "all"
+                <td colSpan={6} className="py-10 text-center text-slate-500 bg-slate-50 font-semibold">
+                  No {activeRole === "all"
                     ? "users"
                     : activeRole === "patients"
                     ? "families"
                     : activeRole === "therapists"
                     ? "therapists"
-                    : "admins"}{" "}
-                  found.
+                    : "admins"} found.
                 </td>
               </tr>
             ) : (
@@ -798,74 +768,75 @@ const AllUsers: React.FC<AllUsersProps> = () => {
           </tbody>
         </table>
       </div>
-
-      {/* Pagination Controls */}
-      <div className="flex flex-col md:flex-row items-center justify-between py-4 gap-y-3">
-        <div className="flex items-center gap-2 text-sm text-gray-700">
-          <label htmlFor="pageSize-select">Rows per page:</label>
-          <select
-            id="pageSize-select"
-            className="py-1 px-2 rounded border border-slate-300 focus:border-blue-400"
-            value={pageSize}
-            onChange={e => {
-              setPageSize(Number(e.target.value));
-              setPage(1);
-            }}
-          >
-            {PAGE_SIZE_OPTIONS.map(sz => (
-              <option key={sz} value={sz}>
-                {sz}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="flex items-center gap-1 text-sm text-slate-500">
-          <button
-            className="px-2 py-1 rounded border border-slate-300 bg-white hover:bg-blue-50 transition disabled:opacity-50"
-            title="Previous Page"
-            disabled={page === 1 || loading}
-            onClick={() => setPage(prev => Math.max(1, prev - 1))}
-            aria-label="Previous Page"
-          >
-            <FiChevronLeft />
-          </button>
-          <span className="px-2 select-none">
-            Page{" "}
-            <input
-              type="number"
-              min={1}
-              max={totalPages}
-              value={page}
+      {/* Pagination */}
+      {activeRole !== "all" && (
+        <div className="flex flex-col md:flex-row items-center justify-between py-6 gap-y-4">
+          <div className="flex items-center gap-2 text-sm text-gray-700">
+            <label htmlFor="pageSize-select" className="font-semibold">Rows per page:</label>
+            <select
+              id="pageSize-select"
+              className="py-1 px-2 rounded border border-slate-300 focus:border-blue-400 transition"
+              value={pageSize}
               onChange={e => {
-                let val = Number(e.target.value);
-                if (Number.isNaN(val) || val < 1) val = 1;
-                if (val > totalPages) val = totalPages;
-                setPage(val);
+                setPageSize(Number(e.target.value));
+                setPage(1);
               }}
-              className="w-12 text-center border border-gray-300 rounded mx-1 py-0.5 px-1 text-sm"
-              style={{ width: 44 }}
-              disabled={loading || totalPages <= 1}
-            />{" "}
-            of {totalPages}
-          </span>
-          <button
-            className="px-2 py-1 rounded border border-slate-300 bg-white hover:bg-blue-50 transition disabled:opacity-50"
-            title="Next Page"
-            disabled={page === totalPages || loading || totalPages <= 1}
-            onClick={() => setPage(prev => Math.min(totalPages, prev + 1))}
-            aria-label="Next Page"
-          >
-            <FiChevronRight />
-          </button>
-          <span className="pl-3">
-            {total > 0 && (
-              <>
-                {(page - 1) * pageSize + 1}-{Math.min(total, page * pageSize)} of {total} users
-              </>
-            )}
-          </span>
+            >
+              {PAGE_SIZE_OPTIONS.map(sz => (
+                <option key={sz} value={sz}>
+                  {sz}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex items-center gap-2 text-sm text-slate-500">
+            <button
+              className="px-2 py-1 rounded border border-slate-300 bg-white hover:bg-blue-50 transition disabled:opacity-50"
+              title="Previous Page"
+              disabled={page === 1 || loading}
+              onClick={() => setPage(prev => Math.max(1, prev - 1))}
+              aria-label="Previous Page"
+            >
+              <FiChevronLeft />
+            </button>
+            <span className="px-2 select-none">
+              Page{" "}
+              <input
+                type="number"
+                min={1}
+                max={totalPages}
+                value={page}
+                onChange={e => {
+                  let val = Number(e.target.value);
+                  if (Number.isNaN(val) || val < 1) val = 1;
+                  if (val > totalPages) val = totalPages;
+                  setPage(val);
+                }}
+                className="w-14 text-center border border-gray-300 rounded-lg mx-1 py-0.5 px-1 text-sm"
+                style={{ width: 48 }}
+                disabled={loading || totalPages <= 1}
+              />{" "}
+              of <span className="font-semibold">{totalPages}</span>
+            </span>
+            <button
+              className="px-2 py-1 rounded border border-slate-300 bg-white hover:bg-blue-50 transition disabled:opacity-50"
+              title="Next Page"
+              disabled={page === totalPages || loading || totalPages <= 1}
+              onClick={() => setPage(prev => Math.min(totalPages, prev + 1))}
+              aria-label="Next Page"
+            >
+              <FiChevronRight />
+            </button>
+            <span className="pl-3 font-medium">
+              {currentTotal > 0 && (
+                <>
+                  {(page - 1) * pageSize + 1}-{Math.min(currentTotal, page * pageSize)} of {currentTotal} {activeRole === "patients" ? "families" : "users"}
+                </>
+              )}
+            </span>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 };
