@@ -95,6 +95,7 @@ import RaisedTickets from "./pages/AdminPages/RaisedTickets/RaisedTickets";
 import ConsultationBooking from "./pages/ParentPages/ConsultationBooking/ConsultationBooking";
 import ConsultationBookingsAdmin from "./pages/AdminPages/ConsultationBookings/ConsultationBookings";
 import OnboardAdmin from "./pages/SuperAdminPages/OnboardAdmin/OnboardAdmin";
+import PaymentConfirmation from "./pages/ParentPages/InvoiveAndPaymentsPage/PaymentConfirmation";
 
 
 export default function App() {
@@ -245,6 +246,12 @@ export default function App() {
 
           <Route path="/parent/consultation-booking" element={<ConsultationBooking />} />
           <Route path="/parent/raise-ticket" element={<RaiseTickets />} />
+          <Route
+            path="/parent/payment-confirmation"
+            element={<PaymentConfirmation />}
+             
+          />
+
           <Route path="/parent/logout" element={<LogOutParent />} />
 
 
@@ -254,6 +261,7 @@ export default function App() {
           <Route path="/parent/complete-parent-profile" element={<ParentCompleteProfile />} />
 
           <Route path="/signin" element={<AuthPage />} />
+         
         
           {/* <Route path="/privacy-policy" element={<PrivacyPolicy />} /> */}
 

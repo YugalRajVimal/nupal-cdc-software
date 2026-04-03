@@ -12,6 +12,9 @@ import axios from "axios";
 import * as XLSX from "xlsx";
 import clsx from "clsx";
 
+import { load } from "@cashfreepayments/cashfree-js";
+
+
 // Interface for each payment detail coming from backend
 interface PaymentDetail {
   InvoiceId: string;
@@ -70,6 +73,12 @@ export default function InvoiveAndPaymentsPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Cashfree
+  const [cashfree, setCashfree] = useState<any>(null);
+  // const [sessionId, setSessionId] = useState<string | null>(null);
+  // const [orderDetails, setOrderDetails] = useState<any>(null);
+  const [paymentInProgress, setPaymentInProgress] = useState(false);
+
   // Search & Pagination UI state (controlled separately)
   const [searchText, setSearchText] = useState("");
   const debouncedSearchText = useDebouncedValue(searchText, 500);
@@ -80,11 +89,22 @@ export default function InvoiveAndPaymentsPage() {
   // For preventing state reset when table data refreshes
   const pageSizeRef = useRef(pageSize);
 
+
+  useEffect(() => {
+    const initializeSDK = async () => {
+      const sdk = await load({
+        mode: "sandbox",
+      });
+      setCashfree(sdk);
+    };
+    initializeSDK();
+  }, []);
+
   // Fetch payments data
   useEffect(() => {
     setLoading(true);
     setError(null);
-    const baseUrl = import.meta.env.VITE_API_URL || "";
+    const baseUrl = import.meta.env.VITE_API_URL  || "";
     const token = localStorage.getItem("patient-token");
     const params = new URLSearchParams();
     params.append("page", String(currentPage));
@@ -114,6 +134,54 @@ export default function InvoiveAndPaymentsPage() {
       });
   }, [debouncedSearchText, currentPage, pageSize]);
 
+  // Load Cashfree SDK on mount
+  // useEffect(() => {
+  //   let isMounted = true;
+  //   load().then((cf) => {
+  //     if (isMounted) setCashfree(cf);
+  //   });
+  //   return () => {
+  //     isMounted = false;
+  //   };
+  // }, []);
+
+  // Get session ID
+  const getSessionId = async (paymentId: string, name: string, email: string, phone: string) => {
+    try {
+      const API_URL = import.meta.env.VITE_API_URL || "";
+      // Pass paymentId to backend; name/email/phone optional for redundancy
+      const response = await axios.post(
+        `${API_URL}/api/cashfree/generate-session-id`,
+        { paymentId, name, email, phone }, // paymentId is required
+        { headers: { "Content-Type": "application/json" } }
+      );
+      if (response.status === 200) {
+        const data = response.data;
+        const orderInfo = {
+          createdAt: data.created_at,
+          orderId: data.order_id,
+          orderAmount: data.order_amount,
+          customerName: data.customer_details?.customer_name,
+          customerEmail: data.customer_details?.customer_email,
+          customerPhone: data.customer_details?.customer_phone,
+        };
+        // setOrderDetails(orderInfo);
+        // setSessionId(data.payment_session_id);
+        console.log(data, "Session Id");
+        return {
+          ...orderInfo,
+          sessionId: data.payment_session_id,
+        };
+      } else {
+        console.error("Error generating sessionId");
+        return null;
+      }
+    } catch (error) {
+      console.error("Error generating sessionId:", error);
+      return null;
+    }
+  };
+
   // --- Pagination controls ---
   const totalCount = paymentsData?.total || 0;
   const numPages =
@@ -141,6 +209,48 @@ export default function InvoiveAndPaymentsPage() {
 
   // For excel, gather all rows on screen only.
   const displayedRows = paymentsData?.payments || [];
+
+  // Handle Payment via Cashfree for a given payment row
+  const handlePayment = async (payment: PaymentDetail) => {
+    setPaymentInProgress(true);
+    try {
+      // Get patient details from the row
+      const { patientName, InvoiceId } = payment;
+      // We'll need a valid email and phone for cashfree
+      // (These should be retrieved in real implementation from user info or backfill)
+      // Using dummy for now:
+      const email = "parent@email.com";
+      const phone = "9999999999";
+      const sessionData = await getSessionId(InvoiceId, patientName, email, phone);
+      if (!cashfree) {
+        setPaymentInProgress(false);
+        console.error("Cashfree SDK not initialized.");
+        return;
+      }
+      if (!sessionData?.sessionId) {
+        setPaymentInProgress(false);
+        console.error("Session Id not found.");
+        return;
+      }
+      let checkoutOptions = {
+        paymentSessionId: sessionData.sessionId,
+        returnUrl: `${window.location.origin}/parent/payment-confirmation`,
+        notifyUrl: `${import.meta.env.VITE_API_URL}/cashfreeWebhook`,
+      };
+      await cashfree
+        .checkout(checkoutOptions)
+        .then(function (data: any) {
+          // Payment initiate
+          console.log(data, "Payment Initiate");
+        })
+        .catch(function (error: any) {
+          console.error(error);
+        });
+    } catch (error) {
+      console.log(error);
+    }
+    setPaymentInProgress(false);
+  };
 
   return (
     <motion.div
@@ -242,6 +352,7 @@ export default function InvoiveAndPaymentsPage() {
                 <th className="px-4 py-3 text-left">Patient Name & Id</th>
                 <th className="px-4 py-3 text-right">Amount</th>
                 <th className="px-4 py-3 text-center">Status</th>
+                <th className="px-4 py-3 text-center">Action</th>
               </tr>
             </thead>
             <tbody>
@@ -276,11 +387,24 @@ export default function InvoiveAndPaymentsPage() {
                           payment.status.slice(1)}
                       </span>
                     </td>
+                    <td className="px-4 py-3 text-center">
+                      {payment.status === "pending" ? (
+                        <button
+                          className="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 transition text-sm disabled:opacity-50"
+                          disabled={paymentInProgress}
+                          onClick={() => handlePayment(payment)}
+                        >
+                          {paymentInProgress ? "Processing..." : "Pay Now"}
+                        </button>
+                      ) : (
+                        <span className="text-gray-400 text-xs">-</span>
+                      )}
+                    </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={5} className="px-4 py-6 text-center text-slate-400">
+                  <td colSpan={6} className="px-4 py-6 text-center text-slate-400">
                     No payment records found.
                   </td>
                 </tr>
@@ -302,6 +426,8 @@ export default function InvoiveAndPaymentsPage() {
           {/* Duplicate pagination controls below if desired */}
         </div>
       </div>
+      {/* Optionally, your PaymentConfirmation modal/dialog here if you want */}
+      {/* <PaymentConfirmation orderDetails={orderDetails} /> */}
     </motion.div>
   );
 }
