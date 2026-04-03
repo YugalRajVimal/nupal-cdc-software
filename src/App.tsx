@@ -96,6 +96,7 @@ import ConsultationBooking from "./pages/ParentPages/ConsultationBooking/Consult
 import ConsultationBookingsAdmin from "./pages/AdminPages/ConsultationBookings/ConsultationBookings";
 import OnboardAdmin from "./pages/SuperAdminPages/OnboardAdmin/OnboardAdmin";
 import PaymentConfirmation from "./pages/ParentPages/InvoiveAndPaymentsPage/PaymentConfirmation";
+import { ContactUs, RefundsAndCancellations, TermsAndConditions } from "./pages/Policies";
 
 
 export default function App() {
@@ -261,6 +262,10 @@ export default function App() {
           <Route path="/parent/complete-parent-profile" element={<ParentCompleteProfile />} />
 
           <Route path="/signin" element={<AuthPage />} />
+
+          <Route path="/policies/contact-us" element={<ContactUs />} />
+          <Route path="/policies/terms-and-conditions" element={<TermsAndConditions />} />
+          <Route path="/policies/refunds-cancellations" element={<RefundsAndCancellations />} />
          
         
           {/* <Route path="/privacy-policy" element={<PrivacyPolicy />} /> */}
