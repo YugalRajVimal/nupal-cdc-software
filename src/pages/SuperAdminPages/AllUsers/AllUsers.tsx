@@ -11,7 +11,7 @@ import {
   FiChevronLeft,
   FiChevronRight,
 } from "react-icons/fi";
-import { useNavigate } from "react-router-dom";
+
 
 // === Design tokens ===
 const COLORS = {
