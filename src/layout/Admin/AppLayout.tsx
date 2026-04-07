@@ -214,7 +214,6 @@ const SubAdminAppLayout: React.FC = () => {
           setIsAdminAuthenticated(false);
           if (window.location.pathname.startsWith("/admin")) {
             // --- Add ?role=admin to the /signin URL redirect ---
-            const currentPath = window.location.pathname + window.location.search + window.location.hash;
             // If not already at /signin
             if (!window.location.pathname.startsWith("/signin")) {
               window.location.href = "/signin?role=admin";

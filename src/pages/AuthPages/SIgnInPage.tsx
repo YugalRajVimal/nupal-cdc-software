@@ -8,6 +8,7 @@ import {
   FiLock,
   FiEye,
   FiHome,
+  FiPhone,
 } from "react-icons/fi";
 import { FaCrown } from "react-icons/fa";
 
@@ -48,10 +49,17 @@ const roleHomeMap: Record<Role, string> = {
 
 const API_BASE = `${import.meta.env.VITE_API_URL}/api/auth`;
 
+function validateInput(input: string): "email" | "phone" | null {
+  // Very simple patterns
+  if (/^\+?[1-9]\d{7,14}$/.test(input.replace(/\s/g, ""))) return "phone"; // basic E.164 or local
+  if (input.includes("@") && /\S+@\S+\.\S+/.test(input)) return "email";
+  return null;
+}
+
 export default function AuthPage() {
   // Choose role by param if present, default to "patient"
   const [role, setRole] = useState<Role>(getInitialRole());
-  const [email, setEmail] = useState("");
+  const [emailOrPhone, setEmailOrPhone] = useState("");
   const [otp, setOtp] = useState("");
   const [otpSent, setOtpSent] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -89,16 +97,34 @@ export default function AuthPage() {
   async function handleSendOtp() {
     setStatus(null);
     setLoading(true);
+
+    const inputType = validateInput(emailOrPhone.trim());
+    let sendPayload: { email?: string; phone?: string; role: Role } = { role };
+
+    if (inputType === "email") {
+      sendPayload.email = emailOrPhone.trim().toLowerCase();
+    } else if (inputType === "phone") {
+      sendPayload.phone = emailOrPhone.replace(/\s+/g, "");
+    } else {
+      setStatus("Please enter a valid email address or phone number.");
+      setLoading(false);
+      return;
+    }
+
     try {
       const res = await fetch(`${API_BASE}/signin`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim().toLowerCase(), role }),
+        body: JSON.stringify(sendPayload),
       });
       const data = await res.json();
       if (res.ok) {
         setOtpSent(true);
-        setStatus("OTP sent! Please check your email.");
+        setStatus(
+          sendPayload.email
+            ? "OTP sent! Please check your email."
+            : "OTP sent! Please check your WhatsApp."
+        );
       } else {
         setOtpSent(false);
         setStatus(data?.message || "Failed to send OTP");
@@ -114,11 +140,27 @@ export default function AuthPage() {
   async function handleVerifyOtp() {
     setStatus(null);
     setLoading(true);
+    const inputType = validateInput(emailOrPhone.trim());
+    let verifyPayload: { email?: string; phone?: string; role: Role; otp: string } = {
+      role,
+      otp,
+    };
+
+    if (inputType === "email") {
+      verifyPayload.email = emailOrPhone.trim().toLowerCase();
+    } else if (inputType === "phone") {
+      verifyPayload.phone = emailOrPhone.replace(/\s+/g, "");
+    } else {
+      setStatus("Invalid input.");
+      setLoading(false);
+      return;
+    }
+
     try {
       const res = await fetch(`${API_BASE}/verify-account`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim().toLowerCase(), role, otp }),
+        body: JSON.stringify(verifyPayload),
       });
       const data = await res.json();
       localStorage.setItem("isLogInViaSuperAdmin", "false");
@@ -140,18 +182,27 @@ export default function AuthPage() {
 
   // --- SUPERADMIN APIs ---
 
-  // API1: Login with email+password for SuperAdmin
+  // API1: Login with email/phone + password for SuperAdmin
   async function handleSuperAdminLogin() {
     setStatus(null);
     setSuperLoading(true);
     try {
+      const inputType = validateInput(emailOrPhone.trim());
+      let payload: any = { password };
+      if (inputType === "email") {
+        payload.email = emailOrPhone.trim().toLowerCase();
+      } else if (inputType === "phone") {
+        payload.phone = emailOrPhone.replace(/\s+/g, "");
+      } else {
+        setStatus("Enter a valid email address or phone number.");
+        setSuperLoading(false);
+        return;
+      }
+
       const res = await fetch(`${API_BASE}/super-admin/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: email.trim().toLowerCase(),
-          password,
-        }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (res.ok && data.token) {
@@ -170,30 +221,41 @@ export default function AuthPage() {
     }
   }
 
-  // API2: Superadmin - Forgot password (send OTP to email)
+  // API2: Superadmin - Forgot password (send OTP to email or phone)
   async function handleSuperAdminSendOtp() {
     setStatus(null);
     setSuperLoading(true);
     try {
+      const inputType = validateInput(emailOrPhone.trim());
+      let payload: any = {};
+      if (inputType === "email") {
+        payload.email = emailOrPhone.trim().toLowerCase();
+      } else if (inputType === "phone") {
+        payload.phone = emailOrPhone.replace(/\s+/g, "");
+      } else {
+        setStatus("Enter a valid email address or phone number.");
+        setSuperLoading(false);
+        return;
+      }
+
       const res = await fetch(`${API_BASE}/super-admin/forgot-password`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: email.trim().toLowerCase(),
-        }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (res.ok) {
-        setStatus("OTP sent! Please check your superadmin email.");
-
+        setStatus(
+          inputType === "email"
+            ? "OTP sent! Please check your superadmin email."
+            : "OTP sent! Please check your registered WhatsApp."
+        );
         setSuperStep("verify");
       } else {
-
         setStatus(data?.message || "Failed to send OTP");
       }
     } catch (err) {
       setStatus("An error occurred.");
-
     } finally {
       setSuperLoading(false);
     }
@@ -204,13 +266,22 @@ export default function AuthPage() {
     setStatus(null);
     setSuperLoading(true);
     try {
+      const inputType = validateInput(emailOrPhone.trim());
+      let payload: any = { otp: superOtp };
+      if (inputType === "email") {
+        payload.email = emailOrPhone.trim().toLowerCase();
+      } else if (inputType === "phone") {
+        payload.phone = emailOrPhone.replace(/\s+/g, "");
+      } else {
+        setStatus("Enter a valid email address or phone number.");
+        setSuperLoading(false);
+        return;
+      }
+
       const res = await fetch(`${API_BASE}/super-admin/verify-account`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: email.trim().toLowerCase(),
-          otp: superOtp,
-        }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (res.ok && data.token) {
@@ -235,19 +306,32 @@ export default function AuthPage() {
     setStatus(null);
     setSuperOtp("");
     setPassword("");
-
   }
   function handleSuperAdminBackToLogin() {
     setSuperStep("login");
     setStatus(null);
     setSuperOtp("");
     setPassword("");
-
   }
 
   // Handler for back to home button
   function handleBackToHome() {
     window.location.href = "/";
+  }
+
+  // Helper for superadmin username label
+  function superAdminUsernameLabel() {
+    return "Administrator Email or Phone Number";
+  }
+
+  // Helper for superadmin username placeholder
+  function superAdminUsernamePlaceholder() {
+    return "Superadmin email or phone (+91...)";
+  }
+
+  // Helper for forgot password username label
+  function superAdminForgotLabel() {
+    return "Enter Superadmin Email or Phone for OTP";
   }
 
   return (
@@ -387,17 +471,18 @@ export default function AuthPage() {
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: 0.04, duration: 0.35 }}
                   >
-                    Email Address
+                    Email Address or Phone Number
                   </motion.label>
                   <div className="relative">
                     <FiMail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <FiPhone className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 rotate-12" />
                     <motion.input
-                      type="email"
-                      value={email}
+                      type="text"
+                      value={emailOrPhone}
                       autoComplete="username"
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="Enter your email"
-                      className="w-full rounded-lg border border-slate-300 pl-10 pr-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                      onChange={(e) => setEmailOrPhone(e.target.value)}
+                      placeholder="Enter your email or phone (+91...)"
+                      className="w-full rounded-lg border border-slate-300 pl-10 pr-10 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
                       initial={{ opacity: 0, x: 30 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: 0.07, duration: 0.38 }}
@@ -411,7 +496,7 @@ export default function AuthPage() {
                     transition={{ duration: 0.15 }}
                     type="button"
                     onClick={handleSendOtp}
-                    disabled={loading || !email.trim()}
+                    disabled={loading || !emailOrPhone.trim()}
                   >
                     {loading ? "Sending..." : "Send OTP →"}
                   </motion.button>
@@ -424,7 +509,7 @@ export default function AuthPage() {
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: 0.04, duration: 0.35 }}
                   >
-                    OTP
+                    OTP (received on Email or WhatsApp)
                   </motion.label>
                   <div className="relative mb-2">
                     <FiLock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -461,7 +546,7 @@ export default function AuthPage() {
                     }}
                     disabled={loading}
                   >
-                    ← Back to Email
+                    ← Back to Login
                   </motion.button>
                 </>
               )}
@@ -506,14 +591,14 @@ export default function AuthPage() {
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: 0.11, duration: 0.3 }}
                   >
-                    Administrator Email
+                    {superAdminUsernameLabel()}
                   </motion.label>
                   <motion.input
-                    type="email"
-                    value={email}
+                    type="text"
+                    value={emailOrPhone}
                     autoComplete="username"
-                    onChange={e => setEmail(e.target.value)}
-                    placeholder="Superadmin email"
+                    onChange={e => setEmailOrPhone(e.target.value)}
+                    placeholder={superAdminUsernamePlaceholder()}
                     className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-slate-300 transition-all"
                     initial={{ opacity: 0, x: 25 }}
                     animate={{ opacity: 1, x: 0 }}
@@ -558,7 +643,7 @@ export default function AuthPage() {
                     transition={{ duration: 0.18 }}
                     type="button"
                     onClick={handleSuperAdminLogin}
-                    disabled={superLoading || !email.trim() || !password}
+                    disabled={superLoading || !emailOrPhone.trim() || !password}
                   >
                     {superLoading ? "Authenticating..." : "Authenticate System Access"}
                   </motion.button>
@@ -581,14 +666,14 @@ export default function AuthPage() {
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: 0.11, duration: 0.3 }}
                   >
-                    Enter Superadmin Email for OTP
+                    {superAdminForgotLabel()}
                   </motion.label>
                   <motion.input
-                    type="email"
-                    value={email}
+                    type="text"
+                    value={emailOrPhone}
                     autoComplete="username"
-                    onChange={e => setEmail(e.target.value)}
-                    placeholder="Superadmin email"
+                    onChange={e => setEmailOrPhone(e.target.value)}
+                    placeholder={superAdminUsernamePlaceholder()}
                     className="w-full rounded-lg bg-slate-800 border border-slate-700 px-3 py-2 text-slate-300 transition-all"
                     initial={{ opacity: 0, x: 25 }}
                     animate={{ opacity: 1, x: 0 }}
@@ -602,7 +687,7 @@ export default function AuthPage() {
                     transition={{ duration: 0.18 }}
                     type="button"
                     onClick={handleSuperAdminSendOtp}
-                    disabled={superLoading || !email.trim()}
+                    disabled={superLoading || !emailOrPhone.trim()}
                   >
                     {superLoading ? "Sending OTP..." : "Send OTP"}
                   </motion.button>
@@ -625,7 +710,7 @@ export default function AuthPage() {
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: 0.13, duration: 0.3 }}
                   >
-                    Enter OTP sent to your email
+                    Enter OTP sent to your email or WhatsApp
                   </motion.label>
                   <div className="relative">
                     <FiLock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
