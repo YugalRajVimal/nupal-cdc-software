@@ -104,7 +104,17 @@ const ParentAppLayout: React.FC = () => {
         if (!token) {
           setIsParentAuthenticated(false);
           if (window.location.pathname.startsWith("/parent")) {
-            window.location.href = "/signin";
+            // --- Add ?role=parent to the /signin URL redirect ---
+            if (!window.location.pathname.startsWith("/signin")) {
+              window.location.href = "/signin?role=parent";
+            } else {
+              // If at /signin but missing role param, update it
+              const url = new URL(window.location.href);
+              if (url.searchParams.get("role") !== "parent") {
+                url.searchParams.set("role", "parent");
+                window.location.href = url.pathname + url.search + url.hash;
+              }
+            }
           }
           return;
         }
@@ -158,11 +168,13 @@ const ParentAppLayout: React.FC = () => {
           }
         } else {
           setIsParentAuthenticated(false);
-          window.location.href = "/signin";
+          // --- Add ?role=parent to failed auth redirect to /signin ---
+          window.location.href = "/signin?role=parent";
         }
       } catch (err) {
         setIsParentAuthenticated(false);
-        window.location.href = "/signin";
+        // --- Add ?role=parent to failed auth redirect to /signin ---
+        window.location.href = "/signin?role=parent";
       }
     };
 

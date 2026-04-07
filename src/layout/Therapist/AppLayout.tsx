@@ -52,16 +52,15 @@ const LayoutContent: React.FC<{
           isExpanded || isHovered ? "lg:ml-[290px]" : "lg:ml-[90px]"
         } ${isMobileOpen ? "ml-0" : ""}`}
       >
-           {isLoggedInViaSuperAdmin && (
-            <SuperAdminBanner
-              superAdminName={superAdminName}
-              superAdminEmail={superAdminEmail}
-            />
-          )}
+        {isLoggedInViaSuperAdmin && (
+          <SuperAdminBanner
+            superAdminName={superAdminName}
+            superAdminEmail={superAdminEmail}
+          />
+        )}
         <SubAdminAppHeader />
         <div className="p-4 mx-auto max-w-(--breakpoint-2xl) md:p-6">
           {/* SuperAdmin Banner */}
-       
           <Outlet />
         </div>
       </div>
@@ -107,7 +106,19 @@ const TherapistAppLayout: React.FC = () => {
         if (!token) {
           setIsTherapistAuthenticated(false);
           if (window.location.pathname.startsWith("/therapist")) {
-            window.location.href = "/signin";
+            // --- Add ?role=therapist to the /signin URL redirect ---
+            const currentPath = window.location.pathname + window.location.search + window.location.hash;
+            // If not already at /signin
+            if (!window.location.pathname.startsWith("/signin")) {
+              window.location.href = "/signin?role=therapist";
+            } else {
+              // Already at /signin but missing role param, update it
+              const url = new URL(window.location.href);
+              if (url.searchParams.get("role") !== "therapist") {
+                url.searchParams.set("role", "therapist");
+                window.location.href = url.pathname + url.search + url.hash;
+              }
+            }
           }
           return;
         }
@@ -186,11 +197,12 @@ const TherapistAppLayout: React.FC = () => {
           }
         } else {
           setIsTherapistAuthenticated(false);
-          window.location.href = "/signin";
+          // --- Add ?role=therapist to failed auth redirect to /signin ---
+          window.location.href = "/signin?role=therapist";
         }
       } catch (err) {
         setIsTherapistAuthenticated(false);
-        window.location.href = "/signin";
+        window.location.href = "/signin?role=therapist";
       }
     };
 

@@ -125,7 +125,6 @@ const SubAdminAppLayout: React.FC = () => {
   // Helper to show toast with close
   const showFollowUpToast = useCallback(
     (count: number) => {
-      // If user closed, don't show again until timer triggers next show
       if (toastManuallyClosedRef.current) return;
       if (toast.isActive(FOLLOW_UP_TOAST_ID)) {
         toast.update(FOLLOW_UP_TOAST_ID, {
@@ -135,7 +134,6 @@ const SubAdminAppLayout: React.FC = () => {
               onClose={() => {
                 toast.dismiss(FOLLOW_UP_TOAST_ID);
                 toastManuallyClosedRef.current = true;
-                // Allow toast to show again after next check/interval
                 setTimeout(() => {
                   toastManuallyClosedRef.current = false;
                 }, 5 * 60 * 1000);
@@ -215,7 +213,19 @@ const SubAdminAppLayout: React.FC = () => {
         if (!token) {
           setIsAdminAuthenticated(false);
           if (window.location.pathname.startsWith("/admin")) {
-            window.location.href = "/signin";
+            // --- Add ?role=admin to the /signin URL redirect ---
+            const currentPath = window.location.pathname + window.location.search + window.location.hash;
+            // If not already at /signin
+            if (!window.location.pathname.startsWith("/signin")) {
+              window.location.href = "/signin?role=admin";
+            } else {
+              // Already at /signin but missing role param, update it
+              const url = new URL(window.location.href);
+              if (url.searchParams.get("role") !== "admin") {
+                url.searchParams.set("role", "admin");
+                window.location.href = url.pathname + url.search + url.hash;
+              }
+            }
           }
           return;
         }
@@ -244,16 +254,18 @@ const SubAdminAppLayout: React.FC = () => {
             setSuperAdminName(data.name);
             setSuperAdminEmail(data.email);
           }
+          // On successful login, redirect away from /signin to /admin
           if (window.location.pathname === "/signin") {
             window.location.href = "/admin";
           }
         } else {
           setIsAdminAuthenticated(false);
-          window.location.href = "/signin";
+          // --- Add ?role=admin to failed auth redirect to /signin ---
+          window.location.href = "/signin?role=admin";
         }
       } catch (err) {
         setIsAdminAuthenticated(false);
-        window.location.href = "/signin";
+        window.location.href = "/signin?role=admin";
       }
     };
 

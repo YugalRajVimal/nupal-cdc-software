@@ -44,7 +44,16 @@ const AppLayout: React.FC = () => {
       if (!token) {
         setIsSuperAdminAuthenticated(false);
         if (window.location.pathname.startsWith("/super-admin")) {
-          window.location.href = "/signin";
+          // Add ?role=superadmin to /signin redirect if not present
+          if (!window.location.pathname.startsWith("/signin")) {
+            window.location.href = "/signin?role=superadmin";
+          } else {
+            const url = new URL(window.location.href);
+            if (url.searchParams.get("role") !== "superadmin") {
+              url.searchParams.set("role", "superadmin");
+              window.location.href = url.pathname + url.search + url.hash;
+            }
+          }
         }
         return;
       }
@@ -65,11 +74,12 @@ const AppLayout: React.FC = () => {
           }
         } else {
           setIsSuperAdminAuthenticated(false);
-          window.location.href = "/signin";
+          // Ensure redirect to /signin?role=superadmin
+          window.location.href = "/signin?role=superadmin";
         }
       } catch (err) {
         setIsSuperAdminAuthenticated(false);
-        window.location.href = "/signin";
+        window.location.href = "/signin?role=superadmin";
       }
     };
 

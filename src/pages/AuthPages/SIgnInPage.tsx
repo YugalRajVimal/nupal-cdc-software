@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   FiUser,
@@ -10,6 +10,18 @@ import {
   FiHome,
 } from "react-icons/fi";
 import { FaCrown } from "react-icons/fa";
+
+// Support ?role= in search params
+function getInitialRole(): Role {
+  if (typeof window === "undefined") return "patient";
+  const url = new URL(window.location.href);
+  const param = url.searchParams.get("role")?.toLowerCase();
+  if (param === "admin") return "admin";
+  if (param === "therapist") return "therapist";
+  if (param === "superadmin") return "superadmin";
+  // Fallback/default to "patient"
+  return "patient";
+}
 
 const roles = [
   { key: "patient", label: "Parent", icon: FiUser },
@@ -37,7 +49,8 @@ const roleHomeMap: Record<Role, string> = {
 const API_BASE = `${import.meta.env.VITE_API_URL}/api/auth`;
 
 export default function AuthPage() {
-  const [role, setRole] = useState<Role>("admin");
+  // Choose role by param if present, default to "patient"
+  const [role, setRole] = useState<Role>(getInitialRole());
   const [email, setEmail] = useState("");
   const [otp, setOtp] = useState("");
   const [otpSent, setOtpSent] = useState(false);
@@ -55,6 +68,22 @@ export default function AuthPage() {
   const [superLoading, setSuperLoading] = useState(false);
 
   const isSuperAdmin = role === "superadmin";
+
+  // Keep role in sync with search param if user manually changes the URL
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const onPopState = () => {
+      setRole(getInitialRole());
+      setOtpSent(false);
+      setStatus(null);
+      setSuperStep("login");
+      setSuperOtp("");
+      setPassword("");
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+    // eslint-disable-next-line
+  }, []);
 
   // Standard roles: Parent, Therapist, Admin
   async function handleSendOtp() {
@@ -296,7 +325,12 @@ export default function AuthPage() {
                   setSuperStep("login");
                   setSuperOtp("");
                   setPassword("");
-
+                  // update URL param as well for deep-linkability
+                  if (typeof window !== "undefined") {
+                    const url = new URL(window.location.href);
+                    url.searchParams.set("role", r.key);
+                    window.history.replaceState({}, "", url.toString());
+                  }
                 }}
                 initial="initial"
                 animate={active ? "selected" : "notSelected"}
