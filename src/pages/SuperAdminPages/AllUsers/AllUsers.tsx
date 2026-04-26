@@ -12,7 +12,6 @@ import {
   FiChevronRight,
 } from "react-icons/fi";
 
-
 // === Design tokens ===
 const COLORS = {
   bgCard: "bg-white",
@@ -56,6 +55,7 @@ type FamilyGroupPatient = {
   userEmail: string;
   fatherFullName?: string;
   motherFullName?: string;
+  motherOccupation?: string;
   address?: string;
   areaName?: string;
 };
@@ -108,6 +108,7 @@ const groupPatientsByParentEmail = (patients: any[]): FamilyGroupPatient[] => {
         userEmail: userEmail,
         fatherFullName: patient.fatherFullName,
         motherFullName: patient.motherFullName,
+        motherOccupation: patient.motherOccupation,
         address: patient.address,
         areaName: patient.areaName,
       };
@@ -172,6 +173,7 @@ const extractUsersFromResponse = (data: any): FlattenedUser[] => {
         familyPatients: family.familyPatients,
         fatherFullName: family.fatherFullName,
         motherFullName: family.motherFullName,
+        motherOccupation: family.motherOccupation,
         address: family.address,
         areaName: family.areaName,
       });
@@ -240,27 +242,54 @@ const PatientChildrenList: React.FC<{ familyPatients: any[] }> = ({ familyPatien
     return 0;
   });
 
+  // ---- REWRITE: Render Mother's and Father's Mobile numbers ----
+  const getMotherMobile = (child: any) => child.mobile1 || (child.userId && child.userId.mobile1) || "";
+  const getFatherMobile = (child: any) => child.mobile2 || (child.userId && child.userId.mobile2) || "";
+
   return (
     <div className="space-y-1">
       <span className="block font-semibold text-blue-700 mb-1">Children</span>
       <div className="flex flex-wrap gap-2">
         {sortedChildren.map((child, idx) => (
-          <span key={child.patientId || idx} className="flex items-center gap-1 border border-blue-100 px-2 py-0.5 bg-blue-50 rounded-md shadow-sm">
-            <a
-              href={`/super-admin/children?patientId=${encodeURIComponent(child.patientId || '')}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="underline font-bold text-blue-700 hover:text-blue-900"
-              title="View child profile"
-            >
-              {child.name || <span className="italic text-slate-600">Unknown</span>}
-            </a>
-            {child.patientId && (
-              <span className="font-mono text-xs text-blue-900 ml-1">({child.patientId})</span>
-            )}
-            {child.userId?.email && (
-              <span className="ml-2 text-xs text-slate-700">{child.userId.email}</span>
-            )}
+          <span key={child.patientId || idx} className="flex flex-col gap-1 border border-blue-100 px-2 py-0.5 bg-blue-50 rounded-md shadow-sm">
+            <div className="flex items-center gap-1">
+              <a
+                href={`/super-admin/children?patientId=${encodeURIComponent(child.patientId || '')}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline font-bold text-blue-700 hover:text-blue-900"
+                title="View child profile"
+              >
+                {child.name || <span className="italic text-slate-600">Unknown</span>}
+              </a>
+              {child.patientId && (
+                <span className="font-mono text-xs text-blue-900 ml-1">({child.patientId})</span>
+              )}
+              {child.userId?.email && (
+                <span className="ml-2 text-xs text-slate-700">{child.userId.email}</span>
+              )}
+              {/* Mother Occupation, if present */}
+              {child.motherOccupation && (
+                <span className="ml-2 text-xs text-slate-700 italic">
+                  (Mother Occupation: {child.motherOccupation})
+                </span>
+              )}
+            </div>
+            {/* Mobile numbers */}
+            <div className="flex gap-4 pl-5 text-xs text-slate-600">
+              {getMotherMobile(child) && (
+                <span>
+                  <span className="font-semibold">Mother Mobile Number:</span>{" "}
+                  <span className="font-mono">{getMotherMobile(child)}</span>
+                </span>
+              )}
+              {getFatherMobile(child) && (
+                <span>
+                  <span className="font-semibold">Father Mobile Number:</span>{" "}
+                  <span className="font-mono">{getFatherMobile(child)}</span>
+                </span>
+              )}
+            </div>
           </span>
         ))}
       </div>
@@ -338,6 +367,25 @@ const UserRow = ({ user, onLoginAsUser, loggingInUserId }: UserRowProps) => {
     );
   };
 
+  // ------ REWRITE: Mother & Father Mobile Number (family summary) ------
+  const getFamilyMotherMobile = (user: FlattenedUser) => {
+    // Try to show mother mobile for patient families, pick the first mobile1 field found
+    if (!user.familyPatients || !Array.isArray(user.familyPatients)) return null;
+    for (const child of user.familyPatients) {
+      if (child.mobile1) return child.mobile1;
+      if (child.userId && child.userId.mobile1) return child.userId.mobile1;
+    }
+    return null;
+  };
+  const getFamilyFatherMobile = (user: FlattenedUser) => {
+    if (!user.familyPatients || !Array.isArray(user.familyPatients)) return null;
+    for (const child of user.familyPatients) {
+      if (child.mobile2) return child.mobile2;
+      if (child.userId && child.userId.mobile2) return child.userId.mobile2;
+    }
+    return null;
+  };
+
   return (
     <tr className="group hover:bg-blue-50 transition">
       <TableCell className="font-mono text-blue-900 font-bold min-w-[100px]">
@@ -363,6 +411,12 @@ const UserRow = ({ user, onLoginAsUser, loggingInUserId }: UserRowProps) => {
               <PatientChildrenList familyPatients={user.familyPatients} />
             </div>
           )}
+          {/* Add motherOccupation display for patient families */}
+          {isPatientFamily && user.motherOccupation && (
+            <div className="text-xs text-amber-700 italic">
+              Mother Occupation: {user.motherOccupation}
+            </div>
+          )}
         </div>
       </TableCell>
       <TableCell>
@@ -376,10 +430,37 @@ const UserRow = ({ user, onLoginAsUser, loggingInUserId }: UserRowProps) => {
               Parent: <span className="font-mono">{user.parentEmail}</span>
             </div>
           )}
-          <div className="flex items-center gap-2">
-            <FiPhone className="text-green-600" />
-            <span className="font-mono text-xs">{user.phone || '-'}</span>
-          </div>
+          {/* REWRITE: Split mother and father mobile numbers */}
+          {user.fromCollection === "patients" && (
+            <div className="flex flex-col gap-1">
+              {getFamilyMotherMobile(user) && (
+                <div className="flex items-center gap-2">
+                  <FiPhone className="text-green-600" />
+                  <span className="font-medium text-xs">Mother Mobile Number:</span>
+                  <span className="font-mono text-xs">{getFamilyMotherMobile(user)}</span>
+                </div>
+              )}
+              {getFamilyFatherMobile(user) && (
+                <div className="flex items-center gap-2">
+                  <FiPhone className="text-green-600" />
+                  <span className="font-medium text-xs">Father Mobile Number:</span>
+                  <span className="font-mono text-xs">{getFamilyFatherMobile(user)}</span>
+                </div>
+              )}
+              {!getFamilyMotherMobile(user) && !getFamilyFatherMobile(user) && (
+                <div className="flex items-center gap-2">
+                  <FiPhone className="text-green-600" />
+                  <span className="font-mono text-xs">-</span>
+                </div>
+              )}
+            </div>
+          )}
+          {user.fromCollection !== "patients" && (
+            <div className="flex items-center gap-2">
+              <FiPhone className="text-green-600" />
+              <span className="font-mono text-xs">{user.phone || '-'}</span>
+            </div>
+          )}
         </div>
       </TableCell>
       <TableCell>
@@ -486,6 +567,7 @@ const AllUsers: React.FC = () => {
               familyPatients: family.familyPatients,
               fatherFullName: family.fatherFullName,
               motherFullName: family.motherFullName,
+              motherOccupation: family.motherOccupation,
               address: family.address,
               areaName: family.areaName,
             }));
@@ -716,7 +798,13 @@ const AllUsers: React.FC = () => {
               </TableHeadCell>
               <TableHeadCell>
                 {activeRole === 'patients'
-                  ? 'Parent/Child Email & Phone'
+                  ? (
+                      <>
+                        Parent/Child Email
+                        <br/>
+                        Mother & Father Mobile Number
+                      </>
+                    )
                   : 'Email & Phone'}
               </TableHeadCell>
               <TableHeadCell>Role</TableHeadCell>

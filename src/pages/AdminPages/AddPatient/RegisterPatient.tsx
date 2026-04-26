@@ -21,6 +21,8 @@ interface FormDataState {
   childDOB: string; // Always stored as 'dd/mm/yyyy' in the frontend state
   fatherFullName: string;
   motherFullName: string;
+  parentOccupation: string;
+  motherOccupation: string; // <--- added
   parentEmail: string;
   mobile1: string;
   mobile2: string;
@@ -29,7 +31,6 @@ interface FormDataState {
   pincode: string;
   diagnosisInfo: string;
   childReference: string;
-  parentOccupation: string;
   remarks: string;
   otherDocument?: File;
   profilePhoto?: File;
@@ -65,8 +66,10 @@ const mandatoryFields: (keyof FormDataState)[] = [
   "childDOB",
   "fatherFullName",
   "motherFullName",
+  "motherOccupation", // <--- added
   "parentEmail",
   "mobile1",
+  "mobile2", // <-- Father Mobile Number now mandatory
   "address",
   "areaName",
   "pincode",
@@ -121,6 +124,7 @@ export default function PatientRegistration() {
     childDOB: "",
     fatherFullName: "",
     motherFullName: "",
+    motherOccupation: "", // <--- added
     parentEmail: "",
     mobile1: "",
     mobile2: "",
@@ -161,8 +165,10 @@ export default function PatientRegistration() {
               "childDOB",
               "fatherFullName",
               "motherFullName",
+              "motherOccupation", // <--- added
               "parentEmail",
-              "mobile1",
+              "mobile1", // Mother Mobile Number
+              "mobile2", // Father Mobile Number now mandatory
               "address",
               "areaName",
               "pincode",
@@ -390,6 +396,24 @@ export default function PatientRegistration() {
                     }
                   />
                   <Input
+                    label="Father Occupation*"
+                    value={formData.parentOccupation}
+                    onChange={(e: ChangeEvent<HTMLInputElement>) => update("parentOccupation", e.target.value)}
+                    required
+                    style={
+                      shouldShowError("parentOccupation") ? { borderColor: "red" } : {}
+                    }
+                  />
+                  <Input
+                    label="Mother's Occupation*"
+                    value={formData.motherOccupation}
+                    onChange={(e: ChangeEvent<HTMLInputElement>) => update("motherOccupation", e.target.value)}
+                    required
+                    style={
+                      shouldShowError("motherOccupation") ? { borderColor: "red" } : {}
+                    }
+                  />
+                  <Input
                     label="Parent Email*"
                     value={formData.parentEmail}
                     onChange={(e: ChangeEvent<HTMLInputElement>) => update("parentEmail", e.target.value)}
@@ -400,7 +424,7 @@ export default function PatientRegistration() {
                     }
                   />
                   <Input
-                    label="Mobile Number 1*"
+                    label="Mother Mobile Number*"
                     value={formData.mobile1}
                     onChange={(e: ChangeEvent<HTMLInputElement>) => update("mobile1", e.target.value)}
                     type="tel"
@@ -410,10 +434,14 @@ export default function PatientRegistration() {
                     }
                   />
                   <Input
-                    label="Mobile Number 2 (optional)"
+                    label="Father Mobile Number*"
                     value={formData.mobile2}
                     onChange={(e: ChangeEvent<HTMLInputElement>) => update("mobile2", e.target.value)}
                     type="tel"
+                    required
+                    style={
+                      shouldShowError("mobile2") ? { borderColor: "red" } : {}
+                    }
                   />
                   <Input
                     label="Complete Address*"
@@ -460,15 +488,7 @@ export default function PatientRegistration() {
                       shouldShowError("childReference") ? { borderColor: "red" } : {}
                     }
                   />
-                  <Input
-                    label="Parent Occupation*"
-                    value={formData.parentOccupation}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) => update("parentOccupation", e.target.value)}
-                    required
-                    style={
-                      shouldShowError("parentOccupation") ? { borderColor: "red" } : {}
-                    }
-                  />
+               
                   <File
                     label="Profile Photo (optional, JPG/PNG)"
                     onChange={(file: File) => update("profilePhoto", file)}
@@ -509,10 +529,11 @@ export default function PatientRegistration() {
                         <h3 className="font-semibold text-gray-700 mb-2 border-b pb-1">Parent Details</h3>
                         <Detail label="Father's Name" value={formData.fatherFullName} />
                         <Detail label="Mother's Name" value={formData.motherFullName} />
+                        <Detail label="Mother's Occupation" value={formData.motherOccupation} />
                         <Detail label="Parent Email" value={formData.parentEmail} />
                         <Detail label="Parent Occupation" value={formData.parentOccupation} />
-                        <Detail label="Mobile 1" value={formData.mobile1} />
-                        <Detail label="Mobile 2" value={formData.mobile2} />
+                        <Detail label="Mother Mobile Number" value={formData.mobile1} />
+                        <Detail label="Father Mobile Number" value={formData.mobile2} />
                         <Detail label="Area Name" value={formData.areaName} />
                         <Detail label="Pincode" value={formData.pincode} />
                         <Detail label="Address" value={formData.address} />

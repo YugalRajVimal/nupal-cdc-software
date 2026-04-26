@@ -39,6 +39,7 @@ type Patient = {
   pincode?: string;
   fatherFullName?: string;
   motherFullName?: string;
+  motherOccupation?: string; // <-- Added!
   parentEmail?: string;
   plannedSessionsPerMonth?: string;
   package?: string;
@@ -136,6 +137,7 @@ export default function PatientsPage() {
       remarks: patient.remarks || "",
       fatherFullName: patient.fatherFullName || "",
       motherFullName: patient.motherFullName || "",
+      motherOccupation: patient.motherOccupation || "", // <-- Added!
       parentEmail: patient.parentEmail || "",
       plannedSessionsPerMonth: patient.plannedSessionsPerMonth || "",
       package: patient.package || "",
@@ -254,15 +256,16 @@ export default function PatientsPage() {
     { label: "DOB", key: "childDOB", editable: true },
     { label: "Father's Name", key: "fatherFullName", editable: true },
     { label: "Mother's Name", key: "motherFullName", editable: true },
+    { label: "Father's Occupation", key: "parentOccupation", editable: true },
+    { label: "Mother's Occupation", key: "motherOccupation", editable: true }, // <-- Added!
     { label: "Parent Email", key: "parentEmail", editable: true },
-    { label: "Mobile 1", key: "mobile1", editable: true },
-    { label: "Mobile 2", key: "mobile2", editable: true },
+    { label: "Mother Mobile Number", key: "mobile1", editable: true },
+    { label: "Father Mobile Number", key: "mobile2", editable: true },
     { label: "Address", key: "address", editable: true },
     { label: "Pincode", key: "pincode", editable: true },
     { label: "Area", key: "areaName", editable: true },
     { label: "Diagnosis/Concern", key: "diagnosisInfo", editable: true },
     { label: "Child Reference", key: "childReference", editable: true },
-    { label: "Parent Occupation", key: "parentOccupation", editable: true },
     { label: "Planned Sessions/Month", key: "plannedSessionsPerMonth", editable: true },
     { label: "Package", key: "package", editable: true },
     { label: "Remarks", key: "remarks", editable: true },
@@ -392,7 +395,25 @@ export default function PatientsPage() {
                   </td>
                   <td className="px-4 py-4 text-slate-600 flex items-center gap-2">
                     <FiPhone />{" "}
-                    {p.mobile1 || (
+                    {/* Display Mother Mobile Number (mobile1) and Father Mobile Number (mobile2) if present */}
+                    {p.mobile1 && p.mobile2 ? (
+                      <>
+                        <span>
+                          <span className="font-semibold">Mother:</span> {p.mobile1}
+                        </span>
+                        <span className="ml-4">
+                          <span className="font-semibold">Father:</span> {p.mobile2}
+                        </span>
+                      </>
+                    ) : p.mobile1 ? (
+                      <span>
+                        <span className="font-semibold">Mother:</span> {p.mobile1}
+                      </span>
+                    ) : p.mobile2 ? (
+                      <span>
+                        <span className="font-semibold">Father:</span> {p.mobile2}
+                      </span>
+                    ) : (
                       <span className="italic text-slate-400">N/A</span>
                     )}
                   </td>
@@ -535,6 +556,14 @@ export default function PatientsPage() {
                               : typeof viewPatient.userId?.manualSignUp === "boolean"
                                 ? (viewPatient.userId.manualSignUp ? "Yes" : "No")
                                 : <span className="italic text-slate-400">N/A</span>
+                            : field.key === "mobile1"
+                            ? viewPatient.mobile1 || (
+                                <span className="italic text-slate-400">N/A</span>
+                              )
+                            : field.key === "mobile2"
+                            ? viewPatient.mobile2 || (
+                                <span className="italic text-slate-400">N/A</span>
+                              )
                             : viewPatient[field.key] || (
                                 <span className="italic text-slate-400">N/A</span>
                               )}
@@ -750,6 +779,67 @@ export default function PatientsPage() {
                               setEditForm((f) => ({
                                 ...f,
                                 pincode: e.target.value,
+                              }))
+                            }
+                          />
+                        </div>
+                      );
+                    }
+                    if (field.key === "motherOccupation") {
+                      return (
+                        <div key={field.key}>
+                          <label className="block mb-1 text-sm font-medium">
+                            Mother's Occupation
+                          </label>
+                          <input
+                            type="text"
+                            className="w-full border rounded px-3 py-2"
+                            value={editForm.motherOccupation || ""}
+                            onChange={(e) =>
+                              setEditForm((f) => ({
+                                ...f,
+                                motherOccupation: e.target.value,
+                              }))
+                            }
+                          />
+                        </div>
+                      );
+                    }
+                    // For newly labeled mobile numbers
+                    if (field.key === "mobile1") {
+                      return (
+                        <div key={field.key}>
+                          <label className="block mb-1 text-sm font-medium">
+                            Mother Mobile Number
+                          </label>
+                          <input
+                            type="text"
+                            className="w-full border rounded px-3 py-2"
+                            value={editForm.mobile1 || ""}
+                            onChange={(e) =>
+                              setEditForm((f) => ({
+                                ...f,
+                                mobile1: e.target.value,
+                              }))
+                            }
+                          />
+                        </div>
+                      );
+                    }
+                    if (field.key === "mobile2") {
+                      return (
+                        <div key={field.key}>
+                          <label className="block mb-1 text-sm font-medium">
+                            Father Mobile Number
+                          </label>
+                          <input
+                            type="text"
+                            className="w-full border rounded px-3 py-2"
+                            value={editForm.mobile2 || ""}
+                            onChange={(e) =>
+                              setEditForm((f) => ({
+                                ...f,
+                                mobile2: e.target.value,
                               }))
                             }
                           />

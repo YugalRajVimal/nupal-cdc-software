@@ -1,7 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import {
   FiUser,
-  // FiTrash2, // Remove unused icon
   FiEye,
   FiChevronLeft,
   FiChevronRight,
@@ -20,10 +19,8 @@ function getQueryParam(name: string): string | null {
   return params.get(name);
 }
 
-// The schema fields from @user.schema.js, expanded exhaustively as per fields in the original file.
 const API_BASE_URL = import.meta.env.VITE_API_URL || "";
 
-// Full data shape reflecting @user.schema.js (1-134) as inferred from given context and typical sources.
 type TherapistProfile = {
   _id: string;
   userId?: {
@@ -110,7 +107,6 @@ const FIELD_LIST: {
   { key: "name", label: "Name", render: (_, row) => row?.userId?.name || row?.name || "-" },
   { key: "email", label: "Email", type: "email", render: (_, row) => row?.userId?.email || row?.email || "-" },
   { key: "role", label: "Role", render: (_, row) => row?.userId?.role || row?.role || "-" },
-  // For editing/viewing, not main table:
   { key: "manualSignUp", label: "Manual Sign Up", render: (_, row) => (row?.userId?.manualSignUp === true ? "Yes" : row?.userId?.manualSignUp === false ? "No" : "-") },
   { key: "fathersName", label: "Father's Name" },
   { key: "mobile1", label: "Mobile 1" },
@@ -140,7 +136,6 @@ const FIELD_LIST: {
   { key: "remarks", label: "Remarks" },
 ];
 
-// Simple calendar widget using native HTML, but gives overlay feel
 function CalendarInput({
   value,
   onChange,
@@ -236,7 +231,6 @@ async function downloadFilesAsZip(selected: TherapistProfile) {
     { key: "certificate", label: "Certificate", value: certificate },
   ];
 
-  // Helper to resolve absolute URL for files (mirrors view logic)
   function resolveFileUrl(val: any) {
     if (!val) return null;
     const uploadsUrl = import.meta.env.VITE_UPLOADS_URL || "";
@@ -253,21 +247,17 @@ async function downloadFilesAsZip(selected: TherapistProfile) {
 
   const jszip = new JSZip();
 
-  // For each file, if present, fetch it as blob and add to zip.
-  // Use therapistID or name for folder structure
   const therapistFolderName = (therapistId || name || selected._id || "Therapist")
     .toString()
     .replace(/\s+/g, "_")
     .replace(/[^a-zA-Z0-9_\-]/g, "");
 
   async function fetchFileAsBlob(url: string) {
-    // Proxy fetch to handle CORS if needed? (for now, just fetch)
     const response = await fetch(url);
     if (!response.ok) throw new Error(`Failed to fetch file: ${url}`);
     return await response.blob();
   }
 
-  // Assemble download tasks
   const fileTasks = fileFields
     .filter(f => !!f.value && typeof f.value === "string")
     .map(async f => {
@@ -275,18 +265,14 @@ async function downloadFilesAsZip(selected: TherapistProfile) {
       if (!url) return null;
       try {
         const blob = await fetchFileAsBlob(url);
-        // infer file extension from url, fallback .bin
         const extMatch = url.match(/\.[a-zA-Z0-9]+(?=\?|$)/);
         const ext = extMatch ? extMatch[0] : ".bin";
-        // Name: AadhaarFront.ext or AadhaarFront_therapistId.ext
         const simpleTid = (therapistId || selected._id || "").toString();
         let fileBaseName = f.label + (simpleTid ? `_${simpleTid}` : "") + ext;
-        // Remove any double _ or __ from baseName
         fileBaseName = fileBaseName.replace(/__+/g, "_");
         jszip.file(fileBaseName, blob);
         return fileBaseName;
       } catch (e) {
-        // Ignore missing/broken
         return null;
       }
     });
@@ -294,9 +280,7 @@ async function downloadFilesAsZip(selected: TherapistProfile) {
   try {
     await Promise.all(fileTasks);
     const content = await jszip.generateAsync({ type: "blob" });
-    // Name the zip file
     const fileName = `${therapistFolderName}_files.zip`;
-    // Trigger download
     const url = window.URL.createObjectURL(content);
     const a = document.createElement("a");
     a.href = url;
@@ -312,8 +296,11 @@ async function downloadFilesAsZip(selected: TherapistProfile) {
   }
 }
 
+// -----------------------------------
+// PAY THERAPIST API INTEGRATION BELOW
+// -----------------------------------
+
 export default function SuperAdminTherapistsPage() {
-  // Search and pagination states
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
@@ -325,11 +312,10 @@ export default function SuperAdminTherapistsPage() {
   const [editField, setEditField] = useState<{ [k: string]: any }>({});
   const [error, setError] = useState<string | null>(null);
 
-  // Keep the selected ID and data in sync when mutating
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedProfile, setSelectedProfile] = useState<TherapistProfile | null>(null);
 
-  // Therapist Pay Modal state
+  // Pay therapist modal state
   const [showPayModal, setShowPayModal] = useState(false);
   const [payForm, setPayForm] = useState<PayFormState>({
     amount: "",
@@ -370,7 +356,6 @@ export default function SuperAdminTherapistsPage() {
     fetchTherapistById(id);
   };
 
-  // ---- Effect for therapist query param ----
   useEffect(() => {
     const therapistParam = getQueryParam("therapist");
     if (
@@ -379,11 +364,9 @@ export default function SuperAdminTherapistsPage() {
     ) {
       fetchTherapistById(therapistParam);
     }
-    // don't depend on fetchTherapistById! (it is stable)
     // eslint-disable-next-line
   }, [window.location.search]);
 
-  // Search & Pagination implementation
   async function fetchTherapists(searchVal = search, pageVal = page, limitVal = limit) {
     setLoading(true);
     setError(null);
@@ -401,13 +384,11 @@ export default function SuperAdminTherapistsPage() {
       );
       let therapistsArr: TherapistProfile[] = [];
       let totalCount = 0;
-      // Standard API interface: { therapists, total }
       if (
         res &&
         res.data &&
         (Array.isArray(res.data.therapists) || Array.isArray(res.data))
       ) {
-        // If directly therapists array or { therapists: [...], total }
         therapistsArr =
           Array.isArray(res.data.therapists)
             ? res.data.therapists
@@ -488,7 +469,6 @@ export default function SuperAdminTherapistsPage() {
     }
   }
 
-
   async function handleEditSubmit() {
     if (!editTherapist) return;
     setLoading(true);
@@ -498,8 +478,6 @@ export default function SuperAdminTherapistsPage() {
         ...editTherapist,
         ...editField,
       };
-
-      // Convert all calendar-editable date fields (if any) to YYYY-MM-DD format
       for (const dfield of DATE_FIELDS) {
         if (payload[dfield] && typeof payload[dfield] === "object" && payload[dfield] instanceof Date) {
           payload[dfield] = payload[dfield].toISOString().slice(0, 10);
@@ -542,9 +520,6 @@ export default function SuperAdminTherapistsPage() {
     }
   }
 
-  // Delete feature removed
-
-  // --- Therapist Pay Feature functions ---
   function openPayModal() {
     setPaySuccess(null);
     setPayError(null);
@@ -573,14 +548,13 @@ export default function SuperAdminTherapistsPage() {
     });
   }
 
+  // INTEGRATED Pay Therapist API
   async function handlePaySubmit(therapistId: string) {
     setPayLoading(true);
     setPayError(null);
     setPaySuccess(null);
 
-    console.log(therapistId);
-
-    // Validate Inputs
+    // Validation
     if (
       !payForm.amount ||
       isNaN(Number(payForm.amount)) ||
@@ -593,8 +567,25 @@ export default function SuperAdminTherapistsPage() {
       setPayLoading(false);
       return;
     }
+
     try {
-      // Payment POST could go here
+      // POST to /api/admin/therapist/:id/pay
+      const token = localStorage.getItem("super-admin-token");
+      const payload = {
+        amount: Number(payForm.amount),
+        type: payForm.type,
+        fromDate: payForm.fromDate,
+        toDate: payForm.toDate,
+        remark: payForm.remark,
+        paidOn: payForm.paidOn,
+      };
+
+      await axios.post(
+        `${API_BASE_URL.replace(/\/$/, "")}/api/super-admin/users/therapists/${therapistId}/pay`,
+        payload,
+        { headers: token ? { Authorization: `${token}` } : undefined }
+      );
+
       setPaySuccess("Payment recorded successfully.");
       setPayError(null);
       if (selectedId) {
@@ -605,13 +596,17 @@ export default function SuperAdminTherapistsPage() {
         closePayModal();
       }, 1200);
     } catch (err: any) {
-      setPayError(err?.response?.data?.error || err?.message || "Error making payment.");
+      setPayError(
+        err?.response?.data?.error ||
+        err?.response?.data?.message ||
+        err?.message ||
+        "Error making payment."
+      );
     } finally {
       setPayLoading(false);
     }
   }
 
-  // Debounced search filter
   useEffect(() => {
     const handle = setTimeout(() => {
       setPage(1);
@@ -621,13 +616,11 @@ export default function SuperAdminTherapistsPage() {
     // eslint-disable-next-line
   }, [search, limit]);
 
-  // Pagination effect
   useEffect(() => {
     fetchTherapists(search, page, limit);
     // eslint-disable-next-line
   }, [page, limit]);
 
-  // Initial effect
   useEffect(() => {
     fetchTherapists();
     // eslint-disable-next-line
@@ -636,7 +629,6 @@ export default function SuperAdminTherapistsPage() {
   function renderTherapistModal() {
     if (!selectedId || !selectedProfile) return null;
     const selected = selectedProfile;
-    // Therapist earnings array, sorted descending by paidOn or by fromDate
     const earnings = Array.isArray(selected.earnings)
       ? [...selected.earnings].sort((a, b) => {
           const dateA = new Date(a.paidOn || a.fromDate).getTime();
@@ -645,7 +637,6 @@ export default function SuperAdminTherapistsPage() {
         })
       : [];
 
-    // --- New: Download all files as zip ---
     const zipFileFields = [
       { key: "aadhaarFront", label: "AadhaarFront", value: selected.aadhaarFront },
       { key: "aadhaarBack", label: "AadhaarBack", value: selected.aadhaarBack },
@@ -659,14 +650,11 @@ export default function SuperAdminTherapistsPage() {
       <div className="fixed inset-0 z-30 bg-white/70 flex items-center justify-center">
         <div className="bg-white rounded-xl shadow-lg max-w-2xl w-full p-6 relative">
           {/* ...the modal contents are unchanged... */}
-          {/* ... same as prior ... */}
-          {/* ... not shown here for brevity ... */}
           <button
             className="absolute right-4 top-3 text-xl"
             onClick={() => {
               setSelectedId(null);
               setSelectedProfile(null);
-              // Remove ?therapist=xxx from URL when closing modal for cleaner UX
               if (typeof window !== "undefined" && window.history && window.location) {
                 const url = new URL(window.location.href);
                 url.searchParams.delete("therapist");
@@ -683,7 +671,6 @@ export default function SuperAdminTherapistsPage() {
               <span className="text-xs text-slate-500 font-semibold">Therapist ID: </span>
               <span className="text-sm text-slate-700">{selected.therapistId}</span>
             </div>
-           
             {selected.userId && (
               <div className="mb-4 border-b pb-2 text-md">
                 <div className="font-semibold mb-1 text-slate-800">User Account</div>
@@ -699,7 +686,6 @@ export default function SuperAdminTherapistsPage() {
                       </span>
                     </div>
                   ))}
-                {/* New: Display isDisabled and panelAccess states, with toggle buttons */}
                 <div className="flex gap-4 mt-3">
                   <div>
                     <span className="font-medium text-xs text-slate-500">Status: </span>
@@ -746,15 +732,12 @@ export default function SuperAdminTherapistsPage() {
               {FIELD_LIST.map(f => {
                 if (f.key === "therapistId") return null;
                 let rawValue = selected[f.key as keyof typeof selected];
-                // If it's a file field, prefix with VITE_UPLOADS_URL if value looks like a relative path
                 let displayValue;
                 if (f.type === "file") {
-                  // If already a full URL or no value, skip prefixing
                   const uploadsUrl = import.meta.env.VITE_UPLOADS_URL || "";
                   if (typeof rawValue === "string" && rawValue) {
                     const isFullUrl = /^(http|https):\/\//i.test(rawValue);
                     const url = isFullUrl ? rawValue : (uploadsUrl ? uploadsUrl.replace(/\/+$/, "") + "/" + rawValue.replace(/^\/+/, "") : rawValue);
-                    // If it's an image, render <img>, otherwise show link
                     const isImage = /\.(jpe?g|png|gif|bmp|webp)$/i.test(url);
                     displayValue = isImage ? (
                       <a href={url} target="_blank" rel="noopener noreferrer">
@@ -767,7 +750,6 @@ export default function SuperAdminTherapistsPage() {
                     displayValue = "-";
                   }
                 } else if (f.render) {
-                  // If custom render is provided, use it (may take care of URL already)
                   displayValue = f.render(rawValue, selected);
                 } else {
                   displayValue = rawValue;
@@ -785,7 +767,6 @@ export default function SuperAdminTherapistsPage() {
                 );
               })}
             </div>
-
             {/* --- Earnings/Payments History Section --- */}
             <div className="mt-7 mb-2">
               <div className="flex items-center gap-2 mb-1">
@@ -822,7 +803,6 @@ export default function SuperAdminTherapistsPage() {
                   </table>
                 )}
               </div>
-              {/* Button to open Pay Modal */}
               <button
                 className="px-3 py-1 bg-green-700 text-white rounded shadow text-xs hover:bg-green-800 transition"
                 onClick={openPayModal}
@@ -833,8 +813,7 @@ export default function SuperAdminTherapistsPage() {
             </div>
           </div>
           <div className="mt-4 text-right flex justify-end items-center gap-2">
-             {/* New: All-files-download button */}
-             <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2">
               <button
                 onClick={async () => {
                   setZipLoading(true);
@@ -870,7 +849,6 @@ export default function SuperAdminTherapistsPage() {
             >
               {selected.isPanelAccessible ? "Revoke Panel Access" : "Grant Panel Access"}
             </button>
-            {/* Delete button removed */}
             <button
               className="px-4 py-1 bg-blue-100 text-blue-700 rounded "
               onClick={() => {
@@ -878,7 +856,6 @@ export default function SuperAdminTherapistsPage() {
                 setEditField({});
                 setSelectedId(null);
                 setSelectedProfile(null);
-                // Optionally, remove any view param from URL when switching to edit
                 if (typeof window !== "undefined" && window.history && window.location) {
                   const url = new URL(window.location.href);
                   url.searchParams.delete("therapist");
@@ -893,7 +870,6 @@ export default function SuperAdminTherapistsPage() {
               onClick={() => {
                 setSelectedId(null);
                 setSelectedProfile(null);
-                // Remove ?therapist=xxx from URL when closing modal
                 if (typeof window !== "undefined" && window.history && window.location) {
                   const url = new URL(window.location.href);
                   url.searchParams.delete("therapist");
@@ -1233,7 +1209,6 @@ export default function SuperAdminTherapistsPage() {
     { label: "Actions", key: "actions" },
   ];
 
-  // Pagination calculation helpers
   const totalPages = Math.max(1, Math.ceil(total / limit));
   const hasPrev = page > 1;
   const hasNext = page < totalPages;
@@ -1324,7 +1299,6 @@ export default function SuperAdminTherapistsPage() {
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">{(t?.userId?.email || t.email) || "-"}</td>
                     <td className="px-4 py-3 whitespace-nowrap">{t.mobile1 || "-"}</td>
-                    {/* Manual Sign Up */}
                     <td className="px-4 py-3 whitespace-nowrap">
                       {t.userId && typeof t.userId.manualSignUp === "boolean"
                         ? (t.userId.manualSignUp ? "Yes" : "No")
@@ -1356,7 +1330,6 @@ export default function SuperAdminTherapistsPage() {
                           className="rounded border border-blue-500 p-1 text-blue-600 hover:bg-blue-100 transition"
                           onClick={() => {
                             onTableViewClick(t._id);
-                            // Update URL to /?therapist=ID for deep-link/view
                             if (typeof window !== "undefined" && window.history && window.location) {
                               const url = new URL(window.location.href);
                               url.searchParams.set("therapist", t._id);
