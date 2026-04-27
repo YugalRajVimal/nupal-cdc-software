@@ -1,5 +1,7 @@
 import React, { useState, ChangeEvent, useRef, useEffect } from "react";
 import axios from "axios";
+import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
 
 /**
  * Parent Complete Profile (one-step form)
@@ -18,14 +20,15 @@ interface ParentFormState {
   fatherFullName: string;
   motherFullName: string;
   parentEmail: string;
-  mobile1: string;
-  mobile2: string;
+  mobile1: string; // Mother's mobile number (mandatory on frontend)
+  mobile2: string; // Father's mobile number (now mandatory)
   address: string;
   areaName: string;
   pincode: string;
   diagnosisInfo: string;
   childReference: string;
   parentOccupation: string;
+  motherOccupation: string; // <-- ADDED for mother occupation
   remarks: string;
   otherDocument?: File;
 }
@@ -47,12 +50,13 @@ const initialState: ParentFormState = {
   diagnosisInfo: "",
   childReference: "",
   parentOccupation: "",
+  motherOccupation: "", // <-- ADDED for mother occupation
   remarks: "",
   otherDocument: undefined,
 };
 
-// All required fields, as per backend (except mobile2/remarks/otherDocument)
-const mandatoryFields: (keyof Omit<ParentFormState, "mobile2" | "remarks" | "otherDocument">)[] = [
+// All required fields, as per backend (except remarks/otherDocument)
+const mandatoryFields: (keyof Omit<ParentFormState, "remarks" | "otherDocument">)[] = [
   "email",
   "childFullName",
   "gender",
@@ -61,12 +65,14 @@ const mandatoryFields: (keyof Omit<ParentFormState, "mobile2" | "remarks" | "oth
   "motherFullName",
   "parentEmail",
   "mobile1",
+  "mobile2", // <-- make mobile2 mandatory
   "address",
   "areaName",
   "pincode",
   "diagnosisInfo",
   "childReference",
   "parentOccupation",
+  "motherOccupation", // <-- ADDED for mother occupation, now mandatory
 ];
 
 // Read name and email from URL or localStorage if possible
@@ -93,6 +99,11 @@ const ParentCompleteProfile: React.FC = () => {
   const [info, setInfo] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
+  // For date picker
+  const [childDOBDate, setChildDOBDate] = useState<Date | null>(
+    formData.childDOB ? new Date(formData.childDOB) : null
+  );
+
   // Card/scroll
   const mainCardRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -108,12 +119,24 @@ const ParentCompleteProfile: React.FC = () => {
         return "Please fill all the mandatory fields.";
       }
     }
+    // Additional frontend validation: Mother's mobile number ("mobile1") should be mandatory
+    if (!formData.mobile1 || formData.mobile1.trim() === "") {
+      return "Please enter Mother's Mobile Number.";
+    }
+    // Additional frontend validation: Father's mobile number ("mobile2") should be mandatory
+    if (!formData.mobile2 || formData.mobile2.trim() === "") {
+      return "Please enter Father's Mobile Number.";
+    }
     // Validate email addresses with @ for minimal check
     if (!formData.email.includes("@") || !formData.parentEmail.includes("@")) {
       return "Please enter valid email addresses.";
     }
     if (!/^\d{8,}$/.test(formData.mobile1)) {
-      return "Please enter a valid mobile number (min 8 digits).";
+      return "Please enter a valid Mother's mobile number (min 8 digits).";
+    }
+    // mobile2 (Father's mobile) is now mandatory, validate
+    if (!/^\d{8,}$/.test(formData.mobile2)) {
+      return "Please enter a valid Father's mobile number (min 8 digits).";
     }
     return null;
   };
@@ -289,13 +312,27 @@ const ParentCompleteProfile: React.FC = () => {
               placeholder="Male / Female / Other"
               required
             />
-            <Input
-              label="Date of Birth*"
-              value={formData.childDOB}
-              onChange={(e: ChangeEvent<HTMLInputElement>) => update("childDOB", e.target.value)}
-              type="date"
-              required
-            />
+            {/* --- Replaced input type="date" with react-datepicker --- */}
+            <div className="flex flex-col min-w-0">
+              <label className="text-sm md:text-base text-blue-800 font-semibold mb-1">
+                Date of Birth*
+              </label>
+              <DatePicker
+                selected={childDOBDate}
+                onChange={(date: Date | null) => {
+                  setChildDOBDate(date);
+                  update("childDOB", date ? date.toISOString().split("T")[0] : "");
+                }}
+                dateFormat="yyyy-MM-dd"
+                maxDate={new Date()}
+                placeholderText="Select date"
+                showMonthDropdown
+                showYearDropdown
+                dropdownMode="select"
+                className="p-3 border-2 border-blue-50 rounded-lg bg-white/[.65] focus:ring-2 focus:ring-blue-400 focus:border-blue-300 outline-none transition text-[1rem] w-full"
+                required
+              />
+            </div>
             <Input
               label="Father's Full Name*"
               value={formData.fatherFullName}
@@ -316,17 +353,18 @@ const ParentCompleteProfile: React.FC = () => {
               required
             />
             <Input
-              label="Mobile Number 1*"
+              label="Mother's Mobile Number*"
               value={formData.mobile1}
               onChange={(e: ChangeEvent<HTMLInputElement>) => update("mobile1", e.target.value)}
               type="tel"
               required
             />
             <Input
-              label="Mobile Number 2 (optional)"
+              label="Father's Mobile Number*"
               value={formData.mobile2}
               onChange={(e: ChangeEvent<HTMLInputElement>) => update("mobile2", e.target.value)}
               type="tel"
+              required
             />
             <Input
               label="Complete Address*"
@@ -362,6 +400,12 @@ const ParentCompleteProfile: React.FC = () => {
               label="Parent Occupation*"
               value={formData.parentOccupation}
               onChange={(e: ChangeEvent<HTMLInputElement>) => update("parentOccupation", e.target.value)}
+              required
+            />
+            <Input
+              label="Mother's Occupation*"
+              value={formData.motherOccupation}
+              onChange={(e: ChangeEvent<HTMLInputElement>) => update("motherOccupation", e.target.value)}
               required
             />
             <Input

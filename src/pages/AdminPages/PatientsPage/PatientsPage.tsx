@@ -94,7 +94,7 @@ export default function PatientsPage() {
     // mimic patient.controller.js paginated endpoint style; expects ?search= &page= &limit=
     if (search) url.searchParams.set("search", search);
     url.searchParams.set("page", String(page));
-    url.searchParams.set("limit", String(limit));
+    url.searchParams.set("pageSize", String(limit));
     fetch(url.toString())
       .then(async (res) => {
         if (!res.ok) throw new Error(await res.text());
