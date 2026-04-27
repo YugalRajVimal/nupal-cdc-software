@@ -37,20 +37,20 @@ type FlattenedUser = {
   name: string;
   email: string;
   role: string;
-  fromCollection: 'therapists' | 'patients' | 'admin' | 'unknown';
+  fromCollection: 'therapists' | 'children' | 'admin' | 'unknown';
   phone?: string;
   [key: string]: any;
 };
 
-type FamilyGroupPatient = {
+type FamilyGroupChildren = {
   _id: string;
   shortId: string;
   name: string;
-  parentEmail: string;
-  familyPatients: any[];
+  motherPhoneNumber: string; // Change: grouping key
+  familyChildren: any[];
   displayNames: string;
   role: string;
-  fromCollection: 'patients';
+  fromCollection: 'children';
   phone?: string;
   userEmail: string;
   fatherFullName?: string;
@@ -63,61 +63,71 @@ type FamilyGroupPatient = {
 // === Helpers ===
 const extractShortId = (user: any, type: string): string => {
   if (type === 'therapists' && user.therapistId) return user.therapistId;
-  if (type === 'patients' && user.patientId) return user.patientId;
+  if (type === 'children' && user.patientId) return user.patientId; // note: children mapping
   if (type === 'admin' && (user.subAdminId || user.adminId)) return user.subAdminId || user.adminId;
   if (user.userId && type !== 'admin') {
     if (type === 'therapists' && user.userId.therapistId) return user.userId.therapistId;
-    if (type === 'patients' && user.userId.patientId) return user.userId.patientId;
+    if (type === 'children' && user.userId.patientId) return user.userId.patientId; // note: children mapping
     if (type === 'admin' && (user.userId.subAdminId || user.userId.adminId)) return user.userId.subAdminId || user.userId.adminId;
   }
   return user._id || '';
 };
 
-const groupPatientsByParentEmail = (patients: any[]): FamilyGroupPatient[] => {
-  const familyGroups: { [key: string]: FamilyGroupPatient } = {};
+// --- REWRITE: groupChildrenByMotherPhone ---
+const groupChildrenByMotherPhone = (childrenArr: any[]): FamilyGroupChildren[] => {
+  const familyGroups: { [motherPhone: string]: FamilyGroupChildren } = {};
 
-  for (const patient of patients) {
-    if (!patient.userId) continue;
-    const parentEmail = patient.parentEmail || patient.userId.email;
-    const userId = patient.userId._id || patient._id;
-    const userEmail = patient.userId.email || patient.parentEmail || '';
-    if (!parentEmail) continue;
+  for (const child of childrenArr) {
+    if (!child.userId) continue;
 
-    if (!familyGroups[parentEmail]) {
+    // Try to get motherPhoneNumber (mobile1 with fallback)
+    // Try both direct and nested under userId
+    let motherPhoneNumber =
+      child.mobile1 ||
+      (child.userId ? child.userId.mobile1 : undefined) ||
+      '';
+    motherPhoneNumber = motherPhoneNumber ? String(motherPhoneNumber).trim() : '';
+
+    // Only group children with a motherPhoneNumber (skip ungrouped if blank)
+    if (!motherPhoneNumber) continue;
+
+    const userId = child.userId._id || child._id;
+    const userEmail = child.userId.email || child.parentEmail || '';
+    if (!familyGroups[motherPhoneNumber]) {
       let displayParentName = 'N/A';
-      if (patient.fatherFullName || patient.motherFullName) {
+      if (child.fatherFullName || child.motherFullName) {
         displayParentName =
-          (patient.fatherFullName ?? '') +
-          (patient.fatherFullName && patient.motherFullName ? ' / ' : '') +
-          (patient.motherFullName ?? '');
-      } else if (patient.userId && patient.userId.name) {
-        displayParentName = patient.userId.name;
-      } else if (patient.name) {
-        displayParentName = patient.name;
+          (child.fatherFullName ?? '') +
+          (child.fatherFullName && child.motherFullName ? ' / ' : '') +
+          (child.motherFullName ?? '');
+      } else if (child.userId && child.userId.name) {
+        displayParentName = child.userId.name;
+      } else if (child.name) {
+        displayParentName = child.name;
       }
-      familyGroups[parentEmail] = {
+      familyGroups[motherPhoneNumber] = {
         _id: userId,
-        shortId: extractShortId(patient, 'patients'),
+        shortId: extractShortId(child, 'children'),
         name: displayParentName,
-        parentEmail: parentEmail,
+        motherPhoneNumber: motherPhoneNumber,
         displayNames: '',
-        familyPatients: [],
-        role: patient.userId.role || 'patient',
-        fromCollection: 'patients',
-        phone: patient.userId.phone || patient.mobile1 || '',
+        familyChildren: [],
+        role: child.userId.role || 'child',
+        fromCollection: 'children',
+        phone: child.userId.phone || child.mobile1 || '',
         userEmail: userEmail,
-        fatherFullName: patient.fatherFullName,
-        motherFullName: patient.motherFullName,
-        motherOccupation: patient.motherOccupation,
-        address: patient.address,
-        areaName: patient.areaName,
+        fatherFullName: child.fatherFullName,
+        motherFullName: child.motherFullName,
+        motherOccupation: child.motherOccupation,
+        address: child.address,
+        areaName: child.areaName,
       };
     }
-    familyGroups[parentEmail].familyPatients.push(patient);
+    familyGroups[motherPhoneNumber].familyChildren.push(child);
   }
 
   Object.values(familyGroups).forEach(family => {
-    family.displayNames = family.familyPatients.map(p => {
+    family.displayNames = family.familyChildren.map(p => {
       const name = p.name || '-';
       const pid = p.patientId || '-';
       return (
@@ -127,14 +137,15 @@ const groupPatientsByParentEmail = (patients: any[]): FamilyGroupPatient[] => {
   });
   Object.values(familyGroups).forEach(family => {
     family.shortId =
-      family.familyPatients.map(p => p.patientId || '-').join(', ') ||
-      family.familyPatients.map(p => p._id).join(', ') ||
+      family.familyChildren.map(p => p.patientId || '-').join(', ') ||
+      family.familyChildren.map(p => p._id).join(', ') ||
       family._id;
   });
 
   return Object.values(familyGroups);
 };
 
+// --- ADAPT extractUsersFromResponse to use groupChildrenByMotherPhone ---
 const extractUsersFromResponse = (data: any): FlattenedUser[] => {
   const users: FlattenedUser[] = [];
 
@@ -157,20 +168,23 @@ const extractUsersFromResponse = (data: any): FlattenedUser[] => {
     });
   }
 
+  // Change: map backend "patients" array to "children" on frontend
   if (Array.isArray(data.patients)) {
-    const families = groupPatientsByParentEmail(data.patients);
+    const families = groupChildrenByMotherPhone(data.patients);
     for (const family of families) {
+      // "parentEmail" -> "motherPhoneNumber" here, and also updated the "email" field for display to be userEmail or motherPhoneNumber
       users.push({
         _id: family._id,
         shortId: family.shortId,
         name: family.name,
-        email: family.userEmail || family.parentEmail,
-        parentEmail: family.parentEmail,
+        email: family.userEmail || family.motherPhoneNumber, // Display email or, if not, mother phone
+        parentEmail: family.motherPhoneNumber, // for compatibility
+        motherPhoneNumber: family.motherPhoneNumber, // actual grouping key used!
         displayNames: family.displayNames,
         role: family.role,
-        fromCollection: 'patients',
+        fromCollection: 'children',
         phone: family.phone,
-        familyPatients: family.familyPatients,
+        familyChildren: family.familyChildren,
         fatherFullName: family.fatherFullName,
         motherFullName: family.motherFullName,
         motherOccupation: family.motherOccupation,
@@ -199,7 +213,7 @@ const extractUsersFromResponse = (data: any): FlattenedUser[] => {
 // Role filter tabs
 const ROLE_OPTIONS = [
   { label: "All Users", value: "all", apiRole: "all" },
-  { label: "Patients", value: "patients", apiRole: "patients" },
+  { label: "Children", value: "children", apiRole: "children" },
   { label: "Therapists", value: "therapists", apiRole: "therapists" },
   { label: "Admins", value: "admin", apiRole: "admin" },
 ];
@@ -211,7 +225,7 @@ const roleTypeColor = (role: string) =>
 
 const typeColor = (type: string) => 
   type === "therapists" ? "bg-blue-50 text-blue-700"
-  : type === "patients" ? "bg-amber-50 text-yellow-700"
+  : type === "children" ? "bg-amber-50 text-yellow-700"
   : type === "admin" ? "bg-purple-50 text-purple-700"
   : "bg-slate-100 text-slate-600";
 
@@ -233,16 +247,16 @@ type UserRowProps = {
   loggingInUserId?: string | null;
 };
 
-const PatientChildrenList: React.FC<{ familyPatients: any[] }> = ({ familyPatients }) => {
-  if (!Array.isArray(familyPatients) || familyPatients.length === 0) return null;
+const ChildrenList: React.FC<{ familyChildren: any[] }> = ({ familyChildren }) => {
+  if (!Array.isArray(familyChildren) || familyChildren.length === 0) return null;
 
-  const sortedChildren = [...familyPatients].sort((a, b) => {
+  const sortedChildren = [...familyChildren].sort((a, b) => {
     if (a.name && b.name) return a.name.localeCompare(b.name);
     if (a.patientId && b.patientId) return a.patientId.localeCompare(b.patientId);
     return 0;
   });
 
-  // ---- REWRITE: Render Mother's and Father's Mobile numbers ----
+  // ---- Render Mother's and Father's Mobile numbers ----
   const getMotherMobile = (child: any) => child.mobile1 || (child.userId && child.userId.mobile1) || "";
   const getFatherMobile = (child: any) => child.mobile2 || (child.userId && child.userId.mobile2) || "";
 
@@ -298,7 +312,7 @@ const PatientChildrenList: React.FC<{ familyPatients: any[] }> = ({ familyPatien
 };
 
 const UserRow = ({ user, onLoginAsUser, loggingInUserId }: UserRowProps) => {
-  const isPatientFamily = user.fromCollection === 'patients';
+  const isChildrenFamily = user.fromCollection === 'children';
   const renderTherapistName = (name: string, user: FlattenedUser) => {
     const therapistRaw = user.therapistRaw || {};
     const therapistObjId = therapistRaw._id || user._id || '';
@@ -335,16 +349,16 @@ const UserRow = ({ user, onLoginAsUser, loggingInUserId }: UserRowProps) => {
     return shortId;
   };
 
-  const renderPatientShortIds = (user: FlattenedUser) => {
+  const renderChildrenShortIds = (user: FlattenedUser) => {
     if (!user.shortId) return null;
-    if (user.fromCollection !== "patients") return user.shortId;
-    const familyPatients = Array.isArray(user.familyPatients) ? user.familyPatients : [];
-    if (familyPatients.length === 0) {
+    if (user.fromCollection !== "children") return user.shortId;
+    const familyChildren = Array.isArray(user.familyChildren) ? user.familyChildren : [];
+    if (familyChildren.length === 0) {
       return (user.shortId || user._id);
     }
     return (
       <div className="flex flex-wrap gap-1">
-        {familyPatients.map((child: any, idx: number) => {
+        {familyChildren.map((child: any, idx: number) => {
           const pid = child.patientId || "-";
           return pid === "-" ? (
             <span key={pid + idx} className="bg-gray-200 text-gray-600 rounded px-2 py-0.5 text-xs font-mono">
@@ -367,19 +381,18 @@ const UserRow = ({ user, onLoginAsUser, loggingInUserId }: UserRowProps) => {
     );
   };
 
-  // ------ REWRITE: Mother & Father Mobile Number (family summary) ------
+  // ------ Mother & Father Mobile Number (family summary, now grouped by motherPhoneNumber) ------
   const getFamilyMotherMobile = (user: FlattenedUser) => {
-    // Try to show mother mobile for patient families, pick the first mobile1 field found
-    if (!user.familyPatients || !Array.isArray(user.familyPatients)) return null;
-    for (const child of user.familyPatients) {
+    if (!user.familyChildren || !Array.isArray(user.familyChildren)) return null;
+    for (const child of user.familyChildren) {
       if (child.mobile1) return child.mobile1;
       if (child.userId && child.userId.mobile1) return child.userId.mobile1;
     }
     return null;
   };
   const getFamilyFatherMobile = (user: FlattenedUser) => {
-    if (!user.familyPatients || !Array.isArray(user.familyPatients)) return null;
-    for (const child of user.familyPatients) {
+    if (!user.familyChildren || !Array.isArray(user.familyChildren)) return null;
+    for (const child of user.familyChildren) {
       if (child.mobile2) return child.mobile2;
       if (child.userId && child.userId.mobile2) return child.userId.mobile2;
     }
@@ -391,8 +404,8 @@ const UserRow = ({ user, onLoginAsUser, loggingInUserId }: UserRowProps) => {
       <TableCell className="font-mono text-blue-900 font-bold min-w-[100px]">
         <div className="flex items-center gap-2">
           <FiHash className="text-blue-400" />
-          {isPatientFamily
-            ? renderPatientShortIds(user)
+          {isChildrenFamily
+            ? renderChildrenShortIds(user)
             : user.fromCollection === "therapists"
             ? renderTherapistShortId(user.shortId, user)
             : <span>{user.shortId || user._id}</span>}
@@ -406,13 +419,13 @@ const UserRow = ({ user, onLoginAsUser, loggingInUserId }: UserRowProps) => {
               ? renderTherapistName(user.name, user)
               : <span>{user.name}</span>}
           </div>
-          {isPatientFamily && Array.isArray(user.familyPatients) && user.familyPatients.length > 0 && (
+          {isChildrenFamily && Array.isArray(user.familyChildren) && user.familyChildren.length > 0 && (
             <div className="mt-1">
-              <PatientChildrenList familyPatients={user.familyPatients} />
+              <ChildrenList familyChildren={user.familyChildren} />
             </div>
           )}
-          {/* Add motherOccupation display for patient families */}
-          {isPatientFamily && user.motherOccupation && (
+          {/* Add motherOccupation display for children families */}
+          {isChildrenFamily && user.motherOccupation && (
             <div className="text-xs text-amber-700 italic">
               Mother Occupation: {user.motherOccupation}
             </div>
@@ -425,13 +438,13 @@ const UserRow = ({ user, onLoginAsUser, loggingInUserId }: UserRowProps) => {
             <FiMail className="text-slate-500" />
             <span className="font-mono text-xs">{user.email}</span>
           </div>
-          {user.fromCollection === "patients" && user.parentEmail && (
+          {/* Notice: parentEmail becomes motherPhoneNumber for children families. */}
+          {user.fromCollection === "children" && user.motherPhoneNumber && (
             <div className="text-xs text-purple-700">
-              Parent: <span className="font-mono">{user.parentEmail}</span>
+              Mother Phone: <span className="font-mono">{user.motherPhoneNumber}</span>
             </div>
           )}
-          {/* REWRITE: Split mother and father mobile numbers */}
-          {user.fromCollection === "patients" && (
+          {user.fromCollection === "children" && (
             <div className="flex flex-col gap-1">
               {getFamilyMotherMobile(user) && (
                 <div className="flex items-center gap-2">
@@ -455,7 +468,7 @@ const UserRow = ({ user, onLoginAsUser, loggingInUserId }: UserRowProps) => {
               )}
             </div>
           )}
-          {user.fromCollection !== "patients" && (
+          {user.fromCollection !== "children" && (
             <div className="flex items-center gap-2">
               <FiPhone className="text-green-600" />
               <span className="font-mono text-xs">{user.phone || '-'}</span>
@@ -503,7 +516,7 @@ const AllUsers: React.FC = () => {
   const [users, setUsers] = useState<FlattenedUser[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeRole, setActiveRole] = useState<'all' | 'patients' | 'therapists' | 'admin'>('all');
+  const [activeRole, setActiveRole] = useState<'all' | 'children' | 'therapists' | 'admin'>('all');
   const [loggingInUserId, setLoggingInUserId] = useState<string | null>(null);
 
   // Pagination & search states
@@ -524,8 +537,8 @@ const AllUsers: React.FC = () => {
     async function fetchUsers() {
       try {
         const params: any = {};
-        params.role = activeRole;
-        if (activeRole === "patients") {
+        params.role = activeRole === "children" ? "patients" : activeRole;
+        if (activeRole === "children") {
           params.page = 1;
           params.limit = 10000; // get all for frontend slicing
         } else {
@@ -548,8 +561,8 @@ const AllUsers: React.FC = () => {
             Array.isArray(data.patients) ||
             Array.isArray(data.admins))
         ) {
-          if (activeRole === "patients" && Array.isArray(data.patients)) {
-            const families = groupPatientsByParentEmail(data.patients);
+          if (activeRole === "children" && Array.isArray(data.patients)) {
+            const families = groupChildrenByMotherPhone(data.patients);
             totalUsers = families.length;
             setServerTotalRaw(families.length);
             const startIndex = (page - 1) * pageSize;
@@ -558,13 +571,15 @@ const AllUsers: React.FC = () => {
               _id: family._id,
               shortId: family.shortId,
               name: family.name,
-              email: family.userEmail || family.parentEmail,
-              parentEmail: family.parentEmail,
+              // "email" field for compatibility - userEmail or motherPhoneNumber
+              email: family.userEmail || family.motherPhoneNumber,
+              parentEmail: family.motherPhoneNumber, // compatibility - now holds mother phone
+              motherPhoneNumber: family.motherPhoneNumber,
               displayNames: family.displayNames,
               role: family.role,
-              fromCollection: 'patients',
+              fromCollection: 'children',
               phone: family.phone,
-              familyPatients: family.familyPatients,
+              familyChildren: family.familyChildren,
               fatherFullName: family.fatherFullName,
               motherFullName: family.motherFullName,
               motherOccupation: family.motherOccupation,
@@ -705,7 +720,7 @@ const AllUsers: React.FC = () => {
     }
   };
 
-  const currentTotal = activeRole === "patients" ? serverTotalRaw : total;
+  const currentTotal = activeRole === "children" ? serverTotalRaw : total;
   const totalPages = Math.max(1, Math.ceil(currentTotal / pageSize));
 
   useEffect(() => {
@@ -768,7 +783,7 @@ const AllUsers: React.FC = () => {
           <button
             key={opt.value}
             onClick={() => {
-              setActiveRole(opt.apiRole as 'all' | 'patients' | 'therapists' | 'admin');
+              setActiveRole(opt.apiRole as 'all' | 'children' | 'therapists' | 'admin');
               setPage(1);
             }}
             className={
@@ -792,17 +807,17 @@ const AllUsers: React.FC = () => {
             <tr>
               <TableHeadCell>User ID</TableHeadCell>
               <TableHeadCell>
-                {activeRole === 'patients'
+                {activeRole === 'children'
                   ? 'Parent / Family Name'
                   : 'Name'}
               </TableHeadCell>
               <TableHeadCell>
-                {activeRole === 'patients'
+                {activeRole === 'children'
                   ? (
                       <>
                         Parent/Child Email
                         <br/>
-                        Mother & Father Mobile Number
+                        Mother Phone & Father Mobile Number
                       </>
                     )
                   : 'Email & Phone'}
@@ -836,7 +851,7 @@ const AllUsers: React.FC = () => {
                 <td colSpan={6} className="py-10 text-center text-slate-500 bg-slate-50 font-semibold">
                   No {activeRole === "all"
                     ? "users"
-                    : activeRole === "patients"
+                    : activeRole === "children"
                     ? "families"
                     : activeRole === "therapists"
                     ? "therapists"
@@ -918,7 +933,7 @@ const AllUsers: React.FC = () => {
             <span className="pl-3 font-medium">
               {currentTotal > 0 && (
                 <>
-                  {(page - 1) * pageSize + 1}-{Math.min(currentTotal, page * pageSize)} of {currentTotal} {activeRole === "patients" ? "families" : "users"}
+                  {(page - 1) * pageSize + 1}-{Math.min(currentTotal, page * pageSize)} of {currentTotal} {activeRole === "children" ? "families" : "users"}
                 </>
               )}
             </span>

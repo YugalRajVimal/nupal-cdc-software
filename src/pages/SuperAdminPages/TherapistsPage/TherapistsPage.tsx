@@ -373,7 +373,7 @@ export default function SuperAdminTherapistsPage() {
     try {
       const params: Record<string, any> = {
         page: pageVal,
-        limit: limitVal,
+        pageSize: limitVal,
       };
       if (searchVal && searchVal.trim().length > 0) {
         params["search"] = searchVal.trim();

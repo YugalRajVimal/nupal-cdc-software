@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
-import { Dropdown } from "../ui/dropdown/Dropdown";
-import { UserCircleIcon } from "../../icons";
+import { UserCircleIcon } from "../icons";
+import { Dropdown } from "../components/ui/dropdown/Dropdown";
+
+
 
 interface AdminProfile {
   name?: string;
@@ -23,7 +25,7 @@ export default function UserDropdown() {
   }
 
   const handleLogout = () => {
-    localStorage.removeItem("admin-token");
+    localStorage.removeItem("super-admin-token");
     window.location.href = "/signin";
   };
 
@@ -32,7 +34,7 @@ export default function UserDropdown() {
       setLoading(true);
       setError(null);
       try {
-        const token = localStorage.getItem("admin-token");
+        const token = localStorage.getItem("super-admin-token");
         if (!token) {
           setProfile(null);
           setError("Not authenticated.");
@@ -91,7 +93,7 @@ export default function UserDropdown() {
             : profile?.name
             ? profile.name
             : error
-            ? "Admin User"
+            ? "Super Admin User"
             : "Unknown"}
         </span>
         <svg
