@@ -9,7 +9,6 @@ import {
   FiChevronRight,
   FiSearch,
 } from "react-icons/fi";
-import { Link } from "react-router";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL as string;
 
