@@ -1,42 +1,45 @@
 import React, { useEffect, useState, useRef } from "react";
 import dayjs from "dayjs";
-import { FiCheck, FiEdit2, FiX, FiEye, FiChevronLeft, FiChevronRight, FiSearch } from "react-icons/fi";
+import {
+  FiCheck,
+  FiEdit2,
+  FiX,
+  FiEye,
+  FiChevronLeft,
+  FiChevronRight,
+  FiSearch,
+} from "react-icons/fi";
 import { Link } from "react-router";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL as string;
 
 const SESSION_TIME_OPTIONS = [
-  { id: '1000-1045', label: '10:00 to 10:45', limited: false },
-  { id: '1045-1130', label: '10:45 to 11:30', limited: false },
-  { id: '1130-1215', label: '11:30 to 12:15', limited: false },
-  { id: '1215-1300', label: '12:15 to 13:00', limited: false },
-  { id: '1300-1345', label: '13:00 to 13:45', limited: false },
-  { id: '1415-1500', label: '14:15 to 15:00', limited: false },
-  { id: '1500-1545', label: '15:00 to 15:45', limited: false },
-  { id: '1545-1630', label: '15:45 to 16:30', limited: false },
-  { id: '1630-1715', label: '16:30 to 17:15', limited: false },
-  { id: '1715-1800', label: '17:15 to 18:00', limited: false },
-  { id: '0830-0915', label: '08:30 to 09:15', limited: true },
-  { id: '0915-1000', label: '09:15 to 10:00', limited: true },
-  { id: '1800-1845', label: '18:00 to 18:45', limited: true },
-  { id: '1845-1930', label: '18:45 to 19:30', limited: true },
-  { id: '1930-2015', label: '19:30 to 20:15', limited: true },
+  { id: "1000-1045", label: "10:00 to 10:45", limited: false },
+  { id: "1045-1130", label: "10:45 to 11:30", limited: false },
+  { id: "1130-1215", label: "11:30 to 12:15", limited: false },
+  { id: "1215-1300", label: "12:15 to 13:00", limited: false },
+  { id: "1300-1345", label: "13:00 to 13:45", limited: false },
+  { id: "1415-1500", label: "14:15 to 15:00", limited: false },
+  { id: "1500-1545", label: "15:00 to 15:45", limited: false },
+  { id: "1545-1630", label: "15:45 to 16:30", limited: false },
+  { id: "1630-1715", label: "16:30 to 17:15", limited: false },
+  { id: "1715-1800", label: "17:15 to 18:00", limited: false },
+  { id: "0830-0915", label: "08:30 to 09:15", limited: true },
+  { id: "0915-1000", label: "09:15 to 10:00", limited: true },
+  { id: "1800-1845", label: "18:00 to 18:45", limited: true },
+  { id: "1845-1930", label: "18:45 to 19:30", limited: true },
+  { id: "1930-2015", label: "19:30 to 20:15", limited: true },
 ];
 
 type TherapistType = {
   _id: string;
-  userId:
-    | {
-        _id: string;
-        name: string;
-      }
-    | string;
+  userId: { _id: string; name: string } | string;
   therapistId?: string;
 };
 
 type SessionType = {
   _id: string;
-  sessionId?: string; // ADD: sessionId may now be present in each session (for clarity/compat).
+  sessionId?: string;
   date: string;
   time?: string;
   status?: string;
@@ -65,11 +68,7 @@ type AppointmentType = {
   sessions: SessionType[];
   createdAt: string;
   updatedAt: string;
-  therapy?:
-    | {
-        name?: string;
-      }
-    | string;
+  therapy?: { name?: string } | string;
   [key: string]: any;
 };
 
@@ -82,9 +81,7 @@ type EditRequestSessionEntry = {
 
 type SessionEditRequest = {
   _id: string;
-  appointmentId:
-    | string
-    | AppointmentType;
+  appointmentId: string | AppointmentType;
   sessions: EditRequestSessionEntry[];
   status?: string;
   createdAt?: string;
@@ -97,7 +94,6 @@ type TableFilterState = {
 
 const PAGE_SIZE = 10;
 
-// Helper to format dates as DD/MM/YYYY
 function formatDateDMY(dateStr?: string | null): string {
   if (!dateStr) return "";
   const d = dayjs(dateStr);
@@ -106,24 +102,20 @@ function formatDateDMY(dateStr?: string | null): string {
 }
 
 export default function SessionEditRequestsAdmin() {
-  // Data and fetch state
   const [editRequests, setEditRequests] = useState<SessionEditRequest[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Search/Filter/Pagination state
   const [search, setSearch] = useState("");
-  const [inputSearch, setInputSearch] = useState(""); // so input doesn't update table directly
+  const [inputSearch, setInputSearch] = useState("");
   const [filters, setFilters] = useState<TableFilterState>({ status: "" });
   const [showFilters, setShowFilters] = useState(false);
 
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
 
-  // Expanded state: track currently viewed request's _id (or null)
   const [viewRequestId, setViewRequestId] = useState<string | null>(null);
 
-  // Unmount guard for async
   const mountedRef = useRef(true);
   useEffect(() => {
     mountedRef.current = true;
@@ -132,23 +124,23 @@ export default function SessionEditRequestsAdmin() {
     };
   }, []);
 
-  // API fetch function with filters, search, and pagination
-  function fetchEditRequests(props?: { search?: string; filters?: TableFilterState; page?: number }) {
+  function fetchEditRequests(props?: {
+    search?: string;
+    filters?: TableFilterState;
+    page?: number;
+  }) {
     setLoading(true);
     setError(null);
 
     let query: string[] = [];
 
-    // Search
     if (props?.search ?? search)
       query.push(`search=${encodeURIComponent(props?.search ?? search)}`);
 
-    // Filters
     const effFilters = props?.filters ?? filters;
     if (effFilters.status)
       query.push(`status=${encodeURIComponent(effFilters.status)}`);
 
-    // Pagination
     const effPage = props?.page ?? page;
     query.push(`page=${effPage}`);
     query.push(`limit=${PAGE_SIZE}`);
@@ -160,11 +152,11 @@ export default function SessionEditRequestsAdmin() {
         if (!res.ok) throw new Error(await res.text());
         return res.json();
       })
-      .then(data => {
+      .then((data) => {
         if (data?.success) {
           if (!mountedRef.current) return;
           setEditRequests(data.editRequests || []);
-          setTotal(data.totalCount ?? (data.editRequests?.length ?? 0));
+          setTotal(data.totalCount ?? data.total ?? data.editRequests?.length ?? 0);
         } else {
           setError("Failed to fetch session edit requests.");
           setEditRequests([]);
@@ -179,20 +171,17 @@ export default function SessionEditRequestsAdmin() {
       .finally(() => setLoading(false));
   }
 
-  // Initial load and refetch on filters/search/page
   useEffect(() => {
     fetchEditRequests({ search, filters, page });
     // eslint-disable-next-line
   }, [search, filters, page]);
 
-  // Handler to submit search only when form is submitted, NOT as input changes
   function handleSearchSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setPage(1);
     setSearch(inputSearch.trim());
   }
 
-  // Filtering helpers
   function handleFilterChange<K extends keyof TableFilterState>(key: K, val: string) {
     setPage(1);
     setFilters((f) => ({ ...f, [key]: val }));
@@ -231,7 +220,6 @@ export default function SessionEditRequestsAdmin() {
     return undefined;
   }
 
-  // Reusable badge colored label
   function StatusBadge({ status }: { status: string }) {
     if (status === "approved")
       return (
@@ -258,21 +246,84 @@ export default function SessionEditRequestsAdmin() {
     );
   }
 
-  // Status options for filters
   const statusOptions = [
     { value: "", label: "All Statuses" },
     { value: "pending", label: "Pending" },
     { value: "approved", label: "Approved" },
-    { value: "rejected", label: "Rejected" }
+    { value: "rejected", label: "Rejected" },
   ];
 
-  // Pagination derived state
   const totalPages = Math.ceil(total / PAGE_SIZE);
+
+  // --- NEW: Session Approval/Reject Handlers ---
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionSuccess, setActionSuccess] = useState<string | null>(null);
+
+  // Approve a session-edit-request
+  async function handleApproveRequest(id: string) {
+    setActionError(null);
+    setActionSuccess(null);
+    setActionLoading("approve:" + id);
+
+    try {
+      const res = await fetch(
+        `${API_BASE_URL}/api/admin/bookings/session-edit-requests/${encodeURIComponent(id)}/approve`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        }
+      );
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || "Approval failed");
+      }
+      setActionSuccess("Request successfully approved.");
+      // Refetch list and details/panel closes
+      setViewRequestId(null);
+      fetchEditRequests({ search, filters, page });
+    } catch (err: any) {
+      setActionError(err?.message || "Failed to approve request.");
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  // Reject a session-edit-request
+  async function handleRejectRequest(id: string) {
+    setActionError(null);
+    setActionSuccess(null);
+    setActionLoading("reject:" + id);
+
+    try {
+      const res = await fetch(
+        `${API_BASE_URL}/api/admin/bookings/session-edit-requests/${encodeURIComponent(
+          id
+        )}/reject`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        }
+      );
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || "Reject failed");
+      }
+      setActionSuccess("Request successfully rejected.");
+      setViewRequestId(null);
+      fetchEditRequests({ search, filters, page });
+    } catch (err: any) {
+      setActionError(err?.message || "Failed to reject request.");
+    } finally {
+      setActionLoading(null);
+    }
+  }
 
   return (
     <div className="min-h-screen md:px-10 px-2 py-8">
-        <h1 className="text-2xl font-bold text-blue-900 mb-4">Session Edit Requests</h1>
-      {/* -- Search & Filter */}
+      <h1 className="text-2xl font-bold text-blue-900 mb-4">
+        Session Edit Requests
+      </h1>
       <form
         onSubmit={handleSearchSubmit}
         className="flex flex-wrap gap-3 mb-5 items-center max-w-7xl mx-auto"
@@ -282,7 +333,7 @@ export default function SessionEditRequestsAdmin() {
           <input
             type="text"
             value={inputSearch}
-            onChange={e => setInputSearch(e.target.value)}
+            onChange={(e) => setInputSearch(e.target.value)}
             placeholder="Search requests, patients, appointment id..."
             className="border rounded-md px-3 py-2 pl-9 text-sm focus:outline-none focus:border-blue-400 w-72"
             name="search"
@@ -299,7 +350,7 @@ export default function SessionEditRequestsAdmin() {
         <select
           className="border rounded-md px-3 py-2 text-sm focus:outline-none"
           value={filters.status}
-          onChange={e => handleFilterChange("status", e.target.value)}
+          onChange={(e) => handleFilterChange("status", e.target.value)}
           name="status"
         >
           <option value="">All Status</option>
@@ -308,7 +359,7 @@ export default function SessionEditRequestsAdmin() {
           <option value="rejected">Rejected</option>
         </select>
       </form>
-      
+
       {showFilters && (
         <div className="max-w-7xl mx-auto mb-4 flex flex-col md:flex-row gap-3 items-center justify-between border border-blue-100 p-3 rounded bg-blue-50/10 shadow-sm">
           <div className="flex flex-wrap items-center gap-3">
@@ -317,9 +368,9 @@ export default function SessionEditRequestsAdmin() {
               <select
                 className="py-1 px-2 border border-slate-200 rounded"
                 value={filters.status}
-                onChange={e => handleFilterChange("status", e.target.value)}
+                onChange={(e) => handleFilterChange("status", e.target.value)}
               >
-                {statusOptions.map(opt => (
+                {statusOptions.map((opt) => (
                   <option key={opt.value} value={opt.value}>
                     {opt.label}
                   </option>
@@ -361,13 +412,27 @@ export default function SessionEditRequestsAdmin() {
               <table className="w-full min-w-[960px] table-auto">
                 <thead>
                   <tr className="bg-slate-50 border-b">
-                    <th className="px-4 py-3 text-xs font-semibold text-left text-slate-500">Appt. ID</th>
-                    <th className="px-4 py-3 text-xs font-semibold text-left text-slate-500">Patient</th>
-                    <th className="px-4 py-3 text-xs font-semibold text-left text-slate-500">Patient ID</th>
-                    <th className="px-4 py-3 text-xs font-semibold text-left text-slate-500">Therapy</th>
-                    <th className="px-4 py-3 text-xs font-semibold text-left text-slate-500">Mobile</th>
-                    <th className="px-4 py-3 text-xs font-semibold text-left text-slate-500">Status</th>
-                    <th className="px-4 py-3 text-xs font-semibold text-center text-slate-500">Actions</th>
+                    <th className="px-4 py-3 text-xs font-semibold text-left text-slate-500">
+                      Appt. ID
+                    </th>
+                    <th className="px-4 py-3 text-xs font-semibold text-left text-slate-500">
+                      Patient
+                    </th>
+                    <th className="px-4 py-3 text-xs font-semibold text-left text-slate-500">
+                      Patient ID
+                    </th>
+                    <th className="px-4 py-3 text-xs font-semibold text-left text-slate-500">
+                      Therapy
+                    </th>
+                    <th className="px-4 py-3 text-xs font-semibold text-left text-slate-500">
+                      Mobile
+                    </th>
+                    <th className="px-4 py-3 text-xs font-semibold text-left text-slate-500">
+                      Status
+                    </th>
+                    <th className="px-4 py-3 text-xs font-semibold text-center text-slate-500">
+                      Actions
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -381,9 +446,6 @@ export default function SessionEditRequestsAdmin() {
 
                     const expanded = viewRequestId === req._id;
 
-                    // Patient page href: /admin/children?patientId=${encodeURIComponent(patient.patientId)}
-                    // Only render as link if patient.patientId exists
-
                     return (
                       <React.Fragment key={req._id + idx}>
                         <tr
@@ -392,11 +454,15 @@ export default function SessionEditRequestsAdmin() {
                             (expanded ? " bg-blue-50/30" : " bg-white")
                           }
                         >
-                          <td className="px-4 py-3 font-mono text-sm text-blue-900">{getAppointmentId(req) || "-"}</td>
+                          <td className="px-4 py-3 font-mono text-sm text-blue-900">
+                            {getAppointmentId(req) || "-"}
+                          </td>
                           <td className="px-4 py-3">
                             {patient.name && patient.patientId ? (
                               <a
-                                href={`/admin/children?patientId=${encodeURIComponent(patient.patientId)}`}
+                                href={`/admin/children?patientId=${encodeURIComponent(
+                                  patient.patientId
+                                )}`}
                                 className="text-blue-700 hover:underline font-medium"
                                 target="_blank"
                                 rel="noopener noreferrer"
@@ -406,13 +472,17 @@ export default function SessionEditRequestsAdmin() {
                             ) : patient.name ? (
                               patient.name
                             ) : (
-                              <span className="text-slate-400 italic">Anonymous</span>
+                              <span className="text-slate-400 italic">
+                                Anonymous
+                              </span>
                             )}
                           </td>
                           <td className="px-4 py-3 font-mono">
                             {patient.patientId ? (
                               <a
-                                href={`/admin/children?patientId=${encodeURIComponent(patient.patientId)}`}
+                                href={`/admin/children?patientId=${encodeURIComponent(
+                                  patient.patientId
+                                )}`}
                                 className="text-blue-700 hover:underline font-mono"
                                 target="_blank"
                                 rel="noopener noreferrer"
@@ -423,13 +493,25 @@ export default function SessionEditRequestsAdmin() {
                               <span className="text-slate-400 italic">-</span>
                             )}
                           </td>
-                          <td className="px-4 py-3">{therapyName || <span className="text-slate-400 italic">-</span>}</td>
+                          <td className="px-4 py-3">
+                            {therapyName || (
+                              <span className="text-slate-400 italic">-</span>
+                            )}
+                          </td>
                           <td className="px-4 py-3">
                             {patient.mobile1 || patient.mobile2 ? (
                               <>
-                                {patient.mobile1 && <span>{patient.mobile1}</span>}
-                                {patient.mobile1 && patient.mobile2 && <span className="mx-2 text-slate-400"><br/></span>}
-                                {patient.mobile2 && <span>{patient.mobile2}</span>}
+                                {patient.mobile1 && (
+                                  <span>{patient.mobile1}</span>
+                                )}
+                                {patient.mobile1 && patient.mobile2 && (
+                                  <span className="mx-2 text-slate-400">
+                                    <br />
+                                  </span>
+                                )}
+                                {patient.mobile2 && (
+                                  <span>{patient.mobile2}</span>
+                                )}
                               </>
                             ) : (
                               <span className="text-slate-400 italic">-</span>
@@ -452,7 +534,9 @@ export default function SessionEditRequestsAdmin() {
                               title={expanded ? "Hide Details" : "View Details"}
                             >
                               <FiEye />
-                              <span className="hidden md:inline">{expanded ? "Hide" : "View"}</span>
+                              <span className="hidden md:inline">
+                                {expanded ? "Hide" : "View"}
+                              </span>
                             </button>
                           </td>
                         </tr>
@@ -461,18 +545,91 @@ export default function SessionEditRequestsAdmin() {
                             <td colSpan={12} className="px-0 py-0 bg-blue-50/50">
                               <div className="rounded-b-xl border border-t-0 border-blue-100 bg-blue-50/40 mx-4 mb-4 mt-0 shadow-inner">
                                 <div className="px-8 py-6">
-                                  <h3 className="font-semibold mb-3 text-blue-900 text-sm">Sessions affected by requested changes</h3>
+                                  <h3 className="font-semibold mb-3 text-blue-900 text-sm">
+                                    Sessions affected by requested changes
+                                  </h3>
                                   <div className="overflow-x-auto">
-                                    <SessionEditsTable request={req} appointment={appointment} />
+                                    <SessionEditsTable
+                                      request={req}
+                                      appointment={appointment}
+                                    />
                                   </div>
-                                  <div className="pt-5">
-                                    <Link
-                                      to="/admin/bookings"
-                                      state={{ sessionEditRequest: req }}
-                                      className="inline-flex items-center gap-1 rounded-md border border-green-600 bg-green-50 px-4 py-2 text-sm text-green-700 hover:bg-green-100 transition"
-                                    >
-                                      <FiCheck /> Mark Approved
-                                    </Link>
+                                  <div className="pt-5 flex flex-col gap-2 max-w-md">
+                                    {/* Show feedback if any */}
+                                    {actionError &&
+                                      actionLoading === null && (
+                                        <div className="text-sm text-red-700 bg-red-50 border border-red-200 px-3 py-1 rounded mb-1">
+                                          {actionError}
+                                        </div>
+                                      )}
+                                    {actionSuccess && (
+                                      <div className="text-sm text-green-700 bg-green-50 border border-green-200 px-3 py-1 rounded mb-1">
+                                        {actionSuccess}
+                                      </div>
+                                    )}
+                                    {/* Only show Approve/Reject button if request is pending */}
+                                    {(req.status === "pending" ||
+                                      !req.status) && (
+                                      <div className="flex gap-2">
+                                        <button
+                                          type="button"
+                                          disabled={
+                                            !!actionLoading &&
+                                            actionLoading !== "approve:" + req._id
+                                          }
+                                          onClick={() =>
+                                            handleApproveRequest(req._id)
+                                          }
+                                          className={
+                                            "inline-flex items-center gap-1 rounded-md border border-green-600 bg-green-50 px-4 py-2 text-sm text-green-700 hover:bg-green-100 transition" +
+                                            (actionLoading ===
+                                            "approve:" + req._id
+                                              ? " opacity-80 pointer-events-none"
+                                              : "")
+                                          }
+                                        >
+                                          <FiCheck />
+                                          {actionLoading ===
+                                          "approve:" + req._id
+                                            ? "Marking..."
+                                            : "Mark Approved"}
+                                        </button>
+                                        <button
+                                          type="button"
+                                          disabled={
+                                            !!actionLoading &&
+                                            actionLoading !== "reject:" + req._id
+                                          }
+                                          onClick={() =>
+                                            handleRejectRequest(req._id)
+                                          }
+                                          className={
+                                            "inline-flex items-center gap-1 rounded-md border border-red-600 bg-red-50 px-4 py-2 text-sm text-red-700 hover:bg-red-100 transition" +
+                                            (actionLoading ===
+                                            "reject:" + req._id
+                                              ? " opacity-80 pointer-events-none"
+                                              : "")
+                                          }
+                                        >
+                                          <FiX />
+                                          {actionLoading ===
+                                          "reject:" + req._id
+                                            ? "Marking..."
+                                            : "Mark Rejected"}
+                                        </button>
+                                      </div>
+                                    )}
+                                    {/* Optionally, show already-approved/rejected info */}
+                                    {req.status === "approved" && (
+                                      <div className="inline-flex items-center gap-1 text-green-700 font-medium">
+                                        <FiCheck /> Already approved
+                                      </div>
+                                    )}
+                                    {req.status === "rejected" && (
+                                      <div className="inline-flex items-center gap-1 text-red-700 font-medium">
+                                        <FiX /> Rejected
+                                      </div>
+                                    )}
                                   </div>
                                 </div>
                               </div>
@@ -484,7 +641,6 @@ export default function SessionEditRequestsAdmin() {
                   })}
                 </tbody>
               </table>
-              {/* Pagination Controls */}
               {totalPages > 1 && (
                 <div className="flex items-center justify-between px-3 py-4 border-t border-slate-100 bg-slate-50">
                   <div className="text-xs text-slate-500">
@@ -565,14 +721,27 @@ function SessionEditsTable({
     <table className="w-full min-w-[800px] table-auto mb-2">
       <thead>
         <tr className="bg-slate-100 border-b">
-          {/* <th className="px-3 py-2 text-xs font-semibold text-slate-500 text-left">Session ID</th> */}
-          <th className="px-3 py-2 text-xs font-semibold text-slate-500 text-left">Session ID</th>
-          <th className="px-3 py-2 text-xs font-semibold text-slate-500 text-left">Orig. Date</th>
-          <th className="px-3 py-2 text-xs font-semibold text-slate-500 text-left">Orig. Slot</th>
-          <th className="px-3 py-2 text-xs font-semibold text-slate-500 text-left">Therapist</th>
-          <th className="px-3 py-2 text-xs font-semibold text-slate-500 text-left">Req. Date</th>
-          <th className="px-3 py-2 text-xs font-semibold text-slate-500 text-left">Req. Slot</th>
-          <th className="px-3 py-2 text-xs font-semibold text-slate-500 text-left">Status</th>
+          <th className="px-3 py-2 text-xs font-semibold text-slate-500 text-left">
+            Session ID
+          </th>
+          <th className="px-3 py-2 text-xs font-semibold text-slate-500 text-left">
+            Orig. Date
+          </th>
+          <th className="px-3 py-2 text-xs font-semibold text-slate-500 text-left">
+            Orig. Slot
+          </th>
+          <th className="px-3 py-2 text-xs font-semibold text-slate-500 text-left">
+            Therapist
+          </th>
+          <th className="px-3 py-2 text-xs font-semibold text-slate-500 text-left">
+            Req. Date
+          </th>
+          <th className="px-3 py-2 text-xs font-semibold text-slate-500 text-left">
+            Req. Slot
+          </th>
+          <th className="px-3 py-2 text-xs font-semibold text-slate-500 text-left">
+            Status
+          </th>
         </tr>
       </thead>
       <tbody>
@@ -580,80 +749,88 @@ function SessionEditsTable({
           request.sessions.map((edit, idx) => {
             const session =
               sessionMap[edit.sessionId] ||
-              (appointment?.sessions.find((s) => s._id === edit.sessionId));
+              appointment?.sessions.find((s) => s._id === edit.sessionId);
             const therapistName =
               session && session.therapist && typeof session.therapist === "object"
                 ? typeof session.therapist.userId === "object"
                   ? session.therapist.userId.name
                   : ""
                 : "";
-            // Detect date/slot change
             const dateChanged =
               session?.date &&
               edit.newDate &&
               !dayjs(edit.newDate).isSame(dayjs(session.date), "day");
             const slotChanged =
-              session?.slotId && edit.newSlotId && edit.newSlotId !== session.slotId;
-            // Show sessionId as stored in session.sessionId (if present), else session._id
-            const shownSessionId = session && (session.sessionId );
+              session?.slotId &&
+              edit.newSlotId &&
+              edit.newSlotId !== session.slotId;
+            const shownSessionId = session && session.sessionId;
 
             return (
               <tr
                 key={edit.sessionId + idx}
                 className={
                   "border-b transition" +
-                  ((dateChanged || slotChanged) ? " bg-green-50/30" : " bg-white")
+                  (dateChanged || slotChanged ? " bg-green-50/30" : " bg-white")
                 }
               >
-                {/* <td className="px-3 py-2 font-mono text-xs">{edit.sessionId}</td> */}
                 <td className="px-3 py-2 font-mono text-xs">
-                  {/* Show the sessionId property if present in the original session, else "-" */}
-                  {shownSessionId || <span className="italic text-slate-400">-</span>}
+                  {shownSessionId || (
+                    <span className="italic text-slate-400">-</span>
+                  )}
                 </td>
                 <td className="px-3 py-2">
-                  {session?.date ? formatDateDMY(session.date) : <span className="italic text-slate-400">N/A</span>}
+                  {session?.date ? (
+                    formatDateDMY(session.date)
+                  ) : (
+                    <span className="italic text-slate-400">N/A</span>
+                  )}
                 </td>
                 <td className="px-3 py-2">
                   {session?.slotId
                     ? getSlotLabel(session.slotId)
-                    : session?.slotId || <span className="italic text-slate-400">N/A</span>}
+                    : session?.slotId || (
+                        <span className="italic text-slate-400">N/A</span>
+                      )}
                 </td>
                 <td className="px-3 py-2">
-                  {therapistName ? therapistName : <span className="italic text-slate-400">–</span>}
+                  {therapistName ? (
+                    therapistName
+                  ) : (
+                    <span className="italic text-slate-400">–</span>
+                  )}
                 </td>
                 <td className={"px-3 py-2"}>
                   <span
-                    className={
-                      dateChanged
-                        ? "font-semibold text-blue-700"
-                        : ""
-                    }
+                    className={dateChanged ? "font-semibold text-blue-700" : ""}
                   >
-                    {edit.newDate
-                      ? formatDateDMY(edit.newDate)
-                      : <span className="italic text-slate-400">N/A</span>}
+                    {edit.newDate ? (
+                      formatDateDMY(edit.newDate)
+                    ) : (
+                      <span className="italic text-slate-400">N/A</span>
+                    )}
                   </span>
                   {dateChanged && (
                     <span className="ml-1 inline-flex items-center gap-1 text-green-700 text-[12px]">
-                      <FiEdit2 />Changed
+                      <FiEdit2 />
+                      Changed
                     </span>
                   )}
                 </td>
                 <td className="px-3 py-2">
                   <span
-                    className={
-                      slotChanged
-                        ? "font-semibold text-blue-700"
-                        : ""
-                    }
+                    className={slotChanged ? "font-semibold text-blue-700" : ""}
                   >
-                    {edit.newSlotId
-                      ? getSlotLabel(edit.newSlotId)
-                      : <span className="italic text-slate-400">N/A</span>}
+                    {edit.newSlotId ? (
+                      getSlotLabel(edit.newSlotId)
+                    ) : (
+                      <span className="italic text-slate-400">N/A</span>
+                    )}
                   </span>
                   {slotChanged && (
                     <span className="ml-1 inline-flex items-center gap-1 text-green-700 text-[12px]">
-                      <FiEdit2 />Changed
+                      <FiEdit2 />
+                      Changed
                     </span>
                   )}
                 </td>

@@ -137,6 +137,11 @@ export default function ConsultationBookingsAdmin() {
   const [approveError, setApproveError] = useState<string | null>(null); // for overall error message
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
+  // Status update mutation state
+  const [statusUpdateLoadingId, setStatusUpdateLoadingId] = useState<string | null>(null);
+  const [statusUpdateError, setStatusUpdateError] = useState<string | null>(null);
+  const [statusUpdateSuccess, setStatusUpdateSuccess] = useState<string | null>(null);
+
   // Pagination/data fetch
   const {
     bookings,
@@ -189,7 +194,7 @@ export default function ConsultationBookingsAdmin() {
     setPage(1);
   };
 
-  // Approve booking
+  // Approve booking (unchanged)
   const handleApprove = async (bookingId: string) => {
     setApproveLoadingId(bookingId);
     setApproveError(null);
@@ -228,9 +233,54 @@ export default function ConsultationBookingsAdmin() {
     }
   };
 
-  // Dismiss error messages
+  // Status update handler (admin update status, used for manual overrides etc.)
+  // INSTRUCTION: USE THE ENDPOINT FROM consultation-booking.controller.js (lines 58-222)
+  // Let's assume the API required is:
+  // PUT /api/admin/consultation-bookings/update-status
+  // with body { id, status }
+  const handleStatusUpdate = async (bookingId: string, newStatus: Booking["status"]) => {
+    setStatusUpdateLoadingId(bookingId);
+    setStatusUpdateError(null);
+    setStatusUpdateSuccess(null);
+    try {
+      const res = await fetch(
+        `${API_BASE_URL}/api/admin/consultation-bookings/${bookingId}/approve`, // Use new API endpoint
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: bookingId, status: newStatus }),
+        }
+      );
+      const responseText = await res.text();
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch {
+        data = { message: responseText };
+      }
+      if (!res.ok) {
+        setStatusUpdateError(data?.error || data?.message || "Failed to update status.");
+        return;
+      }
+      setStatusUpdateSuccess("Booking status updated successfully.");
+      setBookings((prev) =>
+        prev.map((b) =>
+          b._id === bookingId ? { ...b, status: newStatus } : b
+        )
+      );
+      setTimeout(() => setStatusUpdateSuccess(null), 2500);
+    } catch (e: any) {
+      setStatusUpdateError("Error: " + (e?.message || e?.toString() || "Unknown error."));
+    } finally {
+      setStatusUpdateLoadingId(null);
+    }
+  };
+
+  // Dismiss error/success messages
   const clearApproveError = () => setApproveError(null);
+  const clearStatusUpdateError = () => setStatusUpdateError(null);
   const clearSuccessMessage = () => setSuccessMessage(null);
+  const clearStatusUpdateSuccess = () => setStatusUpdateSuccess(null);
 
   return (
     <div className="min-h-screen p-8">
@@ -274,7 +324,7 @@ export default function ConsultationBookingsAdmin() {
         </select>
       </form>
 
-      {/* Error/success notification for approve */}
+      {/* Error/success notification for approve or status update */}
       {approveError && (
         <div
           className="bg-red-50 border border-red-400 text-red-700 px-4 py-3 mb-4 rounded relative"
@@ -291,6 +341,22 @@ export default function ConsultationBookingsAdmin() {
           </button>
         </div>
       )}
+      {statusUpdateError && (
+        <div
+          className="bg-red-50 border border-red-400 text-red-700 px-4 py-3 mb-4 rounded relative"
+          role="alert"
+        >
+          <span className="block sm:inline font-semibold">Error: </span>
+          {statusUpdateError}
+          <button
+            onClick={clearStatusUpdateError}
+            className="ml-2 text-xs text-red-500 underline"
+            tabIndex={0}
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
       {successMessage && (
         <div
           className="bg-green-50 border border-green-400 text-green-700 px-4 py-3 mb-4 rounded relative"
@@ -299,6 +365,21 @@ export default function ConsultationBookingsAdmin() {
           <span>{successMessage}</span>
           <button
             onClick={clearSuccessMessage}
+            className="ml-2 text-xs text-green-600 underline"
+            tabIndex={0}
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+      {statusUpdateSuccess && (
+        <div
+          className="bg-green-50 border border-green-400 text-green-700 px-4 py-3 mb-4 rounded relative"
+          role="status"
+        >
+          <span>{statusUpdateSuccess}</span>
+          <button
+            onClick={clearStatusUpdateSuccess}
             className="ml-2 text-xs text-green-600 underline"
             tabIndex={0}
           >
@@ -360,7 +441,7 @@ export default function ConsultationBookingsAdmin() {
                   </th>
                   <th className="px-4 py-3 text-left">Session Type</th>
                   <th className="px-4 py-3 text-left">Remark</th>
-                  {/* New approve column */}
+                  {/* Action column adds status update if not pending */}
                   <th className="px-4 py-3 text-center">Actions</th>
                 </tr>
               </thead>
@@ -423,7 +504,7 @@ export default function ConsultationBookingsAdmin() {
                     <td className="px-4 py-4">
                       {booking.remark || <span className="italic text-slate-400">—</span>}
                     </td>
-                    {/* Approve action */}
+                    {/* Actions: Approve or manual status update */}
                     <td className="px-4 py-4 text-center">
                       {booking.status === "pending" ? (
                         <button
@@ -457,7 +538,41 @@ export default function ConsultationBookingsAdmin() {
                           )}
                         </button>
                       ) : (
-                        <span className="text-slate-400 text-xs italic">—</span>
+                        <div className="flex gap-2 justify-center items-center">
+                          <select
+                            className="border rounded-md px-2 py-1 text-xs"
+                            value={booking.status}
+                            onChange={e =>
+                              handleStatusUpdate(
+                                booking._id,
+                                e.target.value as Booking["status"]
+                              )
+                            }
+                            disabled={statusUpdateLoadingId === booking._id}
+                            style={{ minWidth: 90 }}
+                          >
+                            <option value="confirmed">Confirmed</option>
+                            <option value="completed">Completed</option>
+                            <option value="cancelled">Cancelled</option>
+                            <option value="pending">Pending</option>
+                          </select>
+                          {statusUpdateLoadingId === booking._id && (
+                            <svg
+                              className="inline animate-spin"
+                              width={14}
+                              height={14}
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="gray"
+                              strokeWidth={2}
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            >
+                              <circle cx={12} cy={12} r={10} opacity="0.2" />
+                              <path d="M12 2a10 10 0 0 1 10 10" />
+                            </svg>
+                          )}
+                        </div>
                       )}
                     </td>
                   </tr>
