@@ -10,21 +10,27 @@ import {
   formatDateDDMMYYYY, getTotalSessionsForPackage, getPatientDisplayName, getPackageDisplay,
 } from "./types";
 
-// --- Helper: Sort therapists by therapistId, highest id on top ("NPL001", ... "NPL099", etc) ---
-function sortTherapistsByTherapistId(therapists: Therapist[]): Therapist[] {
-  return [...therapists].sort((a, b) => {
-    // extract numeric part; missing/invalid ids will be sorted at the bottom
-    const getIdNum = (t: Therapist) => {
-      const match = typeof t.therapistId === "string" ? t.therapistId.match(/\d+$/) : null;
-      return match ? parseInt(match[0], 10) : -1;
-    };
-    return getIdNum(b) - getIdNum(a);
+// --- Helper: Sorts ---
+// (1) Sort therapists by name
+function sortTherapistsByName(therapists: Therapist[]): Therapist[] {
+  return [...therapists].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+}
+
+// (2) Sort therapies by name
+function sortTherapiesByName(therapies: Therapy[]): Therapy[] {
+  return [...therapies].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+}
+
+// (3) Sort patients/children by name
+function sortPatientsByName(patients: Patient[]): Patient[] {
+  return [...patients].sort((a, b) => {
+    const aName = getPatientDisplayName(a) || "";
+    const bName = getPatientDisplayName(b) || "";
+    return aName.localeCompare(bName);
   });
 }
 
 // ─── QuickFillModal ───────────────────────────────────────────────────────────
-// Lets the receptionist pick a fixed therapist + therapy type + time slot that
-// will be applied automatically to every date clicked on the calendar.
 
 type QuickFillModalProps = {
   open: boolean;
@@ -61,8 +67,9 @@ function QuickFillModal({
 
   if (!open) return null;
 
-  // Sort therapists for dropdown: highest therapistId first
-  const sortedTherapists = sortTherapistsByTherapistId(therapists);
+  // Sort therapists and therapies by name for dropdowns
+  const sortedTherapists = sortTherapistsByName(therapists);
+  const sortedTherapies = sortTherapiesByName(therapies);
 
   return (
     <AnimatePresence>
@@ -131,7 +138,7 @@ function QuickFillModal({
                 className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-300 outline-none"
               >
                 <option value="">Select therapy type…</option>
-                {therapies.map(t => (
+                {sortedTherapies.map(t => (
                   <option key={t._id} value={t._id}>{t.name}</option>
                 ))}
               </select>
@@ -189,7 +196,6 @@ function QuickFillModal({
 }
 
 // ─── QuickFillBadge ───────────────────────────────────────────────────────────
-// Shows the currently active quick-fill preset inline in the form.
 
 type QuickFillBadgeProps = {
   settings: QuickFillSettings;
@@ -200,9 +206,9 @@ type QuickFillBadgeProps = {
 };
 
 function QuickFillBadge({ settings, therapists, therapies, onEdit, onClear }: QuickFillBadgeProps) {
-  // No ordering needed here; just display names
-  const tName = therapists.find(t => t._id === settings.therapistId)?.name ?? "—";
-  const tyName = therapies.find(t => t._id === settings.therapyTypeId)?.name ?? "—";
+  // Show sorted display name, though single match
+  const tName = sortTherapistsByName(therapists).find(t => t._id === settings.therapistId)?.name ?? "—";
+  const tyName = sortTherapiesByName(therapies).find(t => t._id === settings.therapyTypeId)?.name ?? "—";
   const slotLabel = _SLOTS.find(s => s.id === settings.slotId)?.label ?? settings.slotId;
 
   return (
@@ -263,8 +269,9 @@ function SessionDatesTimesTable({
   getAvailableSlotsForDate, bookedSlotsPerRow, removeSession,
   quickFillSettings,
 }: SessionDatesTimesTableProps) {
-  // Sorted therapists for dropdown (highest id first)
-  const sortedTherapists = sortTherapistsByTherapistId(therapists);
+  // Sorted therapists and therapies for dropdown
+  const sortedTherapists = sortTherapistsByName(therapists);
+  const sortedTherapies = sortTherapiesByName(therapies);
 
   return (
     <div className="space-y-3 mb-4">
@@ -409,7 +416,7 @@ function SessionDatesTimesTable({
                       required
                     >
                       <option value="">Select Therapy Type</option>
-                      {therapies.map(therapy => (
+                      {sortedTherapies.map(therapy => (
                         <option key={therapy._id} value={therapy._id}>{therapy.name}</option>
                       ))}
                     </select>
@@ -590,8 +597,10 @@ export function BookingFormPanel({
   const [qfModalOpen, setQfModalOpen] = useState(false);
   const totalSessions = getTotalSessionsForPackage(selectedPackage);
 
-  // sorted therapists for dropdowns
-  const sortedTherapists = sortTherapistsByTherapistId(therapists);
+  // Sort therapists, patients, therapies for dropdowns by name
+  const sortedTherapists = sortTherapistsByName(therapists);
+  const sortedTherapies = sortTherapiesByName(therapies);
+  const sortedPatients = sortPatientsByName(patients);
 
   return (
     <div className="flex-1 bg-white border rounded-lg p-6">
@@ -599,8 +608,8 @@ export function BookingFormPanel({
       <QuickFillModal
         open={qfModalOpen}
         onClose={() => setQfModalOpen(false)}
-        therapists={therapists}
-        therapies={therapies}
+        therapists={sortedTherapists}
+        therapies={sortedTherapies}
         settings={quickFillSettings}
         onSave={setQuickFillSettings}
         onClear={() => setQuickFillSettings(null)}
@@ -645,8 +654,8 @@ export function BookingFormPanel({
       {quickFillSettings && (
         <QuickFillBadge
           settings={quickFillSettings}
-          therapists={therapists}
-          therapies={therapies}
+          therapists={sortedTherapists}
+          therapies={sortedTherapies}
           onEdit={() => setQfModalOpen(true)}
           onClear={() => setQuickFillSettings(null)}
         />
@@ -698,7 +707,7 @@ export function BookingFormPanel({
         disabled={!!editBookingId}
       >
         <option value="">Select Children</option>
-        {patients.map(p => (
+        {sortedPatients.map(p => (
           <option key={p.id} value={p.id}>{getPatientDisplayName(p)}</option>
         ))}
       </select>
@@ -711,7 +720,7 @@ export function BookingFormPanel({
         className="w-full border rounded px-3 py-2 mb-3"
       >
         <option value="">Select Therapy</option>
-        {therapies.map(t => (
+        {sortedTherapies.map(t => (
           <option key={t._id} value={t._id}>{t.name}</option>
         ))}
       </select>
@@ -785,7 +794,7 @@ export function BookingFormPanel({
           editBookingId={editBookingId}
           therapists={sortedTherapists}
           therapistId={therapistId}
-          therapies={therapies}
+          therapies={sortedTherapies}
           therapyId={therapyId}
           getAvailableSlotsForDate={getAvailableSlotsForDate}
           bookedSlotsPerRow={bookedSlotsPerRow}

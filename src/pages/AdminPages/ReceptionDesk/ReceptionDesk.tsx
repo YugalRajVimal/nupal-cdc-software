@@ -196,6 +196,8 @@ export default function ReceptionDesk() {
         });
         if (!res.ok) throw new Error("Failed to load reception desk");
         const data = await res.json();
+        // Sort to have latest (most recent) pending payments on top
+        // (We sort by createdAt descending in pendingPaymentBookings)
         if (!data.success) throw new Error(data.message || "API error");
         if (ignore) return;
 
@@ -242,7 +244,7 @@ export default function ReceptionDesk() {
 
         // ---- Pending Payments ----
         // We extend the mapping to also get discountInfo and coupon similar to BookingSummary
-        const pendings: PaymentInfo[] = (data.pendingPaymentBookings || []).map((booking: any) => {
+        let pendings: PaymentInfo[] = (data.pendingPaymentBookings || []).map((booking: any) => {
           let paymentRecord = booking.payment || {};
           let patientName = booking.patient?.name || "";
           let patientId = booking.patient?.patientId || "";
@@ -263,6 +265,8 @@ export default function ReceptionDesk() {
           else if (paymentRecord.coupon) {
             coupon = paymentRecord.coupon;
           }
+          // Add createdAt for sorting when available
+          let createdAt = paymentRecord.createdAt || booking.createdAt || undefined;
           return {
             _id: booking._id,
             appointmentId: booking.appointmentId,
@@ -277,7 +281,16 @@ export default function ReceptionDesk() {
             amountPaid,
             discountInfo,
             coupon,
+            createdAt,
           };
+        });
+
+        // Latest (most recent) first (by createdAt desc)
+        pendings.sort((a, b) => {
+          // If both have createdAt, compare, else fallback to 0
+          const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          return bTime - aTime;
         });
 
         setAppointments(todays);
@@ -1097,6 +1110,12 @@ export default function ReceptionDesk() {
                         {getDiscountString(payment) && (
                           <span className="text-rose-800">
                             {getDiscountString(payment)}
+                          </span>
+                        )}
+                        {/* Show date - createdAt (for recency awareness) */}
+                        {payment.createdAt && (
+                          <span className="text-slate-400 ml-2">
+                            {formatDateDDMMYYYY(payment.createdAt.slice(0, 10))}
                           </span>
                         )}
                       </div>
