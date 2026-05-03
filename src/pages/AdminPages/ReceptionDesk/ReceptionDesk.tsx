@@ -10,6 +10,22 @@ import {
 } from "react-icons/fi";
 import { motion, AnimatePresence } from "framer-motion";
 
+// --- BEGIN: Discount related :: align to BookingSummary logic ---
+type DiscountInfo = {
+  code: string | null;
+  percent: number;
+  amount: number;
+};
+type Coupon = {
+  _id?: string;
+  discountEnabled?: boolean;
+  discount?: number;
+  couponCode?: string;
+  validityDays?: number;
+  createdAt?: string;
+};
+// --- END: Discount ---
+
 const SESSION_TIME_OPTIONS = [
   { id: '1000-1045', label: '10:00 to 10:45', limited: false },
   { id: '1045-1130', label: '10:45 to 11:30', limited: false },
@@ -50,9 +66,12 @@ type PaymentInfo = {
   paymentId?: string;
   paymentStatus?: string;
   paymentAmount?: number | string;
+  totalAmount?: number | string;
   paymentMethod?: string;
   paymentRecordId?: string;
   amountPaid?: number | string;
+  discountInfo?: DiscountInfo;
+  coupon?: Coupon;
   [key: string]: any;
 };
 
@@ -63,15 +82,59 @@ type CollectModalState = {
   payment: PaymentInfo | null
 };
 
-// --- UTILITY: DD/MM/YYYY formatting ---
 function formatDateDDMMYYYY(dateString: string | undefined): string {
   if (!dateString) return "";
-  // Handle only date portion (YYYY-MM-DD) or full ISO string
   let d = dateString;
   if (d.length > 10) d = d.slice(0, 10);
   const [yyyy, mm, dd] = d.split("-");
   if (!yyyy || !mm || !dd) return dateString;
   return `${dd}/${mm}/${yyyy}`;
+}
+
+function getDiscountAmount(payment: PaymentInfo) {
+  if (!payment) return 0;
+  if (payment.discountInfo && typeof payment.discountInfo.amount === "number") {
+    return payment.discountInfo.amount;
+  }
+  if (payment.coupon && payment.coupon.discount && payment.totalAmount) {
+    let discAmt = (parseFloat(payment.coupon.discount as any) / 100) * (parseFloat(payment.totalAmount as any) || 0);
+    return Math.round(discAmt);
+  }
+  return 0;
+}
+
+function getNetPayable(payment: PaymentInfo) {
+  if (!payment) return undefined;
+  let amount = payment.totalAmount ?? payment.paymentAmount;
+  if (amount === null || typeof amount === "undefined") return undefined;
+  let amt = typeof amount === "string" ? parseFloat(amount) : amount;
+  if (isNaN(amt)) return undefined;
+  return amt - getDiscountAmount(payment);
+}
+
+function getAmountPaid(payment: PaymentInfo) {
+  let amt = payment && payment.amountPaid;
+  if (typeof amt === "string") amt = parseFloat(amt);
+  return typeof amt === "number" && !isNaN(amt) ? amt : 0;
+}
+
+function getOutstanding(payment: PaymentInfo) {
+  const net = getNetPayable(payment);
+  const paid = getAmountPaid(payment);
+  if (typeof net === "undefined") return undefined;
+  return net - paid;
+}
+
+function getDiscountString(payment: PaymentInfo) {
+  if (!payment || (!payment.discountInfo && !payment.coupon)) return null;
+  const coupon = payment.coupon;
+  if (coupon?.couponCode && coupon.discountEnabled) {
+    return `Coupon: ${coupon.couponCode} (−${coupon.discount}%)`;
+  }
+  if (payment.discountInfo && payment.discountInfo.amount > 0) {
+    return `Discount: ₹${payment.discountInfo.amount}`;
+  }
+  return null;
 }
 
 export default function ReceptionDesk() {
@@ -87,6 +150,9 @@ export default function ReceptionDesk() {
   const [partialValue, setPartialValue] = useState<string>("");
   const [collectLoading, setCollectLoading] = useState(false);
 
+  // Checkbox state for discount applied
+  const [discountApplied, setDiscountApplied] = useState(false);
+
   // Multi-select state for appointments
   const [selectedAppointments, setSelectedAppointments] = useState<{ [_id_session: string]: boolean }>({});
   const [multiCheckingIn, setMultiCheckingIn] = useState(false);
@@ -100,33 +166,21 @@ export default function ReceptionDesk() {
     return undefined;
   }
 
-  const getPaymentAmount = () => {
-    if (!collectModal.payment?.paymentAmount && collectModal.payment?.paymentAmount !== 0) return undefined;
-    let amount = collectModal.payment.paymentAmount;
-    return toNumber(amount);
-  };
-
-  const getAmountPaid = () => {
-    if (!collectModal.payment?.amountPaid && collectModal.payment?.amountPaid !== 0) return 0;
-    let paid = collectModal.payment.amountPaid;
-    const paidNum = toNumber(paid);
-    return paidNum ?? 0;
-  };
-
-  const paymentAmount = getPaymentAmount();
-  const amountAlreadyPaid = getAmountPaid();
+  // Used for modal UI
+  const currentPayment = collectModal.payment;
+  const netPayable = currentPayment ? getNetPayable(currentPayment) : undefined;
+  const discountAmt = currentPayment ? getDiscountAmount(currentPayment) : 0;
+  const amountPaid = currentPayment ? getAmountPaid(currentPayment) : 0;
+  const outstanding = currentPayment ? getOutstanding(currentPayment) : undefined;
+  const discountString = currentPayment ? getDiscountString(currentPayment) : null;
   const partialNumeric = parseFloat(partialValue);
   const isPartialOverDue =
     collectType === "partial" &&
     partialValue &&
-    paymentAmount !== undefined &&
+    typeof outstanding !== "undefined" &&
     !isNaN(partialNumeric) &&
-    (partialNumeric + amountAlreadyPaid) > paymentAmount;
-  const getPaymentDue = () => {
-    if (paymentAmount === undefined) return undefined;
-    return paymentAmount - amountAlreadyPaid;
-  };
-  const paymentDue = getPaymentDue();
+    (partialNumeric + amountPaid) > (netPayable || 0);
+  const paymentDue = typeof outstanding !== "undefined" ? outstanding : undefined;
 
   useEffect(() => {
     let ignore = false;
@@ -187,6 +241,7 @@ export default function ReceptionDesk() {
         });
 
         // ---- Pending Payments ----
+        // We extend the mapping to also get discountInfo and coupon similar to BookingSummary
         const pendings: PaymentInfo[] = (data.pendingPaymentBookings || []).map((booking: any) => {
           let paymentRecord = booking.payment || {};
           let patientName = booking.patient?.name || "";
@@ -194,10 +249,20 @@ export default function ReceptionDesk() {
           let paymentId = paymentRecord.paymentId || undefined;
           let paymentStatus = paymentRecord.status || undefined;
           let paymentAmount = (typeof paymentRecord.amount !== "undefined" ? paymentRecord.amount : undefined);
+          let totalAmount = typeof paymentRecord.totalAmount !== "undefined" ? paymentRecord.totalAmount : undefined;
           let paymentMethod = paymentRecord.paymentMethod || "";
           let paymentRecordId = paymentRecord._id || undefined;
           let amountPaid = (typeof paymentRecord.amountPaid !== "undefined" ? paymentRecord.amountPaid : 0);
-
+          // Discount logic
+          let discountInfo: DiscountInfo | undefined = undefined;
+          let coupon: Coupon | undefined = undefined;
+          if (paymentRecord.discountInfo) discountInfo = paymentRecord.discountInfo;
+          if (booking.discountInfo && booking.discountInfo.coupon) {
+            coupon = booking.discountInfo.coupon;
+          }
+          else if (paymentRecord.coupon) {
+            coupon = paymentRecord.coupon;
+          }
           return {
             _id: booking._id,
             appointmentId: booking.appointmentId,
@@ -206,9 +271,12 @@ export default function ReceptionDesk() {
             paymentId,
             paymentStatus,
             paymentAmount,
+            totalAmount,
             paymentMethod,
             paymentRecordId,
             amountPaid,
+            discountInfo,
+            coupon,
           };
         });
 
@@ -331,6 +399,11 @@ export default function ReceptionDesk() {
     setCollectModal({ visible: true, payment });
     setCollectType('full');
     setPartialValue("");
+    // discountApplied should default to true if there is any discount or coupon, otherwise false.
+    const hasDiscount =
+      (payment.discountInfo && payment.discountInfo.amount > 0) ||
+      (payment.coupon && payment.coupon.discount && payment.coupon.discount > 0 && payment.coupon.discountEnabled);
+    setDiscountApplied(!!hasDiscount);
   };
 
   const closeCollectModal = () => {
@@ -338,8 +411,10 @@ export default function ReceptionDesk() {
     setPartialValue("");
     setCollectType('full');
     setCollectLoading(false);
+    setDiscountApplied(false);
   };
 
+  // -- BookingSummary (discount aware) HandleCollect logic
   const handleCollect = async () => {
     const payment = collectModal.payment;
     if (!payment) return;
@@ -353,8 +428,12 @@ export default function ReceptionDesk() {
       let url = `${API_URL}/api/admin/bookings/${_id}/collect-payment`;
       let payload: any = {};
 
-      let newAmountPaid = getAmountPaid();
+      let paid = getAmountPaid(payment);
       let partialPaidAmount: number | undefined = undefined;
+      let net = getNetPayable(payment);
+
+      // Add discountApplied field according to checkbox value
+      payload.discountApplied = discountApplied;
 
       if (collectType === "partial") {
         let val = parseFloat(partialValue);
@@ -364,23 +443,19 @@ export default function ReceptionDesk() {
           return;
         }
         if (
-          paymentAmount !== undefined &&
-          !isNaN(val) &&
-          (val + amountAlreadyPaid) > paymentAmount
+          typeof net !== "undefined" &&
+          (val + paid) > net
         ) {
           setCollectLoading(false);
-          alert(
-            `Partial amount plus already paid (${val} + ${amountAlreadyPaid
-            }) cannot exceed the pending amount (${paymentAmount})`
-          );
+          alert(`Partial amount plus already paid cannot exceed the invoice total (${net})`);
           return;
         }
-        payload = { partialAmount: val, paymentId: paymentRecordId, paymentType: collectType };
+        payload = { ...payload, partialAmount: val, paymentId: paymentRecordId, paymentType: collectType };
         partialPaidAmount = val;
-        newAmountPaid += val;
+        paid += val;
       } else {
-        payload = paymentRecordId ? { paymentId: paymentRecordId } : {};
-        newAmountPaid = paymentAmount !== undefined ? paymentAmount : newAmountPaid;
+        payload = paymentRecordId ? { ...payload, paymentId: paymentRecordId } : { ...payload };
+        paid = typeof net === "number" ? net : paid;
       }
 
       const res = await fetch(url, {
@@ -396,24 +471,24 @@ export default function ReceptionDesk() {
 
       let finalAmountPaid: number;
       if (typeof data.amountPaid !== 'undefined' && data.amountPaid !== null) {
-        finalAmountPaid = toNumber(data.amountPaid) ?? newAmountPaid;
+        finalAmountPaid = toNumber(data.amountPaid) ?? paid;
       } else if (collectType === "partial" && typeof partialPaidAmount === "number") {
-        finalAmountPaid = amountAlreadyPaid + partialPaidAmount;
+        finalAmountPaid = getAmountPaid(payment) + partialPaidAmount;
       } else {
-        finalAmountPaid = newAmountPaid;
+        finalAmountPaid = paid;
       }
 
-      let totalAmount: number;
+      let total: number;
       if (typeof data.amount !== 'undefined' && data.amount !== null) {
-        totalAmount = toNumber(data.amount) ?? paymentAmount ?? 0;
+        total = toNumber(data.amount) ?? (getNetPayable(payment) ?? 0);
       } else {
-        totalAmount = paymentAmount ?? 0;
+        total = getNetPayable(payment) ?? 0;
       }
 
       if (
         data.status === "paid" ||
         data.paymentStatus === "paid" ||
-        (typeof totalAmount === "number" && typeof finalAmountPaid === "number" && totalAmount > 0 && finalAmountPaid >= totalAmount)
+        (typeof total === "number" && typeof finalAmountPaid === "number" && total > 0 && finalAmountPaid >= total)
       ) {
         setPayments((pays) => pays.filter((p) => p._id !== _id));
       } else {
@@ -431,6 +506,8 @@ export default function ReceptionDesk() {
                 updatedFields.amountPaid = data.amountPaid;
               }
               if (typeof data.amount !== "undefined") updatedFields.paymentAmount = data.amount;
+              if (typeof data.discountInfo !== "undefined") updatedFields.discountInfo = data.discountInfo;
+              if (typeof data.coupon !== "undefined") updatedFields.coupon = data.coupon;
 
               if (
                 collectType === "partial" &&
@@ -575,9 +652,9 @@ export default function ReceptionDesk() {
         </AnimatePresence>
       </motion.div>
 
-      {/* Payment Collection Modal */}
+      {/* Payment Collection Modal - now includes discount/coupon info */}
       <AnimatePresence>
-        {collectModal.visible && collectModal.payment && (
+        {collectModal.visible && currentPayment && (
           <motion.div
             key="collect-modal"
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/30"
@@ -608,38 +685,74 @@ export default function ReceptionDesk() {
                   Collect Payment
                 </div>
                 <div className="text-sm mb-3">
-                  <span className="font-medium text-blue-700">Appt#: {collectModal.payment.appointmentId}</span>
+                  <span className="font-medium text-blue-700">Appt#: {currentPayment.appointmentId}</span>
                   <br />
                   {/* PatientName with a link for modal */}
-                  {collectModal.payment.patientId && (
+                  {currentPayment.patientId && (
                     <a
-                      href={`/admin/children?patientId=${encodeURIComponent(collectModal.payment.patientId)}`}
+                      href={`/admin/children?patientId=${encodeURIComponent(currentPayment.patientId)}`}
                       className="text-blue-700 hover:underline"
                       title="View patient details"
                       target="_blank"
                       rel="noopener noreferrer"
                       onClick={e => e.stopPropagation()}
                     >
-                      <span className="text-slate-800">{collectModal.payment.patientName}</span>
+                      <span className="text-slate-800">{currentPayment.patientName}</span>
                     </a>
                   )}
-                  {!collectModal.payment.patientId && (
-                    <span className="text-slate-800">{collectModal.payment.patientName}</span>
+                  {!currentPayment.patientId && (
+                    <span className="text-slate-800">{currentPayment.patientName}</span>
                   )}
                   {" "}
-                  <span className="text-xs text-blue-300 font-mono">({collectModal.payment.patientId})</span>
+                  <span className="text-xs text-blue-300 font-mono">({currentPayment.patientId})</span>
+                  <br />
+                  {typeof currentPayment.totalAmount !== "undefined" && (
+                    <span className="text-xs text-slate-500">
+                      Invoice: <span className="font-semibold text-slate-700">
+                        ₹{String(currentPayment.totalAmount)}
+                      </span>
+                    </span>
+                  )}
+                  {discountAmt > 0 && (
+                    <span className="text-xs text-rose-500 ml-2">
+                      − ₹{discountAmt} {discountString && <span className="ml-1">({discountString})</span>}
+                    </span>
+                  )}
                   <br />
                   <span className="text-xs text-slate-500">
                     Amount Due: <span className="font-semibold text-slate-700">
-                      ₹{String(collectModal.payment.paymentAmount ?? "—")}
+                      ₹{typeof netPayable !== "undefined" ? netPayable : (currentPayment.paymentAmount ?? "—")}
                     </span>
                   </span>
-                  {(collectModal.payment.amountPaid || collectModal.payment.amountPaid === 0) && (
+                  {(typeof amountPaid !== "undefined" && (amountPaid || amountPaid === 0)) && (
                     <span className="text-xs text-slate-400 ml-2">
-                      (Already paid: ₹{String(collectModal.payment.amountPaid)})
+                      (Already paid: ₹{String(amountPaid)})
                     </span>
                   )}
                 </div>
+                {/* Discount toggle checkbox */}
+                {(discountAmt > 0 || discountString) && (
+                  <div className="mb-3">
+                    <label className="inline-flex items-center cursor-pointer gap-2">
+                      <input
+                        type="checkbox"
+                        checked={discountApplied}
+                        onChange={() => setDiscountApplied(val => !val)}
+                        className="accent-green-600"
+                        disabled={collectLoading}
+                        aria-label="Apply discount"
+                      />
+                      <span className="text-sm text-slate-700">
+                        Apply discount {discountString ? <span className="text-rose-700 font-semibold">{discountString}</span> : ""}
+                      </span>
+                    </label>
+                    {!discountApplied && (
+                      <div className="ml-6 text-xs text-slate-400">
+                        Invoice will be collected <b>without</b> applying discount.
+                      </div>
+                    )}
+                  </div>
+                )}
                 <form
                   onSubmit={e => {
                     e.preventDefault();
@@ -691,7 +804,7 @@ export default function ReceptionDesk() {
                       />
                       {isPartialOverDue && (
                         <div className="text-xs text-red-500 mt-1">
-                          Partial amount plus already paid cannot exceed the invoice total ({paymentAmount}).
+                          Partial amount plus already paid cannot exceed the invoice total ({netPayable}).
                         </div>
                       )}
                     </div>
@@ -710,7 +823,9 @@ export default function ReceptionDesk() {
                       : "Collect Partial Amount"}
                   </button>
                   <div className="mt-1 text-xs text-slate-400 text-center">
-                    {collectType === "partial" ? "Collects a partial payment; the remaining will appear as pending." : "Marks the invoice as fully paid."}
+                    {collectType === "partial"
+                      ? "Collects a partial payment; the remaining will appear as pending."
+                      : "Marks the invoice as fully paid."}
                   </div>
                 </form>
               </div>
@@ -887,7 +1002,7 @@ export default function ReceptionDesk() {
           )}
         </motion.div>
 
-        {/* Payments */}
+        {/* Payments - Discount and coupon-aware */}
         <motion.div
           whileHover={{ y: -4 }}
           className="bg-white border border-slate-200 rounded-lg p-6 shadow-sm"
@@ -899,82 +1014,102 @@ export default function ReceptionDesk() {
             <p className="text-sm text-slate-500">No pending payments.</p>
           ) : (
             <div className="space-y-4">
-              {payments.map((payment) => (
-                <div
-                  key={payment._id}
-                  className="flex items-center justify-between border-b border-slate-100 pb-3 last:pb-0 last:border-0"
-                >
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-semibold text-blue-700">
-                        Appt#: {payment.appointmentId}
-                      </span>
-                      <span className="font-medium text-slate-800">
-                        {/* Add a link for patientName if patientId present */}
-                        {payment.patientId ? (
-                          <a
-                            href={`/admin/children?patientId=${encodeURIComponent(payment.patientId)}`}
-                            className="text-blue-700 hover:underline"
-                            title="View patient details"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={e => e.stopPropagation()}
-                          >
-                            {payment.patientName}
-                          </a>
-                        ) : (
-                          payment.patientName
-                        )}
-                        <span className="ml-1 text-xs text-blue-400 font-mono">
-                          ({payment.patientId})
-                        </span>
-                      </span>
-                    </div>
-                    <div className="text-xs text-slate-500 flex flex-wrap gap-1 mt-0.5">
-                      <span>
-                        Payment ID:{" "}
-                        <span className="font-mono text-blue-600">
-                          {payment.paymentId || payment.paymentRecordId || "—"}
-                        </span>
-                      </span>
-                      <span>
-                        Status:{" "}
-                        <span
-                          className={
-                            payment.paymentStatus === "paid"
-                              ? "text-green-600"
-                              : "text-red-600"
-                          }
-                        >
-                          {payment.paymentStatus || "pending"}
-                        </span>
-                      </span>
-                      <span>
-                        Amount : ₹
-                        {typeof payment.paymentAmount === "number" ||
-                        (typeof payment.paymentAmount === "string" && /^\d+$/.test(payment.paymentAmount))
-                          ? payment.paymentAmount
-                          : "—"}
-                      </span>
-                      {(payment.amountPaid || payment.amountPaid === 0) && (
-                        <span>
-                          , Paid: ₹
-                          {(typeof payment.amountPaid === "number" ||
-                            (typeof payment.amountPaid === "string" && /^\d+$/.test(payment.amountPaid)))
-                            ? payment.amountPaid
-                            : "—"}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <button
-                    className="rounded-md border border-green-500 px-4 py-1.5 text-sm font-medium text-green-600 hover:bg-green-50 transition"
-                    onClick={() => openCollectModal(payment)}
+              {payments.map((payment) => {
+                const disc = getDiscountAmount(payment);
+                const net = getNetPayable(payment);
+                const paid = getAmountPaid(payment);
+                const outstanding = getOutstanding(payment);
+                return (
+                  <div
+                    key={payment._id}
+                    className="flex items-center justify-between border-b border-slate-100 pb-3 last:pb-0 last:border-0"
                   >
-                    Collect
-                  </button>
-                </div>
-              ))}
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-semibold text-blue-700">
+                          Appt#: {payment.appointmentId}
+                        </span>
+                        <span className="font-medium text-slate-800">
+                          {/* Add a link for patientName if patientId present */}
+                          {payment.patientId ? (
+                            <a
+                              href={`/admin/children?patientId=${encodeURIComponent(payment.patientId)}`}
+                              className="text-blue-700 hover:underline"
+                              title="View patient details"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={e => e.stopPropagation()}
+                            >
+                              {payment.patientName}
+                            </a>
+                          ) : (
+                            payment.patientName
+                          )}
+                          <span className="ml-1 text-xs text-blue-400 font-mono">
+                            ({payment.patientId})
+                          </span>
+                        </span>
+                      </div>
+                      <div className="text-xs text-slate-500 flex flex-wrap gap-1 mt-0.5 items-end">
+                        <span>
+                          Payment ID:{" "}
+                          <span className="font-mono text-blue-600">
+                            {payment.paymentId || payment.paymentRecordId || "—"}
+                          </span>
+                        </span>
+                        <span>
+                          Status:{" "}
+                          <span
+                            className={
+                              payment.paymentStatus === "paid"
+                                ? "text-green-600"
+                                : "text-red-600"
+                            }
+                          >
+                            {payment.paymentStatus || "pending"}
+                          </span>
+                        </span>
+                        {typeof payment.totalAmount !== "undefined" && (
+                          <span>
+                            Invoice: ₹
+                            {payment.totalAmount}
+                          </span>
+                        )}
+                        {disc > 0 && (
+                          <span className="text-rose-500">
+                            − ₹{disc}
+                          </span>
+                        )}
+                        <span>
+                          Payable: ₹{typeof net !== "undefined" ? net : (payment.paymentAmount ?? "—")}
+                        </span>
+                        {(paid || paid === 0) && (
+                          <span>
+                            , Paid: ₹
+                            {paid}
+                          </span>
+                        )}
+                        {typeof outstanding !== "undefined" && outstanding > 0 && (
+                          <span>
+                            , Due: ₹{outstanding}
+                          </span>
+                        )}
+                        {getDiscountString(payment) && (
+                          <span className="text-rose-800">
+                            {getDiscountString(payment)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      className="rounded-md border border-green-500 px-4 py-1.5 text-sm font-medium text-green-600 hover:bg-green-50 transition"
+                      onClick={() => openCollectModal(payment)}
+                    >
+                      Collect
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           )}
         </motion.div>

@@ -132,6 +132,7 @@ export default function AllUpcomingSessions() {
       if (!res.ok) throw new Error("Failed to fetch upcoming sessions");
 
       const data = await res.json();
+      console.log(data);
       if (!data.success) throw new Error(data.message || "API error");
       setShownDate(data.date);
 

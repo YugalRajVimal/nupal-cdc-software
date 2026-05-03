@@ -46,7 +46,7 @@ type FamilyGroupChildren = {
   _id: string;
   shortId: string;
   name: string;
-  motherPhoneNumber: string; // Change: grouping key
+  motherPhoneNumber: string;
   familyChildren: any[];
   displayNames: string;
   role: string;
@@ -60,35 +60,62 @@ type FamilyGroupChildren = {
   areaName?: string;
 };
 
+// === Formatting Helpers ===
+function formatTherapistId(id: string | undefined): string {
+  if (!id) return '';
+  // Remove leading zeroes, then pad with zeros to 3 digits
+  const numPart = String(id).replace(/[^\d]/g, '');
+  if(!numPart) return id;
+  return 'NPL' + numPart.padStart(3, '0');
+}
+
+function formatPatientId(id: string | undefined): string {
+  if (!id) return '';
+  const numPart = String(id).replace(/[^\d]/g, '');
+  if(!numPart) return id;
+  return 'P' + numPart.padStart(4, '0');
+}
+
+function getSortableIdNum(id: string, type: string) {
+  let match;
+  if (type === 'therapists') {
+    // assume therapistId like NPLnnn or just nnn
+    match = id.match(/\d+/);
+  } else if (type === 'children') {
+    // assume patientId like Pnnnn or just nnnn
+    match = id.match(/\d+/);
+  } else {
+    return 0;
+  }
+  return match ? parseInt(match[0], 10) : 0;
+}
+
 // === Helpers ===
 const extractShortId = (user: any, type: string): string => {
+  // Return the id only, do not format here (format in render/sort)
   if (type === 'therapists' && user.therapistId) return user.therapistId;
-  if (type === 'children' && user.patientId) return user.patientId; // note: children mapping
+  if (type === 'children' && user.patientId) return user.patientId;
   if (type === 'admin' && (user.subAdminId || user.adminId)) return user.subAdminId || user.adminId;
   if (user.userId && type !== 'admin') {
     if (type === 'therapists' && user.userId.therapistId) return user.userId.therapistId;
-    if (type === 'children' && user.userId.patientId) return user.userId.patientId; // note: children mapping
+    if (type === 'children' && user.userId.patientId) return user.userId.patientId;
     if (type === 'admin' && (user.userId.subAdminId || user.userId.adminId)) return user.userId.subAdminId || user.userId.adminId;
   }
   return user._id || '';
 };
 
-// --- REWRITE: groupChildrenByMotherPhone ---
 const groupChildrenByMotherPhone = (childrenArr: any[]): FamilyGroupChildren[] => {
   const familyGroups: { [motherPhone: string]: FamilyGroupChildren } = {};
 
   for (const child of childrenArr) {
     if (!child.userId) continue;
 
-    // Try to get motherPhoneNumber (mobile1 with fallback)
-    // Try both direct and nested under userId
     let motherPhoneNumber =
       child.mobile1 ||
       (child.userId ? child.userId.mobile1 : undefined) ||
       '';
     motherPhoneNumber = motherPhoneNumber ? String(motherPhoneNumber).trim() : '';
 
-    // Only group children with a motherPhoneNumber (skip ungrouped if blank)
     if (!motherPhoneNumber) continue;
 
     const userId = child.userId._id || child._id;
@@ -145,7 +172,6 @@ const groupChildrenByMotherPhone = (childrenArr: any[]): FamilyGroupChildren[] =
   return Object.values(familyGroups);
 };
 
-// --- ADAPT extractUsersFromResponse to use groupChildrenByMotherPhone ---
 const extractUsersFromResponse = (data: any): FlattenedUser[] => {
   const users: FlattenedUser[] = [];
 
@@ -168,18 +194,16 @@ const extractUsersFromResponse = (data: any): FlattenedUser[] => {
     });
   }
 
-  // Change: map backend "patients" array to "children" on frontend
   if (Array.isArray(data.patients)) {
     const families = groupChildrenByMotherPhone(data.patients);
     for (const family of families) {
-      // "parentEmail" -> "motherPhoneNumber" here, and also updated the "email" field for display to be userEmail or motherPhoneNumber
       users.push({
         _id: family._id,
         shortId: family.shortId,
         name: family.name,
-        email: family.userEmail || family.motherPhoneNumber, // Display email or, if not, mother phone
-        parentEmail: family.motherPhoneNumber, // for compatibility
-        motherPhoneNumber: family.motherPhoneNumber, // actual grouping key used!
+        email: family.userEmail || family.motherPhoneNumber,
+        parentEmail: family.motherPhoneNumber,
+        motherPhoneNumber: family.motherPhoneNumber,
         displayNames: family.displayNames,
         role: family.role,
         fromCollection: 'children',
@@ -210,7 +234,6 @@ const extractUsersFromResponse = (data: any): FlattenedUser[] => {
   return users;
 };
 
-// Role filter tabs
 const ROLE_OPTIONS = [
   { label: "All Users", value: "all", apiRole: "all" },
   { label: "Children", value: "children", apiRole: "children" },
@@ -250,13 +273,14 @@ type UserRowProps = {
 const ChildrenList: React.FC<{ familyChildren: any[] }> = ({ familyChildren }) => {
   if (!Array.isArray(familyChildren) || familyChildren.length === 0) return null;
 
+  // Make latest (highest id) children appear at top, by numeric part of patientId
   const sortedChildren = [...familyChildren].sort((a, b) => {
-    if (a.name && b.name) return a.name.localeCompare(b.name);
-    if (a.patientId && b.patientId) return a.patientId.localeCompare(b.patientId);
-    return 0;
+    const nA = getSortableIdNum(a.patientId || '', 'children');
+    const nB = getSortableIdNum(b.patientId || '', 'children');
+    // Descending: latest on top
+    return nB - nA;
   });
 
-  // ---- Render Mother's and Father's Mobile numbers ----
   const getMotherMobile = (child: any) => child.mobile1 || (child.userId && child.userId.mobile1) || "";
   const getFatherMobile = (child: any) => child.mobile2 || (child.userId && child.userId.mobile2) || "";
 
@@ -277,7 +301,9 @@ const ChildrenList: React.FC<{ familyChildren: any[] }> = ({ familyChildren }) =
                 {child.name || <span className="italic text-slate-600">Unknown</span>}
               </a>
               {child.patientId && (
-                <span className="font-mono text-xs text-blue-900 ml-1">({child.patientId})</span>
+                <span className="font-mono text-base text-blue-900 ml-1 font-extrabold">
+                  ({formatPatientId(child.patientId)})
+                </span>
               )}
               {child.userId?.email && (
                 <span className="ml-2 text-xs text-slate-700">{child.userId.email}</span>
@@ -289,7 +315,6 @@ const ChildrenList: React.FC<{ familyChildren: any[] }> = ({ familyChildren }) =
                 </span>
               )}
             </div>
-            {/* Mobile numbers */}
             <div className="flex gap-4 pl-5 text-xs text-slate-600">
               {getMotherMobile(child) && (
                 <span>
@@ -335,33 +360,43 @@ const UserRow = ({ user, onLoginAsUser, loggingInUserId }: UserRowProps) => {
     const therapistRaw = user.therapistRaw || {};
     const therapistObjId = therapistRaw._id || user._id || '';
     if (therapistObjId && shortId) {
+      // Format therapistId as NPLnnn, bigger on top
       return (
         <a
           href={`/super-admin/therapists?therapist=${encodeURIComponent(therapistObjId)}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="underline hover:text-blue-900 text-blue-700"
+          className="underline hover:text-blue-900 text-blue-700 text-lg font-bold"
         >
-          {shortId}
+          {formatTherapistId(shortId)}
         </a>
       );
     }
-    return shortId;
+    return <span className="text-lg font-bold">{formatTherapistId(shortId)}</span>;
   };
 
   const renderChildrenShortIds = (user: FlattenedUser) => {
     if (!user.shortId) return null;
-    if (user.fromCollection !== "children") return user.shortId;
+    if (user.fromCollection !== "children") {
+      // Not family - don't format, just show as is
+      return <span className="text-lg font-bold">{user.shortId}</span>;
+    }
     const familyChildren = Array.isArray(user.familyChildren) ? user.familyChildren : [];
     if (familyChildren.length === 0) {
-      return (user.shortId || user._id);
+      return <span className="text-lg font-bold">{user.shortId || user._id}</span>;
     }
+
+    // Sort children by latest id on top
+    const sorted = [...familyChildren].sort((a: any, b: any) =>
+      getSortableIdNum(b.patientId || '', 'children') - getSortableIdNum(a.patientId || '', 'children')
+    );
+
     return (
       <div className="flex flex-wrap gap-1">
-        {familyChildren.map((child: any, idx: number) => {
+        {sorted.map((child: any, idx: number) => {
           const pid = child.patientId || "-";
           return pid === "-" ? (
-            <span key={pid + idx} className="bg-gray-200 text-gray-600 rounded px-2 py-0.5 text-xs font-mono">
+            <span key={pid + idx} className="bg-gray-200 text-gray-600 rounded px-2 py-0.5 text-lg font-bold font-mono">
               -
             </span>
           ) : (
@@ -370,10 +405,10 @@ const UserRow = ({ user, onLoginAsUser, loggingInUserId }: UserRowProps) => {
               href={`/super-admin/children?patientId=${encodeURIComponent(pid)}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="bg-blue-50 border border-blue-200 rounded px-2 py-0.5 text-xs font-bold text-blue-700 hover:text-blue-900 font-mono underline"
+              className="bg-blue-50 border border-blue-200 rounded px-2 py-0.5 text-lg font-bold text-blue-700 hover:text-blue-900 font-mono underline"
               title="View child profile"
             >
-              {pid}
+              {formatPatientId(pid)}
             </a>
           );
         })}
@@ -381,7 +416,6 @@ const UserRow = ({ user, onLoginAsUser, loggingInUserId }: UserRowProps) => {
     );
   };
 
-  // ------ Mother & Father Mobile Number (family summary, now grouped by motherPhoneNumber) ------
   const getFamilyMotherMobile = (user: FlattenedUser) => {
     if (!user.familyChildren || !Array.isArray(user.familyChildren)) return null;
     for (const child of user.familyChildren) {
@@ -401,14 +435,14 @@ const UserRow = ({ user, onLoginAsUser, loggingInUserId }: UserRowProps) => {
 
   return (
     <tr className="group hover:bg-blue-50 transition">
-      <TableCell className="font-mono text-blue-900 font-bold min-w-[100px]">
+      <TableCell className="font-mono text-blue-900 font-extrabold min-w-[100px] text-xl">
         <div className="flex items-center gap-2">
-          <FiHash className="text-blue-400" />
+          <FiHash className="text-blue-400 text-lg" />
           {isChildrenFamily
             ? renderChildrenShortIds(user)
             : user.fromCollection === "therapists"
             ? renderTherapistShortId(user.shortId, user)
-            : <span>{user.shortId || user._id}</span>}
+            : <span className="text-lg font-bold">{user.shortId || user._id}</span>}
         </div>
       </TableCell>
       <TableCell className="font-semibold text-slate-800 w-[240px] min-w-[180px]">
@@ -424,7 +458,6 @@ const UserRow = ({ user, onLoginAsUser, loggingInUserId }: UserRowProps) => {
               <ChildrenList familyChildren={user.familyChildren} />
             </div>
           )}
-          {/* Add motherOccupation display for children families */}
           {isChildrenFamily && user.motherOccupation && (
             <div className="text-xs text-amber-700 italic">
               Mother Occupation: {user.motherOccupation}
@@ -438,7 +471,6 @@ const UserRow = ({ user, onLoginAsUser, loggingInUserId }: UserRowProps) => {
             <FiMail className="text-slate-500" />
             <span className="font-mono text-xs">{user.email}</span>
           </div>
-          {/* Notice: parentEmail becomes motherPhoneNumber for children families. */}
           {user.fromCollection === "children" && user.motherPhoneNumber && (
             <div className="text-xs text-purple-700">
               Mother Phone: <span className="font-mono">{user.motherPhoneNumber}</span>
@@ -523,12 +555,11 @@ const AllUsers: React.FC = () => {
   const [page, setPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(25);
   const [total, setTotal] = useState<number>(0);
-  const [serverTotalRaw, setServerTotalRaw] = useState<number>(0);  // Store backend-reported total for fallback
+  const [serverTotalRaw, setServerTotalRaw] = useState<number>(0);
   const [search, setSearch] = useState<string>('');
   const [searchInput, setSearchInput] = useState<string>('');
   const searchTimeout = useRef<any>(null);
 
-  // Fetch data
   useEffect(() => {
     let controller = new AbortController();
     setLoading(true);
@@ -540,7 +571,7 @@ const AllUsers: React.FC = () => {
         params.role = activeRole === "children" ? "patients" : activeRole;
         if (activeRole === "children") {
           params.page = 1;
-          params.limit = 10000; // get all for frontend slicing
+          params.limit = 10000;
         } else {
           params.page = page;
           params.limit = pageSize;
@@ -555,6 +586,7 @@ const AllUsers: React.FC = () => {
         const { data } = res;
         let extractedUsers: FlattenedUser[] = [];
         let totalUsers: number = 0;
+
         if (
           typeof data === 'object' &&
           (Array.isArray(data.therapists) ||
@@ -562,7 +594,20 @@ const AllUsers: React.FC = () => {
             Array.isArray(data.admins))
         ) {
           if (activeRole === "children" && Array.isArray(data.patients)) {
-            const families = groupChildrenByMotherPhone(data.patients);
+            // Sort families by latest (highest patientId in any family) on top
+            let families = groupChildrenByMotherPhone(data.patients);
+            families = families
+              .slice()
+              .sort((a, b) => {
+                // Sort according to the largest patientId in the family
+                const maxA = Math.max(
+                  ...(a.familyChildren || []).map((c: any) => getSortableIdNum(c.patientId || '', 'children'))
+                );
+                const maxB = Math.max(
+                  ...(b.familyChildren || []).map((c: any) => getSortableIdNum(c.patientId || '', 'children'))
+                );
+                return maxB - maxA;
+              });
             totalUsers = families.length;
             setServerTotalRaw(families.length);
             const startIndex = (page - 1) * pageSize;
@@ -571,9 +616,8 @@ const AllUsers: React.FC = () => {
               _id: family._id,
               shortId: family.shortId,
               name: family.name,
-              // "email" field for compatibility - userEmail or motherPhoneNumber
               email: family.userEmail || family.motherPhoneNumber,
-              parentEmail: family.motherPhoneNumber, // compatibility - now holds mother phone
+              parentEmail: family.motherPhoneNumber,
               motherPhoneNumber: family.motherPhoneNumber,
               displayNames: family.displayNames,
               role: family.role,
@@ -586,8 +630,42 @@ const AllUsers: React.FC = () => {
               address: family.address,
               areaName: family.areaName,
             }));
+          } else if (activeRole === "therapists" && Array.isArray(data.therapists)) {
+            // Sort therapists by id desc (latest on top). Use therapistId if present
+            let therapistUsers = extractUsersFromResponse(data).filter(u => u.fromCollection === "therapists");
+            therapistUsers = therapistUsers.slice()
+              .sort((a, b) =>
+                getSortableIdNum(b.shortId, 'therapists') - getSortableIdNum(a.shortId, 'therapists')
+              );
+            extractedUsers = therapistUsers;
+            totalUsers = typeof data.therapistsTotal === "number" ? data.therapistsTotal : therapistUsers.length;
+            setServerTotalRaw(totalUsers);
           } else {
-            extractedUsers = extractUsersFromResponse(data);
+            // All or admin mode (all/unknown), show admins/unknowns as is, but therapists/children sorted
+            let usersRaw = extractUsersFromResponse(data);
+
+            // For each role, sort as required
+            if (activeRole === "admin") {
+              // no special sort needed, backend order or sort by name
+            } else if (activeRole === "all") {
+              // For role ALL: therapists and children on top by id descending, then others
+              usersRaw = usersRaw.slice().sort((a, b) => {
+                const isA = a.fromCollection, isB = b.fromCollection;
+                if (isA === "therapists" && isB !== "therapists") return -1;
+                if (isA === "children" && isB !== "children") return -1;
+                if (isA !== "therapists" && isB === "therapists") return 1;
+                if (isA !== "children" && isB === "children") return 1;
+                // Same type? Sort by id
+                if (isA === "therapists" && isB === "therapists") {
+                  return getSortableIdNum(b.shortId, 'therapists') - getSortableIdNum(a.shortId, 'therapists');
+                }
+                if (isA === "children" && isB === "children") {
+                  return getSortableIdNum(b.shortId, 'children') - getSortableIdNum(a.shortId, 'children');
+                }
+                return 0;
+              });
+            }
+            extractedUsers = usersRaw;
             if (Array.isArray(data.therapists) && activeRole === "therapists") {
               totalUsers = typeof data.therapistsTotal === "number" ? data.therapistsTotal : data.therapists.length;
               setServerTotalRaw(totalUsers);
@@ -608,6 +686,16 @@ const AllUsers: React.FC = () => {
             fromCollection: u.fromCollection || 'unknown',
             shortId: u.shortId || u._id,
           }));
+          // Try to sort by bigger id on top if role matches
+          if (activeRole === "therapists") {
+            extractedUsers = extractedUsers.slice().sort(
+              (a, b) => getSortableIdNum(b.shortId, 'therapists') - getSortableIdNum(a.shortId, 'therapists')
+            );
+          } else if (activeRole === "children") {
+            extractedUsers = extractedUsers.slice().sort(
+              (a, b) => getSortableIdNum(b.shortId, 'children') - getSortableIdNum(a.shortId, 'children')
+            );
+          }
           totalUsers = Array.isArray(data.users) ? data.users.length : 0;
           setServerTotalRaw(totalUsers);
         } else if (Array.isArray(data)) {
@@ -655,7 +743,6 @@ const AllUsers: React.FC = () => {
     // eslint-disable-next-line
   }, [activeRole, page, pageSize, search]);
 
-  // Debounced search
   useEffect(() => {
     if (searchTimeout.current) clearTimeout(searchTimeout.current);
     searchTimeout.current = setTimeout(() => {

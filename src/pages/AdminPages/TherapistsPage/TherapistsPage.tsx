@@ -7,13 +7,10 @@ import {
 } from "react-icons/fi";
 import { motion } from "framer-motion";
 import axios from "axios";
-
-// Import JSZip for zipping files
 import JSZip from "jszip";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "";
 
-// Utility to get the right auth header (admin-token / super-admin-token)
 function getAuthHeader() {
   const adminToken = localStorage.getItem("admin-token");
   if (adminToken) {
@@ -211,21 +208,17 @@ function CalendarInput({
   );
 }
 
-// Helper: fetch a blob by URL
 async function fetchFileBlob(url: string): Promise<Blob> {
-  // If already a blob URL (data URI), convert to blob
   if (url.startsWith("data:")) {
     const res = await fetch(url);
     return await res.blob();
   }
-  // For http(s) URLs
   const resp = await fetch(url);
   if (!resp.ok)
     throw new Error(`Failed to fetch file: ${resp.statusText}`);
   return await resp.blob();
 }
 
-// Helper: get download URLs for the files from the therapist profile (resolves full URLs)
 function getTherapistFileInfos(therapist: TherapistProfile): {
   label: string;
   url: string | null;
@@ -248,7 +241,6 @@ function getTherapistFileInfos(therapist: TherapistProfile): {
       : uploadsUrl
       ? (uploadsUrl.replace(/\/+$/, "") + "/" + val.replace(/^\/+/, ""))
       : val;
-    // Attempt to preserve extension
     let ext = url.split("?")[0].split("#")[0].split(".").pop();
     if (ext && ext.length <= 5) ext = "." + ext;
     else ext = "";
@@ -257,35 +249,46 @@ function getTherapistFileInfos(therapist: TherapistProfile): {
   });
 }
 
+// Helper to get complete value for each field, for correct Edit modal prefill and update
+// function getFieldValueForEdit(f: { key: string; type?: string }, therapist: TherapistProfile) {
+//   // Prefer userId subfields for some keys if not set at root, else fallback
+//   if (f.key === "name") {
+//     return therapist.userId?.name ?? therapist.name ?? "";
+//   }
+//   if (f.key === "email") {
+//     return therapist.userId?.email ?? therapist.email ?? "";
+//   }
+//   if (f.key === "role") {
+//     return therapist.userId?.role ?? therapist.role ?? "";
+//   }
+//   if (f.key === "manualSignUp") {
+//     return therapist.userId?.manualSignUp ?? "";
+//   }
+//   return therapist[f.key as keyof TherapistProfile] ?? "";
+// }
+
 export default function TherapistsPage() {
-  // Table state & filters
   const [therapists, setTherapists] = useState<TherapistProfile[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    console.log(error);
-  }, []);
+    // Just log error, no-op
+    // console.log(error);
+  }, [error]);
 
-  // Modal & Edit logic
   const [editTherapist, setEditTherapist] = useState<TherapistProfile | null>(null);
   const [editField, setEditField] = useState<{ [k: string]: any }>({});
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedProfile, setSelectedProfile] = useState<TherapistProfile | null>(null);
-
-  // Download state for single therapist file zipping
   const [downloadingZip, setDownloadingZip] = useState(false);
-
-  // Search and pagination state
   const [searchText, setSearchText] = useState("");
-  const [searchCommitted, setSearchCommitted] = useState(""); // Actual text applied to data fetch
+  const [searchCommitted, setSearchCommitted] = useState("");
   const [page, setPage] = useState(1);
-
   const [sortField, setSortField] = useState<null | string>(null);
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [totalPages, setTotalPages] = useState(1);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
-
   const firstViewRef = useRef(false);
 
   const fetchTherapists = useCallback(async () => {
@@ -508,7 +511,6 @@ export default function TherapistsPage() {
     }
   }
 
-  // Download ZIP handler for the 5 main files for therapist
   async function handleDownloadAllFilesZip() {
     if (!selectedProfile) return;
     setDownloadingZip(true);
@@ -522,13 +524,10 @@ export default function TherapistsPage() {
           const blob = await fetchFileBlob(file.url);
           hasFiles = true;
           zip.file(file.filename, blob);
-        } catch (err) {
-          // Could log error or continue
-        }
+        } catch (err) {}
       }
       if (!hasFiles) throw new Error("No files to download.");
       const content = await zip.generateAsync({ type: "blob" });
-      // Download zip
       const a = document.createElement("a");
       const url = URL.createObjectURL(content);
       a.href = url;
@@ -552,7 +551,6 @@ export default function TherapistsPage() {
   function renderTherapistModal() {
     if (!selectedId || !selectedProfile) return null;
     const selected = selectedProfile;
-    // Prepare download file info for the five main files
     const THERAPIST_MAIN_FILES = [
       {
         key: "aadhaarFront",
@@ -575,8 +573,6 @@ export default function TherapistsPage() {
         label: "Certificate",
       },
     ];
-
-    // Show download all button only if at least one of the five files is present
     const filesPresent = THERAPIST_MAIN_FILES.some(({ key }) => {
       const val = selected[key as keyof TherapistProfile];
       return typeof val === "string" && !!val;
@@ -597,7 +593,6 @@ export default function TherapistsPage() {
           <h2 className="text-xl font-bold mb-2">
             Therapist Details
           </h2>
-          {/* Download All 5 Files as ZIP Button */}
           <div className="mb-4 flex flex-wrap gap-2 justify-end">
             {filesPresent && (
               <button
@@ -727,15 +722,11 @@ export default function TherapistsPage() {
 
                 if (f.type === "file") {
                   const uploadsUrl = import.meta.env.VITE_UPLOADS_URL || "";
-                  // Only handle if there's a value
                   if (typeof rawValue === "string" && rawValue) {
-                    // Prepend uploads URL if not already a full URL
                     const isFullUrl = /^(http|https):\/\//i.test(rawValue);
                     const url = isFullUrl
                       ? rawValue
                       : (uploadsUrl ? uploadsUrl.replace(/\/+$/, "") + "/" + rawValue.replace(/^\/+/, "") : rawValue);
-
-                    // If it's an image, render an <img>, otherwise just a link to view
                     const isImage = /\.(jpe?g|png|gif|bmp|webp)$/i.test(url);
                     value = isImage ? (
                       <a href={url} target="_blank" rel="noopener noreferrer">
@@ -846,20 +837,66 @@ export default function TherapistsPage() {
     }));
   }
 
+  // Main Rewrite: Enhanced renderEditModal to show correct data always for every field.
   function renderEditModal() {
     if (!editTherapist) return null;
+
+    // To display toggle and save true reflected state, get values from userId if relevant
     const isDisabled =
-      editTherapist.userId && typeof editTherapist.userId.isDisabled === "boolean"
-        ? editTherapist.userId.isDisabled
+      typeof (editTherapist.userId?.isDisabled) === "boolean"
+        ? editTherapist.userId?.isDisabled
         : typeof editTherapist.isDisabled === "boolean"
         ? editTherapist.isDisabled
         : false;
     const panelAccess =
-      editTherapist.userId && typeof editTherapist.isPanelAccessible === "boolean"
+      typeof (editTherapist.isPanelAccessible) === "boolean"
         ? editTherapist.isPanelAccessible
         : typeof editTherapist.panelAccess === "boolean"
         ? editTherapist.panelAccess
         : false;
+
+    // Helper to get the field value for editing, supporting userId fields too
+    function getInputValue(f: { key: string; type?: string }) {
+      // Prefer editField if set (e.g. after change), else derive from original data
+      if (editField[f.key] !== undefined && editField[f.key] !== null) {
+        return editField[f.key];
+      }
+      // Handle main userId subfields: name, email, role, manualSignUp
+      if (f.key === "name") return editTherapist?.userId?.name ?? editTherapist?.name ?? "";
+      if (f.key === "email") return editTherapist?.userId?.email ?? editTherapist?.email ?? "";
+      if (f.key === "role") return editTherapist?.userId?.role ?? editTherapist?.role ?? "";
+      if (f.key === "manualSignUp") return editTherapist?.userId?.manualSignUp ?? "";
+
+      // Otherwise normal fields
+      let val = editTherapist ? editTherapist[f.key as keyof TherapistProfile] : undefined;
+      // Date fields: prefer value as string: yyyy-mm-dd
+      if ((DATE_FIELDS.includes(f.key) || f.type === "date") && val) {
+        if (typeof val === "string") return val;
+        if (val instanceof Date) return val.toISOString().slice(0, 10);
+      }
+      // ExperienceYears as number
+      if (f.key === "experienceYears") {
+        return typeof val === "number" ? String(val) : val ?? "";
+      }
+      // Default
+      return val ?? "";
+    }
+
+    function getFileDisplayUrl(f: { key: string }, value: any) {
+      // If editTherapist is null or undefined, we can't get the value from it
+      if (!editTherapist) return "";
+      const val = value ?? editTherapist[f.key as keyof TherapistProfile];
+      if (!val || typeof val !== "string") return "";
+      const uploadsUrl = import.meta.env.VITE_UPLOADS_URL || "";
+      const isFullUrl = /^(http|https):\/\//i.test(val);
+      const url = isFullUrl
+        ? val
+        : uploadsUrl
+        ? uploadsUrl.replace(/\/+$/, "") + "/" + val.replace(/^\/+/, "")
+        : val;
+      return url;
+    }
+
     return (
       <div className="fixed inset-0 z-40 bg-white/70 flex items-center justify-center">
         <div className="relative w-full max-w-2xl mx-auto h-full flex items-center justify-center">
@@ -950,54 +987,107 @@ export default function TherapistsPage() {
             >
               {FIELD_LIST.map((f) => {
                 if (f.key === "therapistId") return null;
-
                 const isDateField =
                   DATE_FIELDS.includes(f.key) || f.type === "date";
-                const initialValue =
-                  editField[f.key] !== undefined
-                    ? editField[f.key]
-                    : editTherapist[f.key as keyof typeof editTherapist] ??
-                      "";
+                const value = getInputValue(f);
 
-                return (
-                  <div key={f.key}>
-                    <label className="block text-sm mb-1">{f.label}</label>
-                    {f.type === "file" ? (
-                      <>
-                        <input
-                          className="w-full border px-2 py-1 rounded"
-                          type="file"
-                          onChange={e => handleFileChange(e, f.key)}
-                          accept="image/*,.pdf"
-                        />
-                        {editTherapist[
-                          f.key as keyof typeof editTherapist
-                        ] &&
-                          typeof editTherapist[
-                            f.key as keyof typeof editTherapist
-                          ] === "string" && (
-                            <div className="mt-1 text-xs text-blue-700">
+                // ManualSignUp is usually a boolean handled under userId, make editable if needed
+                if (f.key === "manualSignUp") {
+                  return (
+                    <div key={f.key}>
+                      <label className="block text-sm mb-1">Manual Sign Up</label>
+                      <select
+                        className="w-full border px-2 py-1 rounded"
+                        value={
+                          value === true
+                            ? "true"
+                            : value === false
+                            ? "false"
+                            : value === "" || value === undefined
+                            ? ""
+                            : String(value)
+                        }
+                        onChange={e =>
+                          setEditField(prev => ({
+                            ...prev,
+                            [f.key]: e.target.value === "true" ? true : e.target.value === "false" ? false : "",
+                          }))
+                        }
+                      >
+                        <option value="">Not Set</option>
+                        <option value="true">Yes</option>
+                        <option value="false">No</option>
+                      </select>
+                    </div>
+                  );
+                }
+
+                if (f.type === "file") {
+                  // Show file input but also show existing image/thumb if relevant, even as editField may become File.
+                  const oldUrl = getFileDisplayUrl(f, editTherapist[f.key as keyof TherapistProfile]);
+                  let showUrl = oldUrl;
+                  // If File object selected, show preview if possible
+                  if (editField[f.key] && typeof editField[f.key] === "object" && editField[f.key] instanceof File) {
+                    try {
+                      showUrl = URL.createObjectURL(editField[f.key]);
+                    } catch {}
+                  }
+                  const isImage =
+                    showUrl && /\.(jpe?g|png|gif|bmp|webp)$/i.test(showUrl);
+
+                  return (
+                    <div key={f.key}>
+                      <label className="block text-sm mb-1">{f.label}</label>
+                      <input
+                        className="w-full border px-2 py-1 rounded"
+                        type="file"
+                        onChange={e => handleFileChange(e, f.key)}
+                        accept="image/*,.pdf"
+                      />
+                      {showUrl ? (
+                        <div className="mt-1 text-xs">
+                          {isImage ? (
+                            <div>
+                              <span className="text-blue-700">Current: </span>
                               <a
-                                href={
-                                  editTherapist[
-                                    f.key as keyof typeof editTherapist
-                                  ] as any
-                                }
+                                href={showUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
+                                className="inline-block"
                               >
-                                Current: View
+                                <img
+                                  src={showUrl}
+                                  alt="Current"
+                                  className="h-10 w-10 object-cover rounded shadow border"
+                                />
                               </a>
                             </div>
+                          ) : (
+                            <a
+                              href={showUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-700 underline"
+                            >
+                              Current: View File
+                            </a>
                           )}
-                      </>
-                    ) : isDateField ? (
+                        </div>
+                      ) : (
+                        <span className="mt-1 text-xs text-slate-400">No file uploaded</span>
+                      )}
+                    </div>
+                  );
+                } else if (isDateField) {
+                  return (
+                    <div key={f.key}>
+                      <label className="block text-sm mb-1">{f.label}</label>
                       <CalendarInput
                         value={
-                          typeof initialValue === "string"
-                            ? initialValue
-                            : initialValue && initialValue instanceof Date
-                            ? initialValue.toISOString().slice(0, 10)
+                          typeof value === "string"
+                            ? value
+                            : value && value instanceof Date
+                            ? value.toISOString().slice(0, 10)
                             : ""
                         }
                         onChange={val =>
@@ -1010,11 +1100,16 @@ export default function TherapistsPage() {
                         id={`edit-${f.key}`}
                         name={`edit-${f.key}`}
                       />
-                    ) : (
+                    </div>
+                  );
+                } else {
+                  return (
+                    <div key={f.key}>
+                      <label className="block text-sm mb-1">{f.label}</label>
                       <input
                         className="w-full border px-2 py-1 rounded"
                         type={f.type || "text"}
-                        value={initialValue}
+                        value={typeof value === "undefined" || value === null ? "" : value}
                         onChange={e =>
                           setEditField(prev => ({
                             ...prev,
@@ -1025,9 +1120,9 @@ export default function TherapistsPage() {
                           }))
                         }
                       />
-                    )}
-                  </div>
-                );
+                    </div>
+                  );
+                }
               })}
               <div className="md:col-span-2 text-right pt-4">
                 <button
@@ -1052,7 +1147,6 @@ export default function TherapistsPage() {
     );
   }
 
-  // Add "Manual" column to the table headers
   const tableHeaders: { label: string; key: keyof TherapistProfile | "manualSignUp" | "actions" }[] = [
     { label: "Therapist ID", key: "_id" },
     { label: "Name", key: "name" },
@@ -1065,7 +1159,6 @@ export default function TherapistsPage() {
     { label: "Actions", key: "actions" },
   ];
 
-  // ----------- MAIN RENDER ---------------------
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -1074,7 +1167,6 @@ export default function TherapistsPage() {
     >
       <h1 className="text-2xl font-bold text-slate-800 mb-6">Therapists</h1>
 
-      {/* -- Search Control ONLY -- */}
       <form
         onSubmit={handleSearchSubmit}
         autoComplete="off"
@@ -1110,7 +1202,6 @@ export default function TherapistsPage() {
         )}
       </form>
 
-      {/* -- Table -- */}
       <div className="bg-white border rounded-lg shadow overflow-x-scroll">
         <table className="w-full divide-y divide-slate-200">
           <thead className="bg-slate-100">
@@ -1209,7 +1300,6 @@ export default function TherapistsPage() {
                       <br/>
                       {t.mobile1 || "-"}
                     </td>
-                    {/* Manual Sign Up column */}
                     <td className="px-4 py-3 whitespace-nowrap">
                       {manualSignUp === undefined
                         ? "-"
@@ -1269,7 +1359,6 @@ export default function TherapistsPage() {
         </table>
       </div>
 
-      {/* --- Pagination --- */}
       <div className="flex items-center justify-between mt-4">
         <div className="flex gap-2 items-center">
           <button

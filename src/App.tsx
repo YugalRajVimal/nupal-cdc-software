@@ -64,7 +64,6 @@ import AllUsers from "./pages/SuperAdminPages/AllUsers/AllUsers";
 import AllAppointments from "./pages/SuperAdminPages/AllAppointments/AllAppointments";
 import RequestAppointment from "./pages/ParentPages/RequestAppointment/RequestAppointment";
 import BookingRequests from "./pages/AdminPages/BookingRequest/BookingRequests";
-import AppointmentBookingSystemNew from "./pages/AdminPages/AppointmentBookingSystem/AppointmentBookingSystemNew";
 import RequestEditAppointments from "./pages/ParentPages/RequestEditInAppointments/RequestEditInAppointments";
 import SessionEditRequestsAdmin from "./pages/AdminPages/SessionEditRequests/SessionEditRequests";
 import InvoiveAndPaymentsPage from "./pages/ParentPages/InvoiveAndPaymentsPage/InvoiceAndPaymentsPage";
@@ -97,6 +96,7 @@ import ConsultationBookingsAdmin from "./pages/AdminPages/ConsultationBookings/C
 import OnboardAdmin from "./pages/SuperAdminPages/OnboardAdmin/OnboardAdmin";
 import PaymentConfirmation from "./pages/ParentPages/InvoiveAndPaymentsPage/PaymentConfirmation";
 import { ContactUs, RefundsAndCancellations, TermsAndConditions } from "./pages/Policies";
+import AppointmentBookingSystemMain from "./pages/AdminPages/AppointmentBookingSystem/Main/AppointmentBookingSystemMain";
 
 
 export default function App() {
@@ -188,7 +188,7 @@ export default function App() {
             <Route path="/admin/leads-consults" element={<ConsultationsLeads />} />
             <Route path="/admin/reports-analytics" element={<AnalyticsReports />} />
 
-            <Route path="/admin/bookings" element={<AppointmentBookingSystemNew/>} />
+            <Route path="/admin/bookings" element={<AppointmentBookingSystemMain/>} />
             <Route path="/admin/booking-requests" element={<BookingRequests/>} />
             <Route path="/admin/session-edit-requests" element={<SessionEditRequestsAdmin/>} />
 

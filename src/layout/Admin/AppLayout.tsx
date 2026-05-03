@@ -35,7 +35,7 @@ const FollowUpPendingToastContent = ({
         background: "none",
         border: "none",
         cursor: "pointer",
-        marginLeft: 12,
+        marginLeft: 2,
         padding: 2,
         display: "flex",
         alignItems: "center",
@@ -121,26 +121,35 @@ const SubAdminAppLayout: React.FC = () => {
   // Control for the follow up toast
   const intervalHandleRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const toastManuallyClosedRef = useRef<boolean>(false);
+  const autoCloseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Helper to show toast with close
+  // Helper to show toast with close, hide after 10 sec, show every 15 min
   const showFollowUpToast = useCallback(
     (count: number) => {
       if (toastManuallyClosedRef.current) return;
+      // Clear any existing auto-close timer
+      if (autoCloseTimeoutRef.current) {
+        clearTimeout(autoCloseTimeoutRef.current);
+      }
+
+      const handleClose = () => {
+        toast.dismiss(FOLLOW_UP_TOAST_ID);
+        toastManuallyClosedRef.current = true;
+        // Reset manual close after 15 min (do not reshow toast during this time)
+        setTimeout(() => {
+          toastManuallyClosedRef.current = false;
+        }, 15 * 60 * 1000);
+      };
+
       if (toast.isActive(FOLLOW_UP_TOAST_ID)) {
         toast.update(FOLLOW_UP_TOAST_ID, {
           render: (
             <FollowUpPendingToastContent
               count={count}
-              onClose={() => {
-                toast.dismiss(FOLLOW_UP_TOAST_ID);
-                toastManuallyClosedRef.current = true;
-                setTimeout(() => {
-                  toastManuallyClosedRef.current = false;
-                }, 5 * 60 * 1000);
-              }}
+              onClose={handleClose}
             />
           ),
-          autoClose: false,
+          autoClose: 5000,
           closeButton: false,
           isLoading: false,
         });
@@ -148,22 +157,23 @@ const SubAdminAppLayout: React.FC = () => {
         toast(
           <FollowUpPendingToastContent
             count={count}
-            onClose={() => {
-              toast.dismiss(FOLLOW_UP_TOAST_ID);
-              toastManuallyClosedRef.current = true;
-              setTimeout(() => {
-                toastManuallyClosedRef.current = false;
-              }, 5 * 60 * 1000);
-            }}
+            onClose={handleClose}
           />,
           {
             toastId: FOLLOW_UP_TOAST_ID,
-            autoClose: false,
+            autoClose: 5000,
             closeButton: false,
             isLoading: false,
           }
         );
       }
+
+      // Fallback in case the toast isn't auto-closing (e.g., update malfunction)
+      autoCloseTimeoutRef.current = setTimeout(() => {
+        if (toast.isActive(FOLLOW_UP_TOAST_ID)) {
+          toast.dismiss(FOLLOW_UP_TOAST_ID);
+        }
+      }, 5000);
     },
     []
   );
@@ -194,14 +204,15 @@ const SubAdminAppLayout: React.FC = () => {
     }
   }, [showFollowUpToast]);
 
-  // Show sticky toast, repeat every 5 min
+  // Show sticky toast, repeat every 15 min
   useEffect(() => {
     if (isAdminAuthenticated) {
       fetchAndShowFollowUp();
-      intervalHandleRef.current = setInterval(fetchAndShowFollowUp, 5 * 60 * 1000);
+      intervalHandleRef.current = setInterval(fetchAndShowFollowUp, 15 * 60 * 1000);
     }
     return () => {
       if (intervalHandleRef.current) clearInterval(intervalHandleRef.current);
+      if (autoCloseTimeoutRef.current) clearTimeout(autoCloseTimeoutRef.current);
       toast.dismiss(FOLLOW_UP_TOAST_ID);
     };
   }, [isAdminAuthenticated, fetchAndShowFollowUp]);
