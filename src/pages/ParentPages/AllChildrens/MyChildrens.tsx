@@ -151,7 +151,7 @@ const MyChildrens: React.FC = () => {
             type="search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search name, patient ID or parent..."
+            placeholder="Search name, children ID or parent..."
             className="border border-slate-300 rounded px-3 py-2 text-sm focus:outline-blue-400 bg-white min-w-[200px]"
             autoComplete="off"
             maxLength={120}
@@ -230,7 +230,7 @@ const MyChildrens: React.FC = () => {
 
                 <th className="px-4 py-3 text-left">
                   <div className="flex items-center gap-1">
-                    <FiHash /> Patient ID
+                    <FiHash /> Children ID
                   </div>
                 </th>
                 <th className="px-4 py-3 text-left">Gender</th>
@@ -284,7 +284,7 @@ const MyChildrens: React.FC = () => {
                       </div>
                     </div>
                   </td>
-                  {/* Patient ID column */}
+                  {/* children ID column */}
                   <td className="px-4 py-4 font-semibold text-slate-700">
                     {child.patientId || (
                       <span className="italic text-slate-400">N/A</span>

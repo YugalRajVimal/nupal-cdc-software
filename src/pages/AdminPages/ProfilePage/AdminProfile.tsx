@@ -8,6 +8,10 @@ import {
   Tag,
   message,
   Card,
+  Button,
+  Modal,
+  Form,
+  Input,
 } from "antd";
 import dayjs from "dayjs";
 
@@ -41,7 +45,17 @@ const AdminProfile: React.FC = () => {
   const [admin, setAdmin] = useState<AdminDetails | null>(null);
   const [loading, setLoading] = useState(false);
 
+  // Reset password modal state
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
+  const [form] = Form.useForm();
+
   useEffect(() => {
+    fetchProfile();
+    // eslint-disable-next-line
+  }, []);
+
+  const fetchProfile = () => {
     setLoading(true);
     const adminToken = localStorage.getItem("admin-token");
     axios
@@ -63,7 +77,40 @@ const AdminProfile: React.FC = () => {
         message.error("Error fetching admin profile.");
       })
       .finally(() => setLoading(false));
-  }, []);
+  };
+
+  const handlePasswordReset = (values: { newPassword: string }) => {
+    setResetLoading(true);
+    const adminToken = localStorage.getItem("admin-token");
+    axios
+      .post(
+        `${API_BASE_URL}/api/auth/reset-password`,
+        { newPassword: values.newPassword },
+        {
+          headers: {
+            "Content-Type": "application/json",
+            ...(adminToken ? { Authorization: `${adminToken}` } : {}),
+          },
+        }
+      )
+      .then((res) => {
+        if (res.status === 200 && res.data && res.data.message) {
+          message.success("Password reset successfully.");
+          setIsModalOpen(false);
+          form.resetFields();
+        } else {
+          message.error(res.data?.message || "Failed to reset password.");
+        }
+      })
+      .catch((err) => {
+        const errMsg =
+          err?.response?.data?.message ||
+          err?.message ||
+          "Failed to reset password.";
+        message.error(errMsg);
+      })
+      .finally(() => setResetLoading(false));
+  };
 
   function renderAdmin(admin: AdminDetails) {
     return (
@@ -119,12 +166,82 @@ const AdminProfile: React.FC = () => {
         {admin ? (
           <Card style={{ borderRadius: 14, background: "#f7faff" }}>
             {renderAdmin(admin)}
+            <div style={{ textAlign: "right", marginTop: 16 }}>
+              <Button
+                type="primary"
+                onClick={() => setIsModalOpen(true)}
+                style={{ minWidth: 180 }}
+              >
+                Reset Password
+              </Button>
+            </div>
           </Card>
         ) : (
           !loading && (
             <Text type="secondary">No admin profile data found.</Text>
           )
         )}
+
+        <Modal
+          title="Reset Password"
+          open={isModalOpen}
+          onCancel={() => {
+            setIsModalOpen(false);
+            form.resetFields();
+          }}
+          footer={null}
+        >
+          <Form
+            form={form}
+            layout="vertical"
+            onFinish={handlePasswordReset}
+            autoComplete="off"
+          >
+            <Form.Item
+              label="New Password"
+              name="newPassword"
+              rules={[
+                { required: true, message: "Please input new password!" },
+                { min: 6, message: "Password must be at least 6 characters." },
+              ]}
+              hasFeedback
+            >
+              <Input.Password placeholder="Enter new password" autoComplete="new-password" />
+            </Form.Item>
+            <Form.Item
+              label="Confirm New Password"
+              name="confirmNewPassword"
+              dependencies={["newPassword"]}
+              hasFeedback
+              rules={[
+                { required: true, message: "Please confirm new password!" },
+                ({ getFieldValue }) => ({
+                  validator(_, value) {
+                    if (!value || getFieldValue("newPassword") === value) {
+                      return Promise.resolve();
+                    }
+                    return Promise.reject(
+                      new Error("The two passwords do not match!")
+                    );
+                  },
+                }),
+              ]}
+            >
+              <Input.Password placeholder="Confirm new password" autoComplete="new-password" />
+            </Form.Item>
+            <Form.Item>
+              <Button
+                type="primary"
+                htmlType="submit"
+                block
+                loading={resetLoading}
+                style={{ marginTop: 4 }}
+              >
+                Reset Password
+              </Button>
+            </Form.Item>
+          </Form>
+        </Modal>
       </div>
     </Spin>
   );

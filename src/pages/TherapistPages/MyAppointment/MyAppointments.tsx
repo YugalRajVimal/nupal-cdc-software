@@ -133,7 +133,7 @@ const TherapistMyAppointments: React.FC = () => {
           <input
             value={searchText}
             onChange={e => setSearchText(e.target.value)}
-            placeholder="Search by patient name, ID, or appointment ID..."
+            placeholder="Search by children name, ID, or appointment ID..."
             className="grow bg-transparent outline-none py-2 px-2"
             spellCheck={false}
           />

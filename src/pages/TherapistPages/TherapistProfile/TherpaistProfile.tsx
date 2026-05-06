@@ -103,7 +103,6 @@ type TherapistProfileType = {
   holidays?: HolidayType[];
   isPanelAccessible?: boolean;
   earnings?: EarningType[];
-  // Include other docs if schema allows
   [key: string]: any;
 };
 
@@ -112,7 +111,6 @@ type ProfileDataType = {
   therapistProfile: TherapistProfileType;
 };
 
-// Mapping of known/standard doc keys to labels
 const DOCUMENT_FIELD_LABELS: { [key: string]: string } = {
   aadhaarFront: "Aadhaar Front",
   aadhaarBack: "Aadhaar Back",
@@ -131,7 +129,6 @@ function isPdfFile(url?: string) {
   return /\.pdf$/i.test(url);
 }
 
-// Document Modal State
 type ModalDocType =
   | {
       url: string;
@@ -153,7 +150,6 @@ function DocumentModal({ modalDoc, onClose }: { modalDoc: ModalDocType; onClose:
         style={{ maxWidth: "90vw", maxHeight: "95vh", minWidth: "320px" }}
         onClick={e => e.stopPropagation()}
       >
-        {/* Close button */}
         <button
           type="button"
           onClick={onClose}
@@ -162,7 +158,6 @@ function DocumentModal({ modalDoc, onClose }: { modalDoc: ModalDocType; onClose:
         >
           &#x2715;
         </button>
-
         <div className="mb-2 mt-5 text-lg font-semibold text-purple-900 text-center">{modalDoc.label}</div>
         <div className="max-w-full max-h-[80vh] flex items-center justify-center">
           {modalDoc.type === "image" && (
@@ -202,13 +197,23 @@ function DocumentModal({ modalDoc, onClose }: { modalDoc: ModalDocType; onClose:
   );
 }
 
+// ---- ANTD PASSWORD RESET MODAL (as in ParentProfile) ----
+import { Modal, Form, Input, Button } from "antd";
+import "antd/dist/reset.css"; // import if using Ant Design v5, otherwise ignore
+
 export default function TherpaistProfile() {
   const [profile, setProfile] = useState<ProfileDataType | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [modalDoc, setModalDoc] = useState<ModalDocType>(null);
 
-  // Keyboard ESC close handler for modal - always call in top-level, regardless of render phase
+  const [resetModalOpen, setResetModalOpen] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetPwdError, setResetPwdError] = useState<string | null>(null);
+  const [resetSuccess, setResetSuccess] = useState(false);
+
+  const [form] = Form.useForm();
+
   useEffect(() => {
     if (!modalDoc) return;
     function handler(e: KeyboardEvent) {
@@ -244,6 +249,54 @@ export default function TherpaistProfile() {
     fetchProfile();
   }, []);
 
+  // Handler for password reset ANT Form
+  const handlePasswordReset = async (values: { newPassword: string; confirmNewPassword: string }) => {
+    setResetPwdError(null);
+    setResetSuccess(false);
+
+    if (!values.newPassword || !values.confirmNewPassword) {
+      setResetPwdError("Please fill both password fields.");
+      return;
+    }
+    if (values.newPassword !== values.confirmNewPassword) {
+      setResetPwdError("The two passwords do not match!");
+      return;
+    }
+    if (values.newPassword.length < 6) {
+      setResetPwdError("Password must be at least 6 characters.");
+      return;
+    }
+
+    setResetLoading(true);
+    try {
+      const token = localStorage.getItem("therapist-token");
+      const res = await fetch(`${API_BASE_URL}/api/auth/reset-password`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `${token}` } : {}),
+        },
+        body: JSON.stringify({ newPassword: values.newPassword }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setResetSuccess(true);
+        form.resetFields();
+        setTimeout(() => {
+          setResetSuccess(false);
+          setResetModalOpen(false);
+          setResetPwdError(null);
+        }, 1200);
+      } else {
+        setResetPwdError(json.message || "Failed to reset password.");
+      }
+    } catch (err: any) {
+      setResetPwdError(err?.message || "Password reset error.");
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="p-6 text-gray-600 text-lg">Loading profile...</div>
@@ -260,7 +313,6 @@ export default function TherpaistProfile() {
 
   const { therapistProfile } = profile;
 
-  // Helper views for sections
   const infoRow = (label: string, value?: string | number | null, extraClass?: string) =>
     value !== undefined && value !== null && value !== "" ? (
       <div className={`flex flex-col md:flex-row md:items-center ${extraClass}`}>
@@ -269,7 +321,6 @@ export default function TherpaistProfile() {
       </div>
     ) : null;
 
-  // Document URL resolver: Handles both string and object types
   const docUrl = (fileVal?: any) => {
     if (!fileVal) return null;
     if (typeof fileVal === "object" && fileVal.url) {
@@ -281,7 +332,6 @@ export default function TherpaistProfile() {
     return null;
   };
 
-  // Get all standard and extra document fields
   function getAllDocuments(profileObj: TherapistProfileType) {
     const knownDocKeys = Object.keys(DOCUMENT_FIELD_LABELS);
 
@@ -297,7 +347,6 @@ export default function TherpaistProfile() {
       }
     }
 
-    // Find extra document-looking keys (objects with "url", or strings that look like paths)
     const candidateDocKeys = Object.keys(profileObj)
       .filter(
         (key) =>
@@ -331,15 +380,85 @@ export default function TherpaistProfile() {
 
   const allDocuments = getAllDocuments(therapistProfile);
 
+  // The "Reset Password" button on profile header opens ANT modal
   return (
     <Fragment>
       {/* Modal for viewing document in big size */}
       <DocumentModal modalDoc={modalDoc} onClose={() => setModalDoc(null)} />
 
+      {/* Reset Password Modal (AntD) */}
+      <Modal
+        title="Reset Password"
+        open={resetModalOpen}
+        onCancel={() => {
+          setResetModalOpen(false);
+          form.resetFields();
+          setResetPwdError(null);
+        }}
+        footer={null}
+        destroyOnClose
+      >
+        <Form
+          form={form}
+          layout="vertical"
+          onFinish={handlePasswordReset}
+          autoComplete="off"
+        >
+          <Form.Item
+            label="New Password"
+            name="newPassword"
+            rules={[
+              { required: true, message: "Please input new password!" },
+              { min: 6, message: "Password must be at least 6 characters." },
+            ]}
+            hasFeedback
+          >
+            <Input.Password placeholder="Enter new password" autoComplete="new-password" />
+          </Form.Item>
+          <Form.Item
+            label="Confirm New Password"
+            name="confirmNewPassword"
+            dependencies={["newPassword"]}
+            hasFeedback
+            rules={[
+              { required: true, message: "Please confirm new password!" },
+              ({ getFieldValue }) => ({
+                validator(_, value) {
+                  if (!value || getFieldValue("newPassword") === value) {
+                    return Promise.resolve();
+                  }
+                  return Promise.reject(
+                    new Error("The two passwords do not match!")
+                  );
+                },
+              }),
+            ]}
+          >
+            <Input.Password placeholder="Confirm new password" autoComplete="new-password" />
+          </Form.Item>
+          {resetPwdError && (
+            <div className="text-red-600 mb-3">{resetPwdError}</div>
+          )}
+          {resetSuccess && (
+            <div className="text-green-700 font-medium mb-3">Password updated!</div>
+          )}
+          <Form.Item>
+            <Button
+              type="primary"
+              htmlType="submit"
+              block
+              loading={resetLoading}
+              style={{ marginTop: 4 }}
+            >
+              Reset Password
+            </Button>
+          </Form.Item>
+        </Form>
+      </Modal>
+
       <div className="max-w-3xl mx-auto p-6 md:p-10 bg-white rounded-xl shadow-lg mt-4 mb-10 text-[15px]">
         {/* Header */}
         <div className="flex flex-col sm:flex-row gap-4 items-center mb-6 pb-5 border-b">
-          {/* Icon/avatar */}
           <div className="flex-shrink-0 flex items-center w-18 h-18 rounded-full bg-purple-50 justify-center text-purple-700 text-2xl font-bold">
             <span>
               {therapistProfile.userId?.name
@@ -359,6 +478,21 @@ export default function TherpaistProfile() {
             <div className="text-gray-500 font-medium">
               ID: <span className="font-mono">{therapistProfile.therapistId}</span>
             </div>
+            <div className="mt-1">
+              <button
+                type="button"
+                className="inline-flex items-center gap-1 text-sm font-semibold px-3 py-1.5 bg-purple-100 hover:bg-purple-200 text-purple-800 rounded focus:outline-none border border-purple-100 shadow-sm transition-all"
+                onClick={() => {
+                  setResetModalOpen(true);
+                  form.resetFields();
+                  setResetPwdError(null);
+                  setResetSuccess(false);
+                }}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="inline h-3.5 w-3.5 mr-1" viewBox="0 0 20 20" fill="currentColor"><path d="M10 2a6 6 0 016 6v2h1a1 1 0 011 1v7a2 2 0 01-2 2H4a2 2 0 01-2-2v-7a1 1 0 011-1h1V8a6 6 0 016-6zm4 8V8a4 4 0 10-8 0v2h8zm2 2H4v7h12v-7z" /></svg>
+                Reset Password
+              </button>
+            </div>
           </div>
         </div>
 
@@ -371,19 +505,6 @@ export default function TherpaistProfile() {
             {infoRow("Alt. Mobile", therapistProfile.mobile2)}
             {infoRow("Phone (Account)", therapistProfile.userId?.phone)}
             {infoRow("Father's Name", therapistProfile.fathersName)}
-            {/* {infoRow("Status", (
-              therapistProfile.userId?.status ? (
-                <span
-                  className={
-                    therapistProfile.userId?.status === "active"
-                      ? "text-green-600 font-semibold"
-                      : "text-orange-600"
-                  }
-                >
-                  {therapistProfile.userId?.status}
-                </span>
-              ) : ""
-            ))} */}
             <div>
               {infoRow("Phone Verified", therapistProfile.userId?.phoneVerified ? "Yes" : "No")}
               {infoRow("Email Verified", therapistProfile.userId?.emailVerified ? "Yes" : "No")}
@@ -504,11 +625,9 @@ export default function TherpaistProfile() {
                   );
                 }
 
-                // Decide type for preview
                 let type: "image" | "pdf" | "other" = "other";
                 if (isImageFile(url)) type = "image";
                 else if (isPdfFile(url)) type = "pdf";
-                // Thumbnail style for image/pdf/other
                 return (
                   <div key={doc.field} className="flex flex-col items-center w-40">
                     <div

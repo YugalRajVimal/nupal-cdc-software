@@ -40,7 +40,7 @@ const PAGE_SIZE_OPTIONS = [5, 10, 20, 50];
 
 function downloadExcel(filename: string, rows: PaymentDetail[]) {
   const worksheetData = [
-    ["InvoiceId", "Date", "Patient Id", "Patient Name", "Amount", "Status"],
+    ["InvoiceId", "Date", "Children Id", "Children Name", "Amount", "Status"],
     ...rows.map((row) => [
       row.InvoiceId,
       row.date ? new Date(row.date).toLocaleDateString("en-GB") : "",
@@ -214,7 +214,7 @@ export default function InvoiveAndPaymentsPage() {
   const handlePayment = async (payment: PaymentDetail) => {
     setPaymentInProgress(true);
     try {
-      // Get patient details from the row
+      // Get children details from the row
       const { patientName, InvoiceId } = payment;
       // We'll need a valid email and phone for cashfree
       // (These should be retrieved in real implementation from user info or backfill)
@@ -279,7 +279,7 @@ export default function InvoiveAndPaymentsPage() {
           <FiSearch className="text-slate-400" />
           <input
             type="text"
-            placeholder="Search by patient name, Patient Id or Invoice ID"
+            placeholder="Search by children name, Children Id or Invoice ID"
             value={searchText}
             onChange={handleSearchInputChange}
             className="outline-none flex-1 px-1 py-2 bg-transparent text-slate-800 placeholder:text-slate-400"
@@ -349,7 +349,7 @@ export default function InvoiveAndPaymentsPage() {
               <tr>
                 <th className="px-4 py-3 text-left">Invoice ID</th>
                 <th className="px-4 py-3 text-left">Date</th>
-                <th className="px-4 py-3 text-left">Patient Name & Id</th>
+                <th className="px-4 py-3 text-left">Children Name & Id</th>
                 <th className="px-4 py-3 text-right">Amount</th>
                 <th className="px-4 py-3 text-center">Status</th>
                 <th className="px-4 py-3 text-center">Action</th>

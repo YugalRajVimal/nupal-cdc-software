@@ -109,7 +109,7 @@ function getSingleSession(bk: ConsultationBooking): ConsultationSession | null {
   return null;
 }
 
-// Try to resolve patient display from patient, client, or fallback
+// Try to resolve children display from patient, client, or fallback
 function getPatientDisplayName(patient: Patient | undefined | null, fallbackPatientId?: string): string {
   if (!patient) {
     if (fallbackPatientId) return fallbackPatientId;
@@ -533,7 +533,7 @@ export default function ConsultationBooking() {
           </h3>
 
           <label className="block text-sm mb-1 flex items-center gap-1">
-            <FiUser /> Patient Name
+            <FiUser /> Children Name
           </label>
           <select
             value={patientId}
@@ -541,7 +541,7 @@ export default function ConsultationBooking() {
             className="w-full border rounded px-3 py-2 mb-3"
             disabled={!!editBookingId}
           >
-            <option value="">Select Patient</option>
+            <option value="">Select Children</option>
             {patients.map((patient) => (
               <option key={patient._id} value={patient._id}>
                 {getPatientDisplayName(patient)}
@@ -700,7 +700,7 @@ export default function ConsultationBooking() {
               <input
                 type="text"
                 value={searchImmediate}
-                placeholder="Search by patient / therapy / status / date"
+                placeholder="Search by children / therapy / status / date"
                 className="px-2 py-1 border rounded text-sm w-64"
                 onChange={(e) => setSearchImmediate(e.target.value)}
                 spellCheck={false}
@@ -777,7 +777,7 @@ export default function ConsultationBooking() {
           ) : (
             <div className="flex flex-col gap-4">
               {paginatedBookings.map((bk) => {
-                // Normalize patient & therapy fields for display (support backend shape)
+                // Normalize children & therapy fields for display (support backend shape)
                 const patient = bk.patient || bk.client;
                 const therapyType = bk.therapyType || bk.therapy;
                 // Normalize reason/description

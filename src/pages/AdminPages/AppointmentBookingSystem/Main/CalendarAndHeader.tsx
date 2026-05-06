@@ -93,6 +93,8 @@ type CalendarPanelProps = {
   daysInMonth: number;
   sessions: { date: string; slotId: string }[];
   toggleDate: (day: number) => void;
+  /** Removes the last session for the given date (called by the "−" button) */
+  removeSessionForDate: (dateKey: string) => void;
   getDaySlotSummary: (dateKey: string) => {
     total: number | undefined;
     booked: number | undefined;
@@ -113,7 +115,7 @@ type CalendarPanelProps = {
 
 export function CalendarPanel({
   year, month, changeMonth, startDay, daysInMonth,
-  sessions, toggleDate, getDaySlotSummary, maxSelectableDates,
+  sessions, toggleDate, removeSessionForDate, getDaySlotSummary, maxSelectableDates,
   quickFillActive, getTherapistAvailableSlotsForDay, selectedTherapistName,
 }: CalendarPanelProps) {
   const [hoveredDay, setHoveredDay] = useState<number | null>(null);
@@ -236,8 +238,24 @@ export function CalendarPanel({
                   {day}
                 </div>
                 {selectedCount > 0 && (
-                  <div className="mt-1 text-xs text-blue-700 font-medium">
-                    Selected ({selectedCount})
+                  <div className="mt-1 flex items-center gap-1">
+                    <span className="text-xs text-blue-700 font-medium">
+                      Selected ({selectedCount})
+                    </span>
+                    {/* "−" button: removes one session for this date */}
+                    <button
+                      type="button"
+                      title="Remove one session for this date"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeSessionForDate(getDateKey(year, month + 1, day));
+                      }}
+                      className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-red-100 text-red-600 hover:bg-red-200 border border-red-300 font-bold text-sm leading-none transition"
+                      style={{ lineHeight: 1, padding: 0 }}
+                      aria-label="Remove one session for this date"
+                    >
+                      −
+                    </button>
                   </div>
                 )}
               </div>

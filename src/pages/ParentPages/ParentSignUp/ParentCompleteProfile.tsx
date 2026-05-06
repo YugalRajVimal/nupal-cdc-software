@@ -211,9 +211,9 @@ const ParentCompleteProfile: React.FC = () => {
                 setLoading(false);
                 return;
               }
-              // Unable to generate patient id
-              if (data.error === "Could not generate patient ID.") {
-                setFormError("Could not generate patient ID. Please try again.");
+              // Unable to generate children id
+              if (data.error === "Could not generate children ID.") {
+                setFormError("Could not generate children ID. Please try again.");
                 setLoading(false);
                 return;
               }

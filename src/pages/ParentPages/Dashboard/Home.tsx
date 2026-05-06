@@ -259,7 +259,7 @@ const ParentDashboard: React.FC = () => {
                 <tr>
                   <th className="px-3 py-2 text-left">Invoice ID</th>
                   <th className="px-3 py-2 text-left">Date</th>
-                  <th className="px-3 py-2 text-left">Patient Name</th>
+                  <th className="px-3 py-2 text-left">Children Name</th>
                   <th className="px-3 py-2 text-right">Amount</th>
                 </tr>
               </thead>
@@ -307,7 +307,7 @@ const ParentDashboard: React.FC = () => {
                 <tr>
                   <th className="px-3 py-2 text-left">Booking ID</th>
                   <th className="px-3 py-2 text-left">Date/Time</th>
-                  <th className="px-3 py-2 text-left">Patient</th>
+                  <th className="px-3 py-2 text-left">Children</th>
                   <th className="px-3 py-2 text-left">Therapy</th>
                   <th className="px-3 py-2 text-left">Session Type</th>
                   <th className="px-3 py-2 text-left">Status</th>
@@ -377,7 +377,7 @@ const ParentDashboard: React.FC = () => {
                   <th className="px-3 py-2 text-left">Session ID</th>
                   <th className="px-3 py-2 text-left">Date</th>
                   <th className="px-3 py-2 text-left">Time Slot</th>
-                  <th className="px-3 py-2 text-left">Patient</th>
+                  <th className="px-3 py-2 text-left">Children</th>
                   <th className="px-3 py-2 text-left">Therapist</th>
                   {/* <th className="px-3 py-2 text-center">Checked In</th> */}
                 </tr>

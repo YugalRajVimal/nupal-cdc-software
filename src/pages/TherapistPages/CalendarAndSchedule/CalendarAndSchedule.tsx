@@ -107,7 +107,7 @@ function CalendarSessionItem({ session }: { session: Session }) {
       className={`rounded border flex flex-col justify-end border-sky-300 px-1 py-0.5 bg-sky-50 text-xs mb-1
         ${slot && slot.limited ? "border-orange-400 bg-orange-50" : ""}`}
     >
-      {/* Patient name and id */}
+      {/* children name and id */}
       <span
         className={`font-bold ${
           isCheckedIn ? "text-green-700" : "text-indigo-900"

@@ -313,8 +313,8 @@ export default function MyChildrenAppointmentsPage() {
             <thead className="bg-slate-100 text-slate-600">
               <tr>
                 <th className="px-4 py-3 text-left">Booking ID</th>
-                <th className="px-4 py-3 text-left">Patient</th>
-                <th className="px-4 py-3 text-left">Patient ID</th>
+                <th className="px-4 py-3 text-left">Children</th>
+                <th className="px-4 py-3 text-left">Children ID</th>
                 <th className="px-4 py-3 text-left">Therapy</th>
                 <th className="px-4 py-3 text-left">Package</th>
                 <th className="px-4 py-3 text-left">Created</th>
@@ -479,7 +479,7 @@ export default function MyChildrenAppointmentsPage() {
                 <input type="text" className="w-full border rounded px-3 py-2 bg-gray-100" value={viewAppointment.patient?.name || ""} readOnly disabled />
               </div>
               <div>
-                <label className="block mb-1 text-sm font-medium">Patient ID</label>
+                <label className="block mb-1 text-sm font-medium">Children ID</label>
                 <input type="text" className="w-full border rounded px-3 py-2 bg-gray-100" value={viewAppointment.patient?.patientId || ""} readOnly disabled />
               </div>
               <div>

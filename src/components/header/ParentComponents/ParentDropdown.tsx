@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
-import { Dropdown } from "../../../ui/dropdown/Dropdown";
-import { UserCircleIcon } from "../../../../icons";
+import { UserCircleIcon } from "../../../icons";
+import { Dropdown } from "../../ui/dropdown/Dropdown";
+
 
 interface SubAdminProfile {
   name?: string;
@@ -8,7 +9,7 @@ interface SubAdminProfile {
   avatarUrl?: string;
 }
 
-export default function UserDropdown() {
+export default function ParentDropdown() {
   const [isOpen, setIsOpen] = useState(false);
   const [profile, setProfile] = useState<SubAdminProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -90,7 +91,7 @@ export default function UserDropdown() {
             : profile?.name
             ? profile.name
             : error
-            ? "Admin User"
+            ? "Parent User"
             : "Unknown"}
         </span>
         <svg

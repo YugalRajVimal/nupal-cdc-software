@@ -220,7 +220,8 @@ export default function BookingRequests() {
       if (!res.ok) throw new Error(await res.text());
       setActiveSearch((search) => search); // trigger refetch
     } catch {
-      setActionError((prev) => ({ ...prev, [requestId]: "Failed to reject." }));
+      setActionError((prev) => ({ ...prev, [requestId]: "Failed to process request." }));
+ 
     }
     setActionLoading((prev) => ({ ...prev, [requestId]: false }));
   };
@@ -270,7 +271,8 @@ export default function BookingRequests() {
           <option value="">All Status</option>
           <option value="pending">Pending</option>
           <option value="approved">Approved</option>
-          <option value="rejected">Rejected</option>
+          <option value="rejected">Not Approved</option>
+     
         </select>
       </form>
 
@@ -511,7 +513,8 @@ export default function BookingRequests() {
                                   {actionLoading[req._id] ? (
                                     <span className="animate-spin mr-1" style={{ display: "inline-block" }}>⏳</span>
                                   ) : null}
-                                  Reject
+                                  Not Approved
+                             
                                 </button>
                                 <Link
                                   to="/admin/bookings"

@@ -164,7 +164,7 @@ export default function RequestAppointment() {
     if (!reqSearch) return requestedBookings;
     const term = reqSearch.toLowerCase();
     return requestedBookings.filter(br => {
-      // Find By: Request ID, Patient Name, Patient ID, Therapy, Status, Coupon, Date(s)
+      // Find By: Request ID, Children Name, Children ID, Therapy, Status, Coupon, Date(s)
       const patient =
         typeof br.patient === "object" && br.patient
           ? br.patient
@@ -887,7 +887,7 @@ export default function RequestAppointment() {
             })()}
 
           <label className="block text-sm mb-1 flex items-center gap-1">
-            <FiUser /> Patient Name
+            <FiUser /> Children Name
           </label>
           <select
             value={patientId}
@@ -895,7 +895,7 @@ export default function RequestAppointment() {
             className="w-full border rounded px-3 py-2 mb-3"
             disabled={!!editBookingId}
           >
-            <option value="">Select Patient</option>
+            <option value="">Select Children</option>
             {patients.map((patient) => (
               <option key={patient.id} value={patient.id}>
                 {getPatientDisplayName(patient)}
@@ -1257,7 +1257,7 @@ export default function RequestAppointment() {
               <input
                 type="text"
                 value={reqSearchImmediate}
-                placeholder="Search by request id / patient / therapy / status / coupon / date"
+                placeholder="Search by request id / children / therapy / status / coupon / date"
                 className="px-2 py-1 border rounded text-sm w-64"
                 onChange={e => setReqSearchImmediate(e.target.value)}
                 spellCheck={false}

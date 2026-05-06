@@ -152,7 +152,7 @@ function PatientDetailsBox({ patient }: { patient: { name: string; patientId: st
           <a
             href={`/admin/children?patientId=${encodeURIComponent(patient.patientId)}`}
             className="text-blue-700 hover:underline"
-            title="View patient details"
+            title="View children details"
             target="_blank"
             rel="noopener noreferrer"
             onClick={e => e.stopPropagation()}

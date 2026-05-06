@@ -235,7 +235,8 @@ export default function SessionEditRequestsAdmin() {
     if (status === "rejected")
       return (
         <span className="inline-flex items-center gap-1 rounded bg-red-50 px-2 py-0.5 text-xs font-semibold text-red-700 border border-red-100">
-          <FiX className="inline" /> Rejected
+          <FiX className="inline" /> Not Approved
+     
         </span>
       );
     return (
@@ -249,7 +250,7 @@ export default function SessionEditRequestsAdmin() {
     { value: "", label: "All Statuses" },
     { value: "pending", label: "Pending" },
     { value: "approved", label: "Approved" },
-    { value: "rejected", label: "Rejected" },
+    { value: "rejected", label: "Not Approved" },
   ];
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
@@ -306,13 +307,13 @@ export default function SessionEditRequestsAdmin() {
       );
       const data = await res.json();
       if (!res.ok || !data.success) {
-        throw new Error(data.message || "Reject failed");
+        throw new Error(data.message || "Could not process request.");
       }
-      setActionSuccess("Request successfully rejected.");
+      setActionSuccess("Request marked as not approved successfully.");
       setViewRequestId(null);
       fetchEditRequests({ search, filters, page });
     } catch (err: any) {
-      setActionError(err?.message || "Failed to reject request.");
+      setActionError(err?.message || "Could not mark request as not approved.");
     } finally {
       setActionLoading(null);
     }
@@ -355,7 +356,8 @@ export default function SessionEditRequestsAdmin() {
           <option value="">All Status</option>
           <option value="pending">Pending</option>
           <option value="approved">Approved</option>
-          <option value="rejected">Rejected</option>
+          <option value="rejected">Not Approved</option>
+     
         </select>
       </form>
 
@@ -626,7 +628,8 @@ export default function SessionEditRequestsAdmin() {
                                     )}
                                     {req.status === "rejected" && (
                                       <div className="inline-flex items-center gap-1 text-red-700 font-medium">
-                                        <FiX /> Rejected
+                                        <FiX /> Not Approved
+                                   
                                       </div>
                                     )}
                                   </div>
@@ -707,7 +710,8 @@ function SessionEditsTable({
     if (status === "rejected")
       return (
         <span className="inline-flex items-center gap-1 rounded bg-red-50 px-2 py-0.5 text-xs font-semibold text-red-700 border border-red-100">
-          <FiX className="inline" /> Rejected
+          <FiX className="inline" /> Not Approved
+     
         </span>
       );
     return (

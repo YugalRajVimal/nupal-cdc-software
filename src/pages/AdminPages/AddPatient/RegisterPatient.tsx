@@ -236,7 +236,7 @@ export default function PatientRegistration() {
         }
 
         if (errorMsg.toLowerCase().includes("duplicate")) {
-          toast.error("A patient with this email already exists.", { position: "top-right" });
+          toast.error("A children with this email already exists.", { position: "top-right" });
         } else if (errorObj.errors && typeof errorObj.errors === "object") {
           const firstError = Object.values(errorObj.errors)[0];
           if (typeof firstError === "string") {

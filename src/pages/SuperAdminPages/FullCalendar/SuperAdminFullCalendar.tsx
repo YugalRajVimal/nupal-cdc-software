@@ -96,7 +96,7 @@ function getPatientDisplayName(patient: any) {
   return resultName;
 }
 function processBackendSessionList(data: BackendCalendarRecord[]): Session[] {
-  // Only include: appointmentId, patient (id, name), session date, slotId, therapist, therapyTypeId, isCheckedIn, _id, sessionId
+  // Only include: appointmentId, children (id, name), session date, slotId, therapist, therapyTypeId, isCheckedIn, _id, sessionId
   return data.map((rec) => {
     const { appointmentId, patient, session } = rec;
     return {
@@ -138,7 +138,7 @@ function PatientDetailsBox({ patient }: { patient: { name: string; patientId: st
           <a
             href={`/admin/children?patientId=${encodeURIComponent(patient.patientId)}`}
             className="text-blue-700 hover:underline"
-            title="View patient details"
+            title="View children details"
             target="_blank"
             rel="noopener noreferrer"
             onClick={e => e.stopPropagation()}
@@ -283,7 +283,7 @@ function CalendarSessionItem({
             <a
               href={`/super-admin/children?patientId=${encodeURIComponent(patient.patientId)}`}
               className="text-blue-700 hover:underline"
-              title="View patient details"
+              title="View children details"
               target="_blank"
               rel="noopener noreferrer"
               onClick={e => e.stopPropagation()}

@@ -590,7 +590,7 @@ export default function RequestEditInAppointment() {
           <FiSearch className="text-blue-700 text-xl mr-1" />
           <input
             type="text"
-            placeholder="Search by Patient Name, ID, or Appointment ID"
+            placeholder="Search by Children Name, ID, or Appointment ID"
             value={searchText}
             onChange={handleSearchInput}
             className="w-64 md:w-80 border border-slate-200 rounded px-2 py-1 text-sm focus:outline-none"
@@ -629,8 +629,8 @@ export default function RequestEditInAppointment() {
             <thead className="bg-slate-100 text-slate-600">
               <tr>
                 <th className="px-4 py-3 text-left">Appointment ID</th>
-                <th className="px-4 py-3 text-left">Patient Name</th>
-                <th className="px-4 py-3 text-left">Patient ID</th>
+                <th className="px-4 py-3 text-left">Chiildren Name</th>
+                <th className="px-4 py-3 text-left">Children ID</th>
                 <th className="px-4 py-3 text-center"># Sessions</th>
                 <th className="px-4 py-3 text-left">Actions</th>
               </tr>
@@ -733,7 +733,7 @@ export default function RequestEditInAppointment() {
               </div>
               <div>
                 <label className="block mb-1 text-sm font-medium text-slate-700">
-                  Patient Name
+                Children Name
                 </label>
                 <input
                   type="text"
@@ -745,7 +745,7 @@ export default function RequestEditInAppointment() {
               </div>
               <div>
                 <label className="block mb-1 text-sm font-medium text-slate-700">
-                  Patient ID
+                Children ID
                 </label>
                 <input
                   type="text"

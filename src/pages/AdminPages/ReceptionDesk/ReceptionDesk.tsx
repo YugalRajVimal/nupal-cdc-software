@@ -621,14 +621,14 @@ export default function ReceptionDesk() {
             >
               <div className="px-6 pb-6">
                 <p className="text-sm text-blue-700 mb-4">
-                  Manage patient flow and collections for the day.
+                  Manage children flow and collections for the day.
                 </p>
 
                 <div className="bg-white border border-blue-100 rounded-md p-4 mb-4">
                   <p className="font-medium text-slate-700 mb-2">Steps to Follow</p>
                   <ol className="list-decimal list-inside text-sm text-slate-600 space-y-1">
                     <li>
-                      When a patient arrives, find their appointment in
+                      When a children arrives, find their appointment in
                       "Today’s Appointments".
                     </li>
                     <li>
@@ -653,7 +653,7 @@ export default function ReceptionDesk() {
                     <FiCheckCircle /> Pro Tips
                   </div>
                   <ul className="list-disc list-inside text-sm text-green-700 space-y-1">
-                    <li>Verify patient contact info during session completion.</li>
+                    <li>Verify children contact info during session completion.</li>
                     <li>
                       Unpaid invoices from previous days remain until cleared.
                     </li>
@@ -705,7 +705,7 @@ export default function ReceptionDesk() {
                     <a
                       href={`/admin/children?patientId=${encodeURIComponent(currentPayment.patientId)}`}
                       className="text-blue-700 hover:underline"
-                      title="View patient details"
+                      title="View children details"
                       target="_blank"
                       rel="noopener noreferrer"
                       onClick={e => e.stopPropagation()}
@@ -930,12 +930,12 @@ export default function ReceptionDesk() {
                       <div>
                         <div className="font-medium text-slate-800 flex flex-col items-start gap-1 flex-wrap">
                           <span>
-                            {/* Add a link for patient name if id present */}
+                            {/* Add a link for children name if id present */}
                             {a.patient && a.patient._id ? (
                               <a
                                 href={`/admin/children?patientId=${encodeURIComponent(a.patient._id)}`}
                                 className="text-blue-700 hover:underline"
-                                title="View patient details"
+                                title="View children details"
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 onClick={e => e.stopPropagation()}
@@ -1048,7 +1048,7 @@ export default function ReceptionDesk() {
                             <a
                               href={`/admin/children?patientId=${encodeURIComponent(payment.patientId)}`}
                               className="text-blue-700 hover:underline"
-                              title="View patient details"
+                              title="View children details"
                               target="_blank"
                               rel="noopener noreferrer"
                               onClick={e => e.stopPropagation()}

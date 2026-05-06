@@ -2,14 +2,13 @@ import { useEffect, useRef, useState } from "react";
 
 import { Link } from "react-router";
 import { useSidebar } from "../../context/SidebarContext";
-import { ThemeToggleButton } from "../../components/common/ThemeToggleButton";
-import NotificationDropdown from "../../components/header/NotificationDropdown";
-import UserDropdown from "../../components/header/AdminComponents/header/UserDropdown";
+
+import ParentDropdown from "../../components/header/ParentComponents/ParentDropdown";
 
 const ParentAppHeader: React.FC = () => {
   const [isApplicationMenuOpen, setApplicationMenuOpen] = useState(false);
 
-  const { isMobileOpen, toggleSidebar, toggleMobileSidebar, searchText, setSearchText } = useSidebar();
+  const { isMobileOpen, toggleSidebar, toggleMobileSidebar } = useSidebar();
 
   const handleToggle = () => {
     if (window.innerWidth >= 1024) {
@@ -84,7 +83,7 @@ const ParentAppHeader: React.FC = () => {
           </button>
 
           <Link to="/" className="lg:hidden">
-            <span className="text-3xl font-bold">ADMIN</span>
+            <span className="text-3xl font-bold">PARENT</span>
           </Link>
 
           <button
@@ -106,7 +105,7 @@ const ParentAppHeader: React.FC = () => {
               />
             </svg>
           </button>
-
+{/* 
           <div className="hidden lg:block">
             <form>
               <div className="relative">
@@ -144,7 +143,7 @@ const ParentAppHeader: React.FC = () => {
                 </button>
               </div>
             </form>
-          </div>
+          </div> */}
         </div>
         <div
           className={`${
@@ -153,13 +152,13 @@ const ParentAppHeader: React.FC = () => {
         >
           <div className="flex items-center gap-2 2xsm:gap-3">
             {/* <!-- Dark Mode Toggler --> */}
-            <ThemeToggleButton />
+            {/* <ThemeToggleButton /> */}
             {/* <!-- Dark Mode Toggler --> */}
-            <NotificationDropdown />
+            {/* <NotificationDropdown /> */}
             {/* <!-- Notification Menu Area --> */}
           </div>
           {/* <!-- User Area --> */}
-          <UserDropdown />
+<ParentDropdown />
         </div>
       </div>
     </header>

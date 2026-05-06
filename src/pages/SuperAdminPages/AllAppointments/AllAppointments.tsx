@@ -60,7 +60,7 @@ const AppointmentCard = ({
   isOpen: boolean;
   toggleOpen: () => void;
 }) => {
-  // Patient name & id
+  // children name & id
   const patientName = booking.patient?.name || "-";
   const patientId = booking.patient?.patientId || "-";
   // Therapist name & id
@@ -68,7 +68,7 @@ const AppointmentCard = ({
   const therapistId = booking.therapist?.therapistId || "-";
   const therapist_ObjId = booking.therapist?._id || booking.therapist?.userId?._id || booking.therapist?.therapistId || "";
 
-  // Patient "href"
+  // children "href"
   const patientHref =
     patientId && patientId !== "-"
       ? `/super-admin/children?patientId=${encodeURIComponent(patientId)}`
@@ -107,7 +107,7 @@ const AppointmentCard = ({
             <span className="px-2 text-base text-slate-500 font-sans font-medium">
               ({formatShortDate(booking.createdAt)})
             </span>
-            {/* Patient quick info */}
+            {/* children quick info */}
             <span className="flex items-center gap-1 bg-yellow-50 rounded px-2 py-1 text-slate-800 text-base">
               <FiUserCheck className="text-orange-500" />
               {patientHref ? (
@@ -206,17 +206,17 @@ const AppointmentCard = ({
         aria-hidden={!isOpen}
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 px-6 py-6">
-          {/* Patient Details (collapsable inner section) */}
+          {/* children Details (collapsable inner section) */}
           <details open className="mb-4 group">
             <summary className="flex items-center gap-3 mb-2 cursor-pointer select-none">
               <FiUserCheck className="text-orange-500" />
               <span className="font-semibold text-lg text-blue-900 tracking-tight">
-                Patient Details
+              Children Details
               </span>
               <FiChevronDown className="ml-1 text-slate-400 group-open:rotate-180 transition-transform" />
             </summary>
             <div className="text-[15px]">
-              {/* Patient name & id PROMINENT */}
+              {/* children name & id PROMINENT */}
               <div className="flex gap-2 mb-1 flex-wrap items-center">
                 <span className="font-medium text-slate-700 text-base">
                   Name:{" "}
