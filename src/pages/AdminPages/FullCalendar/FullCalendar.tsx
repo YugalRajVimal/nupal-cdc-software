@@ -7,7 +7,6 @@ import {
   FiX,
   FiSearch,
 } from "react-icons/fi";
-// Do not use Link from react-router-dom due to routing context error
 import "react-toastify/dist/ReactToastify.css";
 
 // --- Constants and Types (unchanged) ---
@@ -366,6 +365,7 @@ type FilterQuery = {
   therapyType: string;
   onlyLimited: boolean;
   checkedIn: string; // 'yes', 'no', '' (all)
+  slotId: string; // --- ADD: slotId filter
 };
 function CalendarSearchFilter({
   filters,
@@ -406,6 +406,17 @@ function CalendarSearchFilter({
         <option value="">All Therapy Types</option>
         {therapyTypes.map(tt => (
           <option value={tt._id} key={tt._id}>{tt.name}</option>
+        ))}
+      </select>
+      {/* --- Slot wise filter dropdown --- */}
+      <select
+        className="py-1 px-2 border rounded bg-white text-sm"
+        value={filters.slotId}
+        onChange={e => setFilters({ ...filters, slotId: e.target.value })}
+      >
+        <option value="">All Slots</option>
+        {SESSION_TIME_OPTIONS.map(opt => (
+          <option value={opt.id} key={opt.id}>{opt.label}</option>
         ))}
       </select>
       <label className="flex items-center gap-1 text-sm cursor-pointer">
@@ -585,11 +596,12 @@ export default function FullCalendar() {
     therapyType: "",
     onlyLimited: false,
     checkedIn: "",
+    slotId: "", // <--- ADD: slotId filter to state
   });
 
   const [therapyTypeList, setTherapyTypeList] = useState<TherapyType[]>([]);
 
-  // Fetch session data
+  // Fetch session data (unchanged)
   const fetchSessions = useCallback(async () => {
     try {
       const token = localStorage.getItem("therapist-token");
@@ -602,6 +614,7 @@ export default function FullCalendar() {
         }
       );
       const json = await res.json();
+      console.log(json);
       if (json && json.success && Array.isArray(json.data)) {
         setSessions(processBackendSessionList(json.data));
         setTherapyTypeList(json.therapyTypes)
@@ -613,7 +626,7 @@ export default function FullCalendar() {
     }
   }, []);
 
-  // Fetch therapy types if needed (for select)
+  // Fetch therapy types if needed (for select) (unchanged)
   const fetchTherapyTypes = useCallback(async () => {
     try {
       const token = localStorage.getItem("therapist-token");
@@ -676,6 +689,11 @@ export default function FullCalendar() {
         s => s.therapyTypeId?._id === filters.therapyType
       );
     }
+    if (filters.slotId && filters.slotId.trim() !== "") {
+      result = result.filter(
+        s => s.slotId === filters.slotId
+      );
+    }
     if (filters.onlyLimited) {
       result = result.filter(s =>
         SESSION_TIME_OPTIONS.find(opt => opt.id === s.slotId)?.limited
@@ -689,7 +707,7 @@ export default function FullCalendar() {
     return result;
   }, [sessions, filters]);
 
-  // Map filtered sessions by date
+  // Map filtered sessions by date (unchanged)
   const sessionMap: { [date: string]: Session[] } = useMemo(() => {
     const m: { [date: string]: Session[] } = {};
     filteredSessions.forEach((session) => {

@@ -141,6 +141,19 @@ function CollectPaymentModal({ open, onClose, payment, onCollected }: CollectPay
               <span className="font-medium text-blue-700">Appt#: {payment.appointmentId}</span><br />
               <span className="text-slate-800">{payment.patientName}</span>{" "}
               <span className="text-xs text-blue-300 font-mono">({payment.patientId})</span><br />
+              {/* Show original payment amount if a discount is available */}
+              {typeof discountPercent === "number" && discountPercent > 0 && (
+                <span className="text-xs text-slate-400 block">
+                  Original Invoice Amount:{" "}
+                  <span className="font-semibold text-slate-600">
+                    ₹
+                    {typeof paymentAmountOriginal === "number"
+                      ? paymentAmountOriginal
+                      : String(payment.paymentAmount ?? "—")}
+                  </span>
+                </span>
+              )}
+         
               {/* Show Discount options if discount is present */}
               {typeof discountPercent === "number" && discountPercent > 0 && (
                 <div>
@@ -158,8 +171,8 @@ function CollectPaymentModal({ open, onClose, payment, onCollected }: CollectPay
                   </div>
                 </div>
               )}
-              <span className="text-xs text-slate-500">
-                Amount Due:{" "}
+              <span className="text-xs text-slate-500 block">
+                Invoice Amount:{" "}
                 <span className="font-semibold text-slate-700">
                   ₹
                   {paymentAmount !== undefined
@@ -175,10 +188,16 @@ function CollectPaymentModal({ open, onClose, payment, onCollected }: CollectPay
                   )}
               </span>
               {payment.amountPaid && (
-                <span className="text-xs text-slate-400 ml-2">
-                  (Already paid: ₹{String(payment.amountPaid)})
+                <span className="text-xs text-slate-400 block">
+                  Already paid: ₹{String(payment.amountPaid)}
                 </span>
               )}
+              <span className="text-xs text-rose-600 block">
+                Due Amount:{" "}
+                <span className="font-semibold">
+                  ₹{typeof paymentDue === "number" ? paymentDue : "—"}
+                </span>
+              </span>
               {/* Show discount percent if present and option to apply is unchecked */}
               {typeof discountPercent === "number" && discountPercent > 0 && applyDiscount && (
                 <div className="text-xs mt-1 text-green-700 font-medium">
