@@ -527,28 +527,83 @@ export function BookingSummary({
                     </div>
                   )}
 
-                  {/* Show discount percent if present */}
-                  {discountPercent > 0 && (
-                    <div className="mb-2 text-xs text-green-700 font-semibold flex items-center gap-2">
-                      <FiTag className="text-green-600" />
-                      Discount Applied: {discountPercent}%
-                      {booking.discountInfo?.coupon?.couponCode ? (
-                        <span className="ml-2 bg-green-100 px-2 py-0.5 rounded text-green-800 font-mono">
-                          Code: {booking.discountInfo.coupon.couponCode}
-                        </span>
-                      ) : null}
+                  {/* Show invoice, discount, and payment breakdown */}
+                  <div className="mb-2 px-2 py-2 rounded bg-sky-100 border border-sky-200">
+                    {/* Original Invoice Amount */}
+                    <div className="mb-1 flex items-center gap-2 text-xs font-semibold text-blue-900">
+                      <span>Original Invoice Amount: <span className="font-mono">₹{paymentAmount ?? 0}</span></span>
                     </div>
-                  )}
+                    
+                    {/* Discount section */}
+                    {discountPercent > 0 && (
+                      <div className="mb-1 flex flex-col gap-1 text-xs font-semibold text-green-700">
+                        <div className="flex items-center gap-2">
+                          <span>Discount Applied ({discountPercent}%)</span>
+                          {booking.discountInfo?.coupon?.couponCode && (
+                            <span className="ml-2 bg-green-100 px-2 py-0.5 rounded text-green-800 font-mono">
+                              Code: {booking.discountInfo.coupon.couponCode}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 text-green-800">
+                          Invoice Amount: 
+                          <span className="font-mono">
+                            ₹
+                            {typeof paymentAmount === "number"
+                              ? calcDiscountedAmount(paymentAmount, discountPercent)
+                              : typeof paymentAmount === "number"
+                                ? calcDiscountedAmount(paymentAmount, discountPercent)
+                                : 0}
+                            (after discount)
+                          </span>
+                        </div>
+                       
+                      </div>
+                    )}
 
-                  {/* Payment */}
+                    {/* If no discount, show discounted value equals original */}
+                    {discountPercent <= 0 && (
+                      <div className="mb-1 flex items-center gap-2 text-xs text-slate-700">
+                        <span className="text-slate-700">No Discount Applied</span>
+                        <span className="font-mono">Invoice Amount: ₹{paymentAmount ?? paymentAmount ?? 0}</span>
+                      </div>
+                    )}
+
+                    {/* Due Amount */}
+                    <div className="flex items-center gap-2 text-xs text-blue-800 font-semibold mt-1">
+                      Due Amount: 
+                      <span className="font-mono">
+                        ₹
+                        {(() => {
+                          // Calculate due based on paid, discount, and invoice
+                          const baseAmt = typeof paymentAmount === "number"
+                            ? (discountPercent > 0
+                              ? calcDiscountedAmount(paymentAmount, discountPercent)
+                              : paymentAmount)
+                            : typeof paymentAmount === "number"
+                              ? (discountPercent > 0
+                                ? calcDiscountedAmount(paymentAmount, discountPercent)
+                                : paymentAmount)
+                              : 0;
+                          return typeof paidAmount === "number"
+                            ? Math.max(0, baseAmt - paidAmount)
+                            : baseAmt;
+                        })()}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Payment Status */}
                   <div className="mb-2 flex items-center gap-2">
                     <FiCreditCard className="text-green-600" />
                     {isPaid ? (
                       <span className="text-green-700 font-semibold">Payment Collected</span>
                     ) : isPartiallyPaid ? (
                       <span className="text-amber-700 font-semibold">
-                        Partially Paid{typeof paymentAmount !== "undefined" && typeof paidAmount !== "undefined"
-                          ? ` (Amount: ₹${paymentAmount} | Paid: ₹${paidAmount})` : ""}
+                        Partially Paid
+                        {typeof paymentAmount !== "undefined" && typeof paidAmount !== "undefined"
+                          ? ` (Amount: ₹${paymentAmount} | Paid: ₹${paidAmount})`
+                          : ""}
                       </span>
                     ) : (
                       <span className="text-orange-600 font-semibold">Payment Pending</span>
@@ -563,6 +618,7 @@ export function BookingSummary({
                       </button>
                     )}
                   </div>
+          
 
                   {/* Sessions */}
                   {Array.isArray(booking.sessions) && booking.sessions.length > 0 && (
