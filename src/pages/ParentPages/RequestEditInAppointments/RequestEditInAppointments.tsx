@@ -292,12 +292,7 @@ export default function RequestEditInAppointment() {
         error: null,
         requested,
         status: reqStatus,
-        therapistName:
-          typeof s.therapist === "object"
-            ? typeof s.therapist.userId === "object"
-              ? s.therapist.userId.name
-              : ""
-            : "",
+        // REMOVE: therapistName assignment
         isEditedSlot: false,
         pendingRequestNewDate: pendingReqVal?.newDate || null,
         pendingRequestNewSlotId: pendingReqVal?.newSlotId || null,
@@ -950,7 +945,7 @@ export default function RequestEditInAppointment() {
                     <th className="px-3 py-2 text-left">Session ID</th>
                     <th className="px-3 py-2 text-left">Date</th>
                     <th className="px-3 py-2 text-left">Slot</th>
-                    <th className="px-3 py-2 text-left">Therapist</th>
+                    {/* Therapist column removed */}
                     <th className="px-3 py-2 text-left">Status</th>
                   </tr>
                 </thead>
@@ -964,12 +959,7 @@ export default function RequestEditInAppointment() {
                           date: s.date,
                           slotId: s.slotId || "",
                           status: s.status,
-                          therapistName:
-                            typeof s.therapist === "object"
-                              ? typeof s.therapist.userId === "object"
-                                ? s.therapist.userId.name
-                                : ""
-                              : "",
+                          // therapistName omitted
                         };
 
                       let alreadyRequested = localState.requested;
@@ -1122,20 +1112,7 @@ export default function RequestEditInAppointment() {
                               </div>
                             )}
                           </td>
-                          {/* Therapist cell */}
-                          <td className="px-3 py-2">
-                            {localState.therapistName
-                              ? localState.therapistName
-                              : typeof s.therapist === "object"
-                                ? typeof s.therapist.userId === "object"
-                                  ? s.therapist.userId.name
-                                  : ""
-                                : (
-                                  <span className="italic text-slate-400">
-                                    –
-                                  </span>
-                                )}
-                          </td>
+                          {/* Therapist cell removed */}
                           {/* Status cell */}
                           <td className="px-3 py-2 capitalize">
                             {localState.status &&
@@ -1157,7 +1134,7 @@ export default function RequestEditInAppointment() {
                   ) : (
                     <tr>
                       <td
-                        colSpan={6}
+                        colSpan={5}
                         className="px-3 py-5 text-center text-slate-400"
                       >
                         No session data

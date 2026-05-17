@@ -13,14 +13,14 @@ type TherapistType = {
 };
 type SessionType = {
   _id?: string;
-  sessionId?: string; // <-- Make room for explicit sessionId as per request (may be _id as well)
+  sessionId?: string;
   date: string;
   time?: string;
   status?: string;
   notes?: string;
   slotId?: string;
   therapist?: TherapistType;
-  isCheckedIn?: boolean; // <-- added
+  isCheckedIn?: boolean;
   [key: string]: any;
 };
 type PackageType = {
@@ -133,11 +133,6 @@ function formatDateTime(dateString?: string) {
   if (!dateString) return "-";
   return dayjs(dateString).format("DD MMM YYYY HH:mm");
 }
-function displayTherapistName(therapist: TherapistType | undefined) {
-  if (!therapist) return "-";
-  if (typeof therapist.userId === "string") return therapist.userId;
-  return therapist.userId.name;
-}
 
 function useDebounce<T>(value: T, ms: number) {
   const [debounced, setDebounced] = useState(value);
@@ -209,7 +204,7 @@ export default function MyChildrenAppointmentsPage() {
   const [pageSize, setPageSize] = useState(10);
   const [totalCount, setTotalCount] = useState(0);
 
-  const debouncedSearchText = useDebounce(searchText, 500); // Debounce for search
+  const debouncedSearchText = useDebounce(searchText, 500);
 
   // --- Data State ---
   const [appointments, setAppointments] = useState<AppointmentType[]>([]);
@@ -259,7 +254,6 @@ export default function MyChildrenAppointmentsPage() {
     setPageSize(Number(e.target.value));
     setCurrentPage(1);
   }
-  // Keep search bar state separate from table data
   function handleSearchInputChange(e: React.ChangeEvent<HTMLInputElement>) {
     setSearchText(e.target.value);
     setCurrentPage(1);
@@ -573,41 +567,6 @@ export default function MyChildrenAppointmentsPage() {
                 </>
               )}
             </div>
-            {/* --- Therapist Info --- */}
-            <h3 className="font-semibold mb-2 mt-6 text-blue-900">Therapist Info</h3>
-            {(viewAppointment.therapist || (viewAppointment.sessions || []).some(s => s.therapist)) ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-2">
-                <div>
-                  <label className="block mb-1 text-sm font-medium">Therapist Name</label>
-                  <input
-                    type="text"
-                    className="w-full border rounded px-3 py-2 bg-gray-100"
-                    value={displayTherapistName(
-                      viewAppointment.therapist
-                        || ((viewAppointment.sessions || []).find(s => s.therapist)?.therapist)
-                    )}
-                    readOnly
-                    disabled
-                  />
-                </div>
-                <div>
-                  <label className="block mb-1 text-sm font-medium">Therapist ID</label>
-                  <input
-                    type="text"
-                    className="w-full border rounded px-3 py-2 bg-gray-100"
-                    value={
-                      viewAppointment.therapist?.therapistId ||
-                      ((viewAppointment.sessions || []).find(s => s.therapist)?.therapist?.therapistId) ||
-                      ""
-                    }
-                    readOnly
-                    disabled
-                  />
-                </div>
-              </div>
-            ) : (
-              <div className="mb-2 text-slate-400 text-sm">No therapist data available</div>
-            )}
             {/* --- Package Info --- */}
             <h3 className="font-semibold mb-2 mt-6 text-blue-900">Package Info</h3>
             {viewAppointment.package ? (
@@ -699,7 +658,6 @@ export default function MyChildrenAppointmentsPage() {
                     <th className="px-3 py-2 text-left">Session ID</th>
                     <th className="px-3 py-2 text-left">Date</th>
                     <th className="px-3 py-2 text-left">Slot</th>
-                    <th className="px-3 py-2 text-left">Therapist</th>
                     <th className="px-3 py-2 text-left">Checked In</th>
                   </tr>
                 </thead>
@@ -709,22 +667,11 @@ export default function MyChildrenAppointmentsPage() {
                       <tr key={s._id || s.sessionId || idx} className="border-t">
                         <td className="px-3 py-2">{idx + 1}</td>
                         <td className="px-3 py-2">
-                          {/* Show both sessionId and fallback to _id if present */}
                           {s.sessionId || s._id || <span className="italic text-slate-400">N/A</span>}
                         </td>
                         <td className="px-3 py-2">{s.date ? dayjs(s.date).format("YYYY-MM-DD") : "-"}</td>
                         <td className="px-3 py-2">
                           {SESSION_TIME_OPTIONS.find(opt => opt.id === s.slotId)?.label || s.slotId || "--"}
-                        </td>
-                        <td className="px-3 py-2">
-                          {s.therapist ? (
-                            <>
-                              {displayTherapistName(s.therapist)}
-                              {s.therapist.therapistId ? (
-                                <span className="ml-1 text-xs text-blue-800 font-mono">[{s.therapist.therapistId}]</span>
-                              ) : null}
-                            </>
-                          ) : "-"}
                         </td>
                         <td className="px-3 py-2">
                           {s.isCheckedIn === true ? (
@@ -745,7 +692,7 @@ export default function MyChildrenAppointmentsPage() {
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={6} className="px-3 py-5 text-center text-slate-400">No session data</td>
+                      <td colSpan={5} className="px-3 py-5 text-center text-slate-400">No session data</td>
                     </tr>
                   )}
                 </tbody>

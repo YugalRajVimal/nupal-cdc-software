@@ -44,6 +44,7 @@ export type Therapist = {
   _id: string;
   therapistId: string;
   name: string;
+  userId?: { name?: string; [key: string]: any }; // Added userId?.name support
   holidays?: TherapistHoliday[];
   mobile1?: string;
   bookedSlots?: { [date: string]: string[] };

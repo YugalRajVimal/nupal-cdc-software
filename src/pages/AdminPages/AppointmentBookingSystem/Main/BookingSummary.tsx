@@ -1,8 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   FiUser, FiTag, FiPackage, FiChevronDown, FiHash,
-  FiEdit2, FiX, FiCreditCard, FiCheckCircle, 
+  FiEdit2, FiX, FiCreditCard, FiCheckCircle, FiSearch,
 } from "react-icons/fi";
 import {
   Booking, Therapist, PAGE_SIZE_OPTIONS, SESSION_TIME_OPTIONS,
@@ -153,7 +153,7 @@ function CollectPaymentModal({ open, onClose, payment, onCollected }: CollectPay
                   </span>
                 </span>
               )}
-         
+
               {/* Show Discount options if discount is present */}
               {typeof discountPercent === "number" && discountPercent > 0 && (
                 <div>
@@ -307,7 +307,44 @@ export function BookingSummary({
   const [bookingsError, setLocalBookingsError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
-  const [total, setTotal] = useState(0);
+  // const [total, setTotal] = useState(0);
+
+  // Search/filter state
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterTherapist, setFilterTherapist] = useState("");
+  const [filterStatus, setFilterStatus] = useState("");
+  const [therapistList, setTherapistList] = useState<Therapist[]>([]);
+
+  // ----------- SESSION THERAPISTS FOR DROPDOWN -----------
+  // Memoized list of unique therapists that are present in any session
+  const sessionTherapistOptions = useMemo(() => {
+    // Collect all therapist objects from all sessions across all bookings
+    const therapistMap: Map<string, Therapist> = new Map();
+
+    bookings.forEach((booking: any) => {
+      if (!Array.isArray(booking.sessions)) return;
+      booking.sessions.forEach((session: any) => {
+        const t = session.therapist;
+        // Prefer _id. If duplicate with different therapistId/name, first seen wins.
+        if (t && typeof t === "object" && t._id) {
+          if (!therapistMap.has(t._id)) {
+            therapistMap.set(t._id, t);
+          }
+        }
+      });
+    });
+
+    // Convert map to sorted array
+    return Array.from(therapistMap.values()).sort((a, b) => {
+      // Sort by name
+      const aName = (a.userId?.name || a.name || "").toLowerCase();
+      const bName = (b.userId?.name || b.name || "").toLowerCase();
+      if (aName < bName) return -1;
+      if (aName > bName) return 1;
+      return 0;
+    });
+  }, [bookings]);
+  // -------------------------------------------------------
 
   // Collect Payment Modal
   const [collectModalOpen, setCollectModalOpen] = useState(false);
@@ -320,8 +357,108 @@ export function BookingSummary({
   const [checkInLoading, setCheckInLoading] = useState(false);
   const [checkInError, setCheckInError] = useState<string | null>(null);
 
-  const totalPages = Math.ceil(total / pageSize);
+  // const totalPages = Math.ceil(total / pageSize);
 
+  // Fetch therapist list for filter dropdown (optional, can be optimized)
+  useEffect(() => {
+    let endpoint = import.meta.env.VITE_API_URL || (window as any).VITE_API_URL;
+    if (endpoint) endpoint = endpoint.replace(/\/$/, "");
+    // Fetch therapists on mount only
+    fetch(`${endpoint}/api/admin/therapists?limit=100`)
+      .then(async (res) => {
+        if (!res.ok) return;
+        const data = await res.json();
+        setTherapistList(Array.isArray(data?.therapists) ? data.therapists : []);
+      })
+      .catch(() => setTherapistList([]));
+  }, []);
+
+  // --- SEARCH & FILTER HANDLING FOR LOCAL DATA ---
+
+  // Returns a normalized string for flexible search
+  const normalize = (v: any) =>
+    (typeof v === "string" ? v : v?.toString() ?? "")
+      .toLowerCase()
+      .trim();
+
+  // Main local filtered bookings
+  const filteredBookings = bookings
+    .filter((booking: any) => {
+      // Filtering by therapist
+      if (filterTherapist) {
+        // Filter if neither booking therapist nor any of this booking's session's therapist matches
+        const therapistMatch =
+          booking.therapist?._id === filterTherapist ||
+          booking.therapistId === filterTherapist ||
+          (Array.isArray(booking.sessions) &&
+            booking.sessions.some(
+              (session: any) =>
+                session.therapist &&
+                typeof session.therapist === "object" &&
+                session.therapist._id === filterTherapist
+            )
+          );
+        if (!therapistMatch) return false;
+      }
+
+      // Filtering by payment status
+      if (
+        filterStatus &&
+        normalize(booking.payment?.status) !== normalize(filterStatus)
+      ) {
+        return false;
+      }
+
+      // Fuzzy searching on Booking ID, Patient Name/Id, Therapist name/id, Therapy name, Package, Remark, etc.
+      if (searchTerm.trim()) {
+        const query = normalize(searchTerm);
+        const patient = booking?.patient;
+        const therapist = booking?.therapist || getTherapistObject(booking);
+
+        // Compose possible searchable string fields
+        const valuesToSearch = [
+          booking.appointmentId,
+          patient?.name,
+          patient?._id,
+          patient?.patientId,
+          therapist?.name,
+          therapist?._id,
+          therapist?.therapistId,
+          booking?.therapy?.name,
+          booking?.package?.name || getPackageDisplay(booking.package),
+          booking?.remark,
+        ].filter(Boolean).map(normalize);
+
+        if (!valuesToSearch.some((field) => field.includes(query))) {
+          return false;
+        }
+      }
+      return true;
+    });
+
+  // Pagination logic on filtered bookings (pagination must be applied _after_ filtering)
+  const pagedBookings = filteredBookings.slice(
+    (page - 1) * pageSize,
+    (page - 1) * pageSize + pageSize
+  );
+  const filteredTotal = filteredBookings.length;
+  const filteredPages = Math.ceil(filteredTotal / pageSize);
+
+  // Local calculation for session count on displayed bookings
+  const totalSessionCount = pagedBookings && Array.isArray(pagedBookings)
+    ? pagedBookings.reduce((acc, b) => acc + (Array.isArray(b.sessions) ? b.sessions.length : 0), 0)
+    : 0;
+
+  // Keep selection and page valid as filters/search changes
+  useEffect(() => {
+    // If page becomes out of bounds due to filtering, reset to 1
+    if (page > filteredPages && filteredPages > 0) {
+      setPage(1);
+    }
+    // Reset page when filter/search changes
+  }, [searchTerm, filterTherapist, filterStatus, filteredPages]);
+
+  // On _remote_ data load, getBookings still called as usual
   function fetchBookings() {
     setLocalBookingsLoading(true);
     setBookingsLoading(true);
@@ -330,16 +467,14 @@ export function BookingSummary({
     let endpoint = import.meta.env.VITE_API_URL || (window as any).VITE_API_URL;
     if (endpoint) endpoint = endpoint.replace(/\/$/, "");
     const params = new URLSearchParams();
-    params.append("page", String(page));
-    params.append("pageSize", String(pageSize));
-
+    params.append("page", "1"); // always fetch all (page 1)
+    params.append("pageSize", "10000"); // get ALL available
     fetch(`${endpoint}/api/admin/bookings?${params.toString()}`)
       .then(async (res) => {
         if (!res.ok) throw new Error("Could not fetch bookings.");
         const data = await res.json();
-        console.log(data);
         setBookings(data?.bookings || []);
-        setTotal(data?.total || 0);
+        // setTotal(data?.bookings?.length || 0); // For total, show all
         setLocalBookingsLoading(false);
         setBookingsLoading(false);
       })
@@ -350,19 +485,11 @@ export function BookingSummary({
         setBookingsLoading(false);
       });
   }
-
-  useEffect(() => { fetchBookings(); }, [page, pageSize]); // eslint-disable-line
-
-  // Modified: Calculate total session dates selected across all bookings on this page
-  const totalSessionCount = bookings && Array.isArray(bookings)
-    ? bookings.reduce((acc, b) => acc + (Array.isArray(b.sessions) ? b.sessions.length : 0), 0)
-    : 0;
+  useEffect(() => { fetchBookings(); }, []); // ONLY on mount
 
   const handleModalCollectPayment = (booking: any) => {
-    // Calculate discount percent if any, from booking.discountInfo.coupon
     let discountPercent = 0;
     if (booking.discountInfo && booking.discountInfo.coupon && booking.discountInfo.coupon.discountEnabled) {
-      // We assume that .discount field on coupon is a percentage
       discountPercent = Number(booking.discountInfo.coupon.discount) || 0;
     }
     setCollectModalOpen(true);
@@ -416,6 +543,24 @@ export function BookingSummary({
     }
   };
 
+  // Handle search bar and controls
+  const onSearchInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchTerm(e.target.value);
+    setPage(1);
+  };
+  const onSearchFormSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setPage(1);
+  };
+
+  // Reset filters
+  const resetFilters = () => {
+    setSearchTerm("");
+    setFilterTherapist("");
+    setFilterStatus("");
+    setPage(1);
+  };
+
   return (
     <div className="mt-6">
       <CollectPaymentModal
@@ -435,16 +580,80 @@ export function BookingSummary({
       <div className="bg-white border rounded-lg p-4 text-sm">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
           <p className="font-medium">Booking Summary</p>
-
-          {/* NEW: Show total session dates count */}
           <div className="bg-blue-50 border border-blue-100 rounded px-3 py-1 text-xs text-blue-800 font-semibold shadow-sm">
             Total Selected Sessions: <span className="ml-1 text-blue-900 font-extrabold">{totalSessionCount}</span>
           </div>
         </div>
 
+        {/* Search/Filter Bar */}
+        <form onSubmit={onSearchFormSubmit} className="flex flex-wrap items-center gap-3 mb-4">
+          <div className="relative w-1/2">
+            <input
+              value={searchTerm}
+              onChange={onSearchInputChange}
+              className="border px-2 pl-8 py-1 rounded w-full text-xs focus:ring-blue-200 focus:ring"
+              placeholder="Search by Booking ID, Patient, Therapist, etc."
+              type="search"
+              autoComplete="off"
+            />
+            <FiSearch className="absolute left-2 top-2 text-slate-400" size={16} />
+          </div>
+          <div>
+            <select
+              className="border px-2 py-1 rounded text-xs min-w-[160px]"
+              value={filterTherapist}
+              onChange={e => { setFilterTherapist(e.target.value); setPage(1); }}
+            >
+              <option value="">All Therapists</option>
+              {/* Show all unique therapists (from sessions), then therapists from master list that are not already included */}
+              {/* Session therapists (unique by _id) */}
+              {sessionTherapistOptions.map((t) =>
+                <option key={t._id} value={t._id}>
+                  {(t.userId?.name || t.name) ?? ""}
+                  {t.therapistId ? ` (${t.therapistId})` : ""}
+                </option>
+              )}
+              {/* From master therapistList, skip if already in sessionTherapistOptions */}
+              {therapistList
+                .filter(
+                  masterT =>
+                    !sessionTherapistOptions.find(sessionT => sessionT._id === masterT._id)
+                )
+                .map((t) =>
+                  <option key={t._id} value={t._id}>
+                    {(t.name || t.userId?.name) ?? ""}
+                    {t.therapistId ? ` (${t.therapistId})` : ""}
+                  </option>
+                )
+              }
+            </select>
+          </div>
+          <div>
+            <select
+              className="border px-2 py-1 rounded text-xs"
+              value={filterStatus}
+              onChange={e => { setFilterStatus(e.target.value); setPage(1); }}
+            >
+              <option value="">All Statuses</option>
+              <option value="paid">Paid</option>
+              <option value="partiallypaid">Partially Paid</option>
+              <option value="pending">Pending</option>
+            </select>
+          </div>
+          <button
+            type="button"
+            className="text-xs rounded px-2 py-1 border border-slate-300 text-slate-500 bg-slate-50 hover:bg-slate-100"
+            onClick={resetFilters}
+            disabled={
+              !searchTerm && !filterTherapist && !filterStatus
+            }>
+            Reset
+          </button>
+        </form>
+
         {/* Pagination */}
         <div className="flex flex-wrap items-center justify-between py-2">
-          <span className="text-xs text-slate-500">Total: <b>{total}</b></span>
+          <span className="text-xs text-slate-500">Total: <b>{filteredTotal}</b></span>
           <div className="flex items-center gap-2">
             <span className="text-xs text-slate-400">Rows:</span>
             <select
@@ -455,8 +664,8 @@ export function BookingSummary({
               {PAGE_SIZE_OPTIONS.map((opt) => <option value={opt} key={opt}>{opt}</option>)}
             </select>
             <button className="px-2 py-1 text-xs border rounded border-slate-300" disabled={page === 1 || bookingsLoading} onClick={() => setPage((p) => Math.max(1, p - 1))}>Prev</button>
-            <span className="text-xs">{page} / {Math.max(totalPages, 1)}</span>
-            <button className="px-2 py-1 text-xs border rounded border-slate-300" disabled={page >= totalPages || bookingsLoading} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>Next</button>
+            <span className="text-xs">{page} / {Math.max(filteredPages, 1)}</span>
+            <button className="px-2 py-1 text-xs border rounded border-slate-300" disabled={page >= filteredPages || bookingsLoading} onClick={() => setPage((p) => Math.min(filteredPages, p + 1))}>Next</button>
           </div>
         </div>
 
@@ -465,11 +674,11 @@ export function BookingSummary({
           <div className="text-center py-12 text-slate-400 text-base">Loading bookings…</div>
         ) : bookingsError ? (
           <div className="text-red-600 p-3">{bookingsError}</div>
-        ) : !bookings || bookings.length === 0 ? (
+        ) : !pagedBookings || pagedBookings.length === 0 ? (
           <p className="text-slate-500 mb-3">No bookings found.</p>
         ) : (
           <div className="flex flex-col gap-4">
-            {bookings.map((booking: any) => {
+            {pagedBookings.map((booking: any) => {
               const therapistObj = getTherapistObject(booking);
               const paymentStatus = booking.payment?.status;
               const isPaid = paymentStatus === "paid";
@@ -527,13 +736,10 @@ export function BookingSummary({
                     </div>
                   )}
 
-                  {/* Show invoice, discount, and payment breakdown */}
                   <div className="mb-2 px-2 py-2 rounded bg-sky-100 border border-sky-200">
-                    {/* Original Invoice Amount */}
                     <div className="mb-1 flex items-center gap-2 text-xs font-semibold text-blue-900">
                       <span>Original Invoice Amount: <span className="font-mono">₹{paymentAmount ?? 0}</span></span>
                     </div>
-                    
                     {/* Discount section */}
                     {discountPercent > 0 && (
                       <div className="mb-1 flex flex-col gap-1 text-xs font-semibold text-green-700">
@@ -557,10 +763,8 @@ export function BookingSummary({
                             (after discount)
                           </span>
                         </div>
-                       
                       </div>
                     )}
-
                     {/* If no discount, show discounted value equals original */}
                     {discountPercent <= 0 && (
                       <div className="mb-1 flex items-center gap-2 text-xs text-slate-700">
@@ -568,8 +772,6 @@ export function BookingSummary({
                         <span className="font-mono">Invoice Amount: ₹{paymentAmount ?? paymentAmount ?? 0}</span>
                       </div>
                     )}
-
-                    {/* Due Amount */}
                     <div className="flex items-center gap-2 text-xs text-blue-800 font-semibold mt-1">
                       Due Amount: 
                       <span className="font-mono">
@@ -593,7 +795,6 @@ export function BookingSummary({
                     </div>
                   </div>
 
-                  {/* Payment Status */}
                   <div className="mb-2 flex items-center gap-2">
                     <FiCreditCard className="text-green-600" />
                     {isPaid ? (
@@ -618,7 +819,6 @@ export function BookingSummary({
                       </button>
                     )}
                   </div>
-          
 
                   {/* Sessions */}
                   {Array.isArray(booking.sessions) && booking.sessions.length > 0 && (
