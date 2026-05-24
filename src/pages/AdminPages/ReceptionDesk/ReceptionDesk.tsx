@@ -87,6 +87,25 @@ function formatDateDDMMYYYY(dateString: string | undefined): string {
   return `${dd}/${mm}/${yyyy}`;
 }
 
+// Helper: Build a JS date for a session from today+slot
+function getSessionDateTime(todayISO: string, slotId: string | undefined): Date | null {
+  if (!todayISO || !slotId) return null;
+  // todayISO: e.g. "2024-06-14"
+  // slotId: e.g. "1000-1045"
+  // Use first 4 digits for start: "1000" => 10:00, "0830" => 8:30
+  let slot = slotId;
+  if (slot.includes('-')) slot = slot.split('-')[0]; // get start time
+  if (slot.length === 9) slot = slot.substring(0, 4); // e.g. "1000-1045" -> "1000"
+  if (!/^\d{4}$/.test(slot)) return null;
+  const hour = Number(slot.substring(0, 2));
+  const minute = Number(slot.substring(2, 4));
+  if (isNaN(hour) || isNaN(minute)) return null;
+  // Combine date and time
+  const [yyyy, mm, dd] = todayISO.split("-");
+  if (!yyyy || !mm || !dd) return null;
+  return new Date(Number(yyyy), Number(mm) - 1, Number(dd), hour, minute, 0);
+}
+
 // Utilities for new CollectPaymentModal (for prompt)
 function toNumber(v: any): number | undefined {
   if (typeof v === "number") return v;
@@ -399,12 +418,6 @@ export default function ReceptionDesk() {
   const [payments, setPayments] = useState<PaymentInfo[]>([]);
   const [today, setToday] = useState<string>("");
 
-  // Modal State
-  // const [collectModal, setCollectModal] = useState<{ visible: boolean; payment: PaymentInfo | null }>({
-  //   visible: false,
-  //   payment: null,
-  // });
-
   // Multi-select state for appointments
   const [selectedAppointments, setSelectedAppointments] = useState<{ [_id_session: string]: boolean }>({});
   const [multiCheckingIn, setMultiCheckingIn] = useState(false);
@@ -663,6 +676,33 @@ export default function ReceptionDesk() {
     setPayments((pays) => pays.filter((p) => p._id !== collectPaymentCurrent._id));
   };
 
+  // Status Display Logic for Appointments
+  function getAppointmentStatusStr(a: Appointment): {label: string, colorClass: string, bgClass?: string} {
+    // If checked-in
+    if (a.status === "checked-in" || a.isCheckedIn) {
+      return {
+        label: "Checked In",
+        colorClass: "text-green-700",
+        bgClass: "bg-green-50"
+      };
+    }
+    // If not checked in, check time
+    const sessionDate = getSessionDateTime(today, a.time);
+    const now = new Date();
+    if (sessionDate && now > sessionDate) {
+      return {
+        label: "Missed",
+        colorClass: "text-red-700",
+        bgClass: "bg-red-50"
+      };
+    }
+    return {
+      label: "Not Checked In",
+      colorClass: "text-yellow-800",
+      bgClass: "bg-yellow-50"
+    };
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center ">
@@ -841,6 +881,7 @@ export default function ReceptionDesk() {
                 const key = `${a._id}||${a.sessionId}`;
                 const checked = !!selectedAppointments[key];
                 const selectable = a.status === "scheduled" && !a.isCheckedIn;
+                const statusObj = getAppointmentStatusStr(a);
                 return (
                   <div
                     key={a._id + "|" + a.sessionId}
@@ -900,11 +941,11 @@ export default function ReceptionDesk() {
                               Session ID: {a.sessionId ?? "—"}
                             </span>
                           </span>
-                          {(a.status === "checked-in" || a.isCheckedIn) && (
-                            <span className="ml-2 text-green-600 text-xs bg-green-50 rounded px-2 py-0.5 font-semibold whitespace-nowrap">
-                              Session Completed
-                            </span>
-                          )}
+                          <span
+                            className={`ml-2 ${statusObj.colorClass} text-xs font-semibold px-2 py-0.5 rounded whitespace-nowrap ${statusObj.bgClass ?? ""}`}
+                          >
+                            {statusObj.label}
+                          </span>
                         </div>
                         <div className="text-xs text-slate-500 mt-0.5">
                           Therapist:{" "}

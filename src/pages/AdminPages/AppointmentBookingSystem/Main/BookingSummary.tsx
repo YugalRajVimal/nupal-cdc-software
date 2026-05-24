@@ -298,6 +298,44 @@ type BookingSummaryProps = {
   paymentLoadingBookingId: string | null;
 };
 
+// --- Utility for session time: "YYYY-MM-DD" + slotId to Date ---
+function getSessionDateTime(session: any) {
+  // s.date: ISO or YYYY-MM-DD, s.slotId: i.e. "09-10" or in SESSION_TIME_OPTIONS
+  if (!session || !session.date) return null;
+  // Find slot
+  let slotObj = undefined;
+  if (session.slotId) {
+    slotObj = SESSION_TIME_OPTIONS.find(opt => opt.id === session.slotId);
+  }
+  let time = "09:00"; // fallback default
+  if (slotObj && slotObj.label) {
+    // Parse from label: e.g. "9:00 - 10:00 AM"
+    // But best: slotObj.startTime or .from or .start (but original has only label/id)
+    // slotObj does not have 'startTime', so only parse from label
+    if (slotObj.label) {
+      const match = slotObj.label.match(/(\d{1,2}:\d{2})\s*-/);
+      if (match) {
+        time = match[1];
+      } else {
+        const h = slotObj.label.match(/(\d{1,2})\s*-/)?.[1];
+        if (h) time = `${h.padStart(2, "0")}:00`;
+      }
+    }
+  } else if (typeof session.slotId === "string" && /\d{1,2}-\d{1,2}/.test(session.slotId)) {
+    // try to infer from slotId
+    const hours = session.slotId.split("-")[0]?.padStart(2, "0");
+    time = hours ? `${hours}:00` : "09:00";
+  }
+  // Combine date and time
+  let dtString = `${session.date}T${time}`;
+  let dt = new Date(dtString);
+  // In rare case time missing or invalid, fallback to just date
+  if (isNaN(dt.getTime())) {
+    dt = new Date(session.date);
+  }
+  return dt;
+}
+
 export function BookingSummary({
   bookings, setBookings, setBookingsLoading, setBookingsError,
   getTherapistObject, editBookingId,
@@ -560,6 +598,19 @@ export function BookingSummary({
     setFilterStatus("");
     setPage(1);
   };
+
+  // Helper: Get session status text
+  function getSessionStatus(session: any) {
+    const checkedIn = session.isCheckedIn === true;
+    const dt = getSessionDateTime(session);
+    const now = new Date();
+    // If checked in, always show as checked in, regardless of time
+    if (checkedIn) return <span className="text-green-700 font-semibold">Checked In</span>;
+    // If not checked in and current time is past session time, show as "Missed"
+    if (dt && now > dt) return <span className="text-gray-500 font-semibold">Missed</span>;
+    // If not checked in and not past, normal "Not Checked In"
+    return <span className="text-red-600 font-semibold">Not Checked In</span>;
+  }
 
   return (
     <div className="mt-6">
@@ -847,7 +898,7 @@ export function BookingSummary({
                                 s.therapyTypeId && typeof s.therapyTypeId === "object"
                                   ? s.therapyTypeId
                                   : typeof s.therapyType === "string" ? s.therapyType : undefined;
-                              const checkedIn = s.isCheckedIn === true;
+                              // const checkedIn = s.isCheckedIn === true;
 
                               return (
                                 <tr key={s._id || s.date + "-" + idx}>
@@ -866,20 +917,24 @@ export function BookingSummary({
                                       : <span className="text-gray-400">—</span>}
                                   </td>
                                   <td className="px-2 py-1 border border-slate-200 whitespace-nowrap">
-                                    {checkedIn
-                                      ? <span className="text-green-700 font-semibold">Checked In</span>
-                                      : <span className="text-red-600 font-semibold">Not Checked In</span>}
+                                    {getSessionStatus(s)}
                                   </td>
                                   <td className="px-2 py-1 border border-slate-200 whitespace-nowrap text-right">
-                                    {!checkedIn && (
-                                      <button
-                                        className={`text-xs rounded px-2 py-1 border border-green-500 text-green-700 hover:bg-green-50 flex items-center gap-1 ${checkInLoading ? "opacity-60 cursor-not-allowed" : ""}`}
-                                        disabled={checkInLoading}
-                                        onClick={() => openCheckInModal(booking, s)}
-                                      >
-                                        <FiCheckCircle /> Mark Session Completed
-                                      </button>
-                                    )}
+                                    {(s.isCheckedIn !== true && (() => {
+                                      // Show check-in button only if not checked in AND not missed
+                                      const dt = getSessionDateTime(s);
+                                      const now = new Date();
+                                      if (dt && now > dt) return null; // Don't show if missed
+                                      return (
+                                        <button
+                                          className={`text-xs rounded px-2 py-1 border border-green-500 text-green-700 hover:bg-green-50 flex items-center gap-1 ${checkInLoading ? "opacity-60 cursor-not-allowed" : ""}`}
+                                          disabled={checkInLoading}
+                                          onClick={() => openCheckInModal(booking, s)}
+                                        >
+                                          <FiCheckCircle /> Mark Session Completed
+                                        </button>
+                                      );
+                                    })())}
                                   </td>
                                 </tr>
                               );

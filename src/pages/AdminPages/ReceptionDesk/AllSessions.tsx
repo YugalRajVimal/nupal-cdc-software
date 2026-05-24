@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import {
   FiCheckCircle,
-
   FiCalendar,
 } from "react-icons/fi";
 import { motion } from "framer-motion";
@@ -98,6 +97,67 @@ function formatDateDDMMYYYY(dateStr: string): string {
   return dateStr;
 }
 
+// Helper to get session's ending Date object
+function getSessionEndDate(session: UpcomingSession["session"]) {
+  // try slotId first if available, fallback to time (range "HH:MM to HH:MM")
+  // Returns Date object at end of session (date + endTime)
+  if (!session?.date) return null;
+  let endTimeStr: string | null = null;
+
+  // Try slotId
+  if (session.slotId) {
+    const slot = SESSION_TIME_OPTIONS.find(opt => opt.id === session.slotId);
+    if (slot && slot.label) {
+      // "10:00 to 10:45" → split and take right part
+      const labelMatch = slot.label.match(/to\s+(\d{2}:\d{2})/);
+      if (labelMatch) {
+        endTimeStr = labelMatch[1];
+      }
+    }
+  }
+
+  // Try time property which may be slot range (ex: "10:00-10:45" or "10:00 to 10:45")
+  if (!endTimeStr && session.time) {
+    // Accept time like "10:00-10:45" or "10:00 to 10:45"
+    let t = session.time;
+    let match = t.match(/(?:-|to)\s*(\d{2}:\d{2})/); // after - or to
+    if (match) endTimeStr = match[1];
+  }
+
+  // fallback? Try slotId itself "1000-1045"
+  if (!endTimeStr && session.slotId && session.slotId.includes('-')) {
+    let parts = session.slotId.split('-');
+    if (parts[1]?.length === 4) {
+      // "1045" → turn into HH:MM
+      endTimeStr = `${parts[1].slice(0, 2)}:${parts[1].slice(2)}`;
+    }
+  }
+
+  // fallback to 23:59 if not found
+  if (!endTimeStr) endTimeStr = "23:59";
+
+  // Compose full datetime string. session.date is YYYY-MM-DD
+  let datePart = session.date;
+  let dateObj: Date;
+  if (datePart.length === 10) {
+    // expected format
+    dateObj = new Date(`${datePart}T${endTimeStr}:00`);
+  } else {
+    // fallback: hand to Date parser
+    let fallback = new Date(session.date);
+    if (!isNaN(fallback.getTime())) {
+      let yyyy = fallback.getFullYear(),
+        mm = String(fallback.getMonth() + 1).padStart(2, "0"),
+        dd = String(fallback.getDate()).padStart(2, "0");
+      dateObj = new Date(`${yyyy}-${mm}-${dd}T${endTimeStr}:00`);
+    } else {
+      // Can't determine at all
+      return null;
+    }
+  }
+  return dateObj;
+}
+
 export default function AllUpcomingSessions() {
   const [loading, setLoading] = useState(true);
   // const [guideOpen, setGuideOpen] = useState(false);
@@ -155,6 +215,34 @@ export default function AllUpcomingSessions() {
     let slot = session.slotId || session.time || "";
     let known = SESSION_TIME_OPTIONS.find((opt) => opt.id === slot);
     return known?.label || slot || "—";
+  }
+
+  // Helper to get status for each session
+  function getSessionStatus(session: UpcomingSession["session"]) {
+    // 1. Checked in?
+    if (session.isCheckedIn) {
+      return {
+        label: 'Checked In',
+        color: 'green',
+        icon: <FiCheckCircle size={13} />,
+      };
+    }
+    // 2. Missed?
+    const now = new Date();
+    const endDateObj = getSessionEndDate(session);
+    if (endDateObj && endDateObj < now) {
+      return {
+        label: 'Missed',
+        color: 'red',
+        icon: null,
+      };
+    }
+    // 3. Not checked in (and not missed)
+    return {
+      label: 'Not Checked In',
+      color: 'slate',
+      icon: null,
+    };
   }
 
   // Handle selecting/unselecting session for multi select
@@ -355,7 +443,7 @@ export default function AllUpcomingSessions() {
                     <th className="py-2 px-2 border-b font-semibold">Therapy</th>
                     <th className="py-2 px-2 border-b font-semibold">Appt# / Booking</th>
                     {/* <th className="py-2 px-2 border-b font-semibold">Package</th> */}
-                    <th className="py-2 px-2 border-b font-semibold">Checked In?</th>
+                    <th className="py-2 px-2 border-b font-semibold">Status</th>
                     <th className="py-2 px-2 border-b font-semibold"></th>
                   </tr>
                 </thead>
@@ -373,6 +461,9 @@ export default function AllUpcomingSessions() {
                     const isUnchecked = !s.session.isCheckedIn;
 
                     const isSelected = selectedSessionIds.includes(s.session._id);
+
+                    // Calculate new status (Missed/Checked In/Not Checked In)
+                    const sessionStatus = getSessionStatus(s.session);
 
                     return (
                       <tr
@@ -452,17 +543,30 @@ export default function AllUpcomingSessions() {
                           {s.package?.packageName || s.package?.packageType || "—"}
                         </td> */}
                         <td className="py-2 px-2">
-                          {s.session.isCheckedIn ? (
-                            <span className="rounded bg-green-50 px-2 py-0.5 text-green-700 font-semibold text-xs inline-flex items-center gap-1">
-                              Yes <FiCheckCircle size={13} />
-                            </span>
-                          ) : (
-                            <span className="rounded bg-slate-100 px-2 py-0.5 text-slate-500 font-semibold text-xs">
-                              No
-                            </span>
-                          )}
+                          <span
+                            className={[
+                              "rounded",
+                              "px-2",
+                              "py-0.5",
+                              "font-semibold",
+                              "text-xs",
+                              "inline-flex",
+                              "items-center",
+                              "gap-1",
+                              "whitespace-nowrap",
+                              sessionStatus.color === 'green'
+                                ? "bg-green-50 text-green-700"
+                                : sessionStatus.color === 'red'
+                                ? "bg-red-50 text-red-600"
+                                : "bg-slate-100 text-slate-500"
+                            ].join(' ')}
+                            style={{ whiteSpace: 'nowrap' }}
+                          >
+                            {sessionStatus.label}
+                            {sessionStatus.icon}
+                          </span>
                         </td>
-                        
+                   
                         <td className="py-2 px-2 text-center">
                           {!s.session.isCheckedIn && checkedInFilter !== "checkedIn" && (
                             <button
