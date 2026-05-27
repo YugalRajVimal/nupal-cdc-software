@@ -6,13 +6,16 @@ import {
 import { motion } from "framer-motion";
 
 /**
- * All Upcomming Sessions Page
+ * All Upcoming Sessions Page
  * Shows upcoming (all future, NOT just today) sessions across bookings, as returned by
  * backend admin endpoint `/api/admin/bookings/all-sessions`
- * - See: booking.controller.js#getAllSessions (2163+)
  * - Accessible for admin/reception
- * - Filter bar for date, therapist, patient, therapyType, isCheckedIn
+ * - Filter bar for date, therapist, patient, therapyType, isCheckedIn/Missed
  */
+
+// Session statuses as per booking.schema.js (1-74):
+// "scheduled", "checkedIn", "missed", "cancelled"
+type SessionStatus = 'scheduled' | 'checkedIn' | 'missed' | 'cancelled';
 
 const SESSION_TIME_OPTIONS = [
   { id: '1000-1045', label: '10:00 to 10:45', limited: false },
@@ -53,7 +56,6 @@ type Package = {
 
 type PaymentSummary = any;
 
-// For each session from backend
 type UpcomingSession = {
   bookingId: string;
   appointmentId?: string;
@@ -67,7 +69,9 @@ type UpcomingSession = {
     slotId?: string;
     time?: string;
     therapist?: any;
-    isCheckedIn?: boolean;
+    status?: SessionStatus; // added: session status from backend ("scheduled", "checkedIn", "missed", "cancelled")
+    sessionId?: string; // not reliable, but used for old display
+    isCheckedIn?: boolean; // backward compat
     [k: string]: any;
   };
 };
@@ -77,90 +81,65 @@ const API_URL = import.meta.env.VITE_API_URL;
 // Helper to format date string as DD/MM/YYYY
 function formatDateDDMMYYYY(dateStr: string): string {
   if (!dateStr) return "";
-  // Accepts YYYY-MM-DD, or YYYY/MM/DD, also fallback.
   const match = dateStr.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
   if (match) {
     const [, yyyy, mm, dd] = match;
-    // Pad mm and dd to 2 digits as needed
     const pad = (n: string) => n.length === 1 ? "0" + n : n;
     return `${pad(dd)}/${pad(mm)}/${yyyy}`;
   }
-  // Try to parse as Date object
   const d = new Date(dateStr);
   if (!isNaN(d.getTime())) {
-    // Date valid
     const day = ("0" + d.getDate()).slice(-2);
     const month = ("0" + (d.getMonth() + 1)).slice(-2);
     return `${day}/${month}/${d.getFullYear()}`;
   }
-  // As a fallback, just return original string
   return dateStr;
 }
 
 // Helper to get session's ending Date object
-function getSessionEndDate(session: UpcomingSession["session"]) {
-  // try slotId first if available, fallback to time (range "HH:MM to HH:MM")
-  // Returns Date object at end of session (date + endTime)
-  if (!session?.date) return null;
-  let endTimeStr: string | null = null;
+// function getSessionEndDate(session: UpcomingSession["session"]) {
+//   if (!session?.date) return null;
+//   let endTimeStr: string | null = null;
 
-  // Try slotId
-  if (session.slotId) {
-    const slot = SESSION_TIME_OPTIONS.find(opt => opt.id === session.slotId);
-    if (slot && slot.label) {
-      // "10:00 to 10:45" → split and take right part
-      const labelMatch = slot.label.match(/to\s+(\d{2}:\d{2})/);
-      if (labelMatch) {
-        endTimeStr = labelMatch[1];
-      }
-    }
-  }
-
-  // Try time property which may be slot range (ex: "10:00-10:45" or "10:00 to 10:45")
-  if (!endTimeStr && session.time) {
-    // Accept time like "10:00-10:45" or "10:00 to 10:45"
-    let t = session.time;
-    let match = t.match(/(?:-|to)\s*(\d{2}:\d{2})/); // after - or to
-    if (match) endTimeStr = match[1];
-  }
-
-  // fallback? Try slotId itself "1000-1045"
-  if (!endTimeStr && session.slotId && session.slotId.includes('-')) {
-    let parts = session.slotId.split('-');
-    if (parts[1]?.length === 4) {
-      // "1045" → turn into HH:MM
-      endTimeStr = `${parts[1].slice(0, 2)}:${parts[1].slice(2)}`;
-    }
-  }
-
-  // fallback to 23:59 if not found
-  if (!endTimeStr) endTimeStr = "23:59";
-
-  // Compose full datetime string. session.date is YYYY-MM-DD
-  let datePart = session.date;
-  let dateObj: Date;
-  if (datePart.length === 10) {
-    // expected format
-    dateObj = new Date(`${datePart}T${endTimeStr}:00`);
-  } else {
-    // fallback: hand to Date parser
-    let fallback = new Date(session.date);
-    if (!isNaN(fallback.getTime())) {
-      let yyyy = fallback.getFullYear(),
-        mm = String(fallback.getMonth() + 1).padStart(2, "0"),
-        dd = String(fallback.getDate()).padStart(2, "0");
-      dateObj = new Date(`${yyyy}-${mm}-${dd}T${endTimeStr}:00`);
-    } else {
-      // Can't determine at all
-      return null;
-    }
-  }
-  return dateObj;
-}
+//   if (session.slotId) {
+//     const slot = SESSION_TIME_OPTIONS.find(opt => opt.id === session.slotId);
+//     if (slot && slot.label) {
+//       const labelMatch = slot.label.match(/to\s+(\d{2}:\d{2})/);
+//       if (labelMatch) endTimeStr = labelMatch[1];
+//     }
+//   }
+//   if (!endTimeStr && session.time) {
+//     let t = session.time;
+//     let match = t.match(/(?:-|to)\s*(\d{2}:\d{2})/);
+//     if (match) endTimeStr = match[1];
+//   }
+//   if (!endTimeStr && session.slotId && session.slotId.includes('-')) {
+//     let parts = session.slotId.split('-');
+//     if (parts[1]?.length === 4) {
+//       endTimeStr = `${parts[1].slice(0, 2)}:${parts[1].slice(2)}`;
+//     }
+//   }
+//   if (!endTimeStr) endTimeStr = "23:59";
+//   let datePart = session.date;
+//   let dateObj: Date;
+//   if (datePart.length === 10) {
+//     dateObj = new Date(`${datePart}T${endTimeStr}:00`);
+//   } else {
+//     let fallback = new Date(session.date);
+//     if (!isNaN(fallback.getTime())) {
+//       let yyyy = fallback.getFullYear(),
+//         mm = String(fallback.getMonth() + 1).padStart(2, "0"),
+//         dd = String(fallback.getDate()).padStart(2, "0");
+//       dateObj = new Date(`${yyyy}-${mm}-${dd}T${endTimeStr}:00`);
+//     } else {
+//       return null;
+//     }
+//   }
+//   return dateObj;
+// }
 
 export default function AllUpcomingSessions() {
   const [loading, setLoading] = useState(true);
-  // const [guideOpen, setGuideOpen] = useState(false);
   const [sessions, setSessions] = useState<UpcomingSession[]>([]);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [shownDate, setShownDate] = useState<string>("");
@@ -169,14 +148,16 @@ export default function AllUpcomingSessions() {
   const [selectedSessionIds, setSelectedSessionIds] = useState<string[]>([]);
   const [checkingIn, setCheckingIn] = useState<string[]>([]);
   const [multiCheckingIn, setMultiCheckingIn] = useState(false);
+  // const [missingIds, setMissingIds] = useState<string[]>([]);
+  const [missingInProgress, setMissingInProgress] = useState<string[]>([]);
+  const [multiMissingIn, setMultiMissingIn] = useState(false);
 
-  // isCheckedIn filter state: 'all', 'checkedIn', 'notCheckedIn'
-  const [checkedInFilter, setCheckedInFilter] = useState<'all' | 'checkedIn' | 'notCheckedIn'>('all');
+  // Filter state: 'all', 'checkedIn', 'notCheckedIn', 'missed'
+  const [checkedInFilter, setCheckedInFilter] = useState<'all' | 'checkedIn' | 'notCheckedIn' | 'missed'>('all');
 
   // Fetch all sessions (no filter)
   const fetchSessions = async () => {
     setFetchError(null);
-
     try {
       const token = localStorage.getItem("admin-token");
       const endpoint = `${API_URL}/api/admin/bookings/sessions`;
@@ -192,7 +173,6 @@ export default function AllUpcomingSessions() {
       if (!res.ok) throw new Error("Failed to fetch upcoming sessions");
 
       const data = await res.json();
-      console.log(data);
       if (!data.success) throw new Error(data.message || "API error");
       setShownDate(data.date);
 
@@ -219,30 +199,42 @@ export default function AllUpcomingSessions() {
 
   // Helper to get status for each session
   function getSessionStatus(session: UpcomingSession["session"]) {
-    // 1. Checked in?
-    if (session.isCheckedIn) {
-      return {
-        label: 'Checked In',
-        color: 'green',
-        icon: <FiCheckCircle size={13} />,
-      };
+    // session.status should always be one of the statuses; fallback to legacy boolean
+    switch (session.status) {
+      case "checkedIn":
+        return {
+          label: "Checked In",
+          color: "green",
+          icon: <FiCheckCircle size={13} />,
+        };
+      case "missed":
+        return {
+          label: "Missed",
+          color: "red",
+          icon: null,
+        };
+      case "cancelled":
+        return {
+          label: "Cancelled",
+          color: "orange",
+          icon: null,
+        };
+      case "scheduled":
+      default:
+        // old fallback: if checkedIn==true, treat as CheckedIn (legacy)
+        if (session.isCheckedIn) {
+          return {
+            label: "Checked In",
+            color: "green",
+            icon: <FiCheckCircle size={13} />,
+          };
+        }
+        return {
+          label: "Not Checked In",
+          color: "slate",
+          icon: null,
+        };
     }
-    // 2. Missed?
-    const now = new Date();
-    const endDateObj = getSessionEndDate(session);
-    if (endDateObj && endDateObj < now) {
-      return {
-        label: 'Missed',
-        color: 'red',
-        icon: null,
-      };
-    }
-    // 3. Not checked in (and not missed)
-    return {
-      label: 'Not Checked In',
-      color: 'slate',
-      icon: null,
-    };
   }
 
   // Handle selecting/unselecting session for multi select
@@ -254,10 +246,10 @@ export default function AllUpcomingSessions() {
     );
   }
 
-  // Bulk toggle all checkbox select for only non-checkedIn sessions
+  // Bulk toggle all checkbox select for only scheduled (not checkedIn or missed) sessions
   function handleAllCheckSelect(e: React.ChangeEvent<HTMLInputElement>) {
     if (e.target.checked) {
-      let filtered = filteredSessions.filter((s) => !s.session.isCheckedIn).map((s) => s.session._id);
+      let filtered = filteredSessions.filter((s) => (s.session.status === "scheduled" || (!s.session.status && !s.session.isCheckedIn))).map((s) => s.session._id);
       setSelectedSessionIds(filtered);
     } else {
       setSelectedSessionIds([]);
@@ -270,7 +262,6 @@ export default function AllUpcomingSessions() {
     setFetchError(null);
     try {
       const token = localStorage.getItem("admin-token");
-      // Find bookingId for this sessionId
       const sessionObj = sessions.find((s) => s.session._id === sessionId);
       const bookingId = sessionObj?.bookingId;
       const res = await fetch(`${API_URL}/api/admin/bookings/check-in`, {
@@ -284,14 +275,41 @@ export default function AllUpcomingSessions() {
       if (!res.ok) throw new Error("Failed to check-in session");
       const data = await res.json();
       if (!data.success) throw new Error(data.message || "Check-in error");
-      // Refresh sessions list
       await fetchSessions();
-      // Remove from selected if it was selected
       setSelectedSessionIds((ids) => ids.filter((id) => id !== sessionId));
     } catch (error: any) {
       setFetchError(error.message || "Could not check-in session");
     } finally {
       setCheckingIn((prev) => prev.filter((id) => id !== sessionId));
+    }
+  }
+
+  // Handle single session Missed ("Mark as Missed")
+  async function handleSessionMissed(sessionId: string) {
+    setMissingInProgress((prev) => [...prev, sessionId]);
+    setFetchError(null);
+    try {
+      const token = localStorage.getItem("admin-token");
+      const sessionObj = sessions.find((s) => s.session._id === sessionId);
+      const bookingId = sessionObj?.bookingId;
+      // endpoint as per bookings-admin.routes.js @miss-session
+      const res = await fetch(`${API_URL}/api/admin/bookings/mark-missed`, {
+        method: "POST",
+        headers: {
+          Authorization: `${token || ""}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ sessionId, bookingId }),
+      });
+      if (!res.ok) throw new Error("Failed to mark session as missed");
+      const data = await res.json();
+      if (!data.success) throw new Error(data.message || "Mark missed error");
+      await fetchSessions();
+      // setMissingIds((ids) => [...ids, sessionId]);
+    } catch (error: any) {
+      setFetchError(error.message || "Could not mark session as missed");
+    } finally {
+      setMissingInProgress((prev) => prev.filter((id) => id !== sessionId));
     }
   }
 
@@ -315,7 +333,6 @@ export default function AllUpcomingSessions() {
           body: JSON.stringify({ sessionId, bookingId }),
         });
       }
-      // After all, re-fetch list
       await fetchSessions();
       setSelectedSessionIds([]);
     } catch (error: any) {
@@ -325,16 +342,58 @@ export default function AllUpcomingSessions() {
     }
   }
 
+  // Multi mark-missed
+  async function handleMultiMissed() {
+    if (selectedSessionIds.length === 0) return;
+    setMultiMissingIn(true);
+    setFetchError(null);
+    try {
+      const token = localStorage.getItem("admin-token");
+      for (let i = 0; i < selectedSessionIds.length; ++i) {
+        const sessionId = selectedSessionIds[i];
+        const sessionObj = sessions.find((s) => s.session._id === sessionId);
+        const bookingId = sessionObj?.bookingId;
+        await fetch(`${API_URL}/api/admin/bookings/mark-missed`, {
+          method: "POST",
+          headers: {
+            Authorization: `${token || ""}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ sessionId, bookingId }),
+        });
+      }
+      await fetchSessions();
+      setSelectedSessionIds([]);
+    } catch (error: any) {
+      setFetchError(error.message || "Could not bulk mark selected as missed");
+    } finally {
+      setMultiMissingIn(false);
+    }
+  }
+
   // Filtering logic
   let filteredSessions = sessions;
   if (checkedInFilter === "checkedIn") {
-    filteredSessions = sessions.filter((s) => s.session.isCheckedIn);
+    filteredSessions = sessions.filter(
+      (s) => s.session.status === "checkedIn" || (!s.session.status && s.session.isCheckedIn)
+    );
   } else if (checkedInFilter === "notCheckedIn") {
-    filteredSessions = sessions.filter((s) => !s.session.isCheckedIn);
+    filteredSessions = sessions.filter(
+      (s) => s.session.status === "scheduled" || (!s.session.status && !s.session.isCheckedIn)
+    );
+  } else if (checkedInFilter === "missed") {
+    filteredSessions = sessions.filter(
+      (s) => s.session.status === "missed"
+    );
   }
 
-  // For select-all: how many not checked-in in filtered?
-  const notCheckedInCount = filteredSessions.filter((x) => !x.session.isCheckedIn).length;
+  // For select-all: how many scheduled (not checkedIn or missed) in filtered?
+  const notCheckedInCount = filteredSessions.filter((x) =>
+    (x.session.status === "scheduled" || (!x.session.status && !x.session.isCheckedIn))
+  ).length;
+
+  // For select-all missed: how many missed status in filtered
+  // const missedCount = filteredSessions.filter((x) => x.session.status === "missed").length;
 
   return (
     <motion.div
@@ -352,18 +411,23 @@ export default function AllUpcomingSessions() {
         </h1>
       </div>
 
-      {/* Filter Bar: Checked-in */}
+      {/* Filter Bar: Checked-in / Missed / Not Checked-in */}
       <div className="mb-4 flex gap-4 items-center">
         <label className="font-medium text-slate-700">Show:</label>
         <select
           className="rounded border border-slate-300 px-2 py-1 text-sm"
           value={checkedInFilter}
-          onChange={e => setCheckedInFilter(e.target.value as 'all' | 'checkedIn' | 'notCheckedIn')}
-          style={{ minWidth: 140 }}
+          onChange={e =>
+            setCheckedInFilter(
+              e.target.value as 'all' | 'checkedIn' | 'notCheckedIn' | 'missed'
+            )
+          }
+          style={{ minWidth: 170 }}
         >
           <option value="all">All Sessions</option>
           <option value="notCheckedIn">Not Checked-In</option>
           <option value="checkedIn">Checked-In</option>
+          <option value="missed">Missed</option>
         </select>
       </div>
 
@@ -393,7 +457,7 @@ export default function AllUpcomingSessions() {
               {filteredSessions.length} result{filteredSessions.length === 1 ? "" : "s"}
             </span>
           </div>
-          {notCheckedInCount > 0 && checkedInFilter !== "checkedIn" && (
+          {notCheckedInCount > 0 && checkedInFilter !== "checkedIn" && checkedInFilter !== "missed" && (
             <div className="flex gap-4 items-center mb-3">
               <div className="flex items-center select-none">
                 <input
@@ -421,6 +485,20 @@ export default function AllUpcomingSessions() {
               >
                 {multiCheckingIn ? "Processing..." : `Check-in Selected (${selectedSessionIds.length})`}
               </button>
+              <button
+                onClick={handleMultiMissed}
+                disabled={
+                  multiMissingIn ||
+                  selectedSessionIds.length === 0 ||
+                  notCheckedInCount === 0
+                }
+                className={`rounded bg-red-600 text-white px-4 py-1 font-semibold text-xs hover:bg-red-700 transition-all
+                  ${multiMissingIn || selectedSessionIds.length === 0 ? "opacity-60 cursor-not-allowed" : ""}
+                `}
+                type="button"
+              >
+                {multiMissingIn ? "Processing..." : `Mark as Missed (${selectedSessionIds.length})`}
+              </button>
             </div>
           )}
 
@@ -435,14 +513,12 @@ export default function AllUpcomingSessions() {
                   <tr>
                     <th className="py-2 px-2 border-b font-semibold w-8"></th>
                     <th className="py-2 px-2 border-b font-semibold">Session ID</th>
-
                     <th className="py-2 px-2 border-b font-semibold">Date</th>
                     <th className="py-2 px-2 border-b font-semibold">Time Slot</th>
                     <th className="py-2 px-2 border-b font-semibold">Patient</th>
                     <th className="py-2 px-2 border-b font-semibold">Therapist</th>
                     <th className="py-2 px-2 border-b font-semibold">Therapy</th>
                     <th className="py-2 px-2 border-b font-semibold">Appt# / Booking</th>
-                    {/* <th className="py-2 px-2 border-b font-semibold">Package</th> */}
                     <th className="py-2 px-2 border-b font-semibold">Status</th>
                     <th className="py-2 px-2 border-b font-semibold"></th>
                   </tr>
@@ -458,11 +534,8 @@ export default function AllUpcomingSessions() {
                       s.session?.therapist?.therapistId ??
                       s.session?.therapist?._id ??
                       "";
-                    const isUnchecked = !s.session.isCheckedIn;
-
+                    const isUnchecked = (s.session.status === "scheduled" || (!s.session.status && !s.session.isCheckedIn));
                     const isSelected = selectedSessionIds.includes(s.session._id);
-
-                    // Calculate new status (Missed/Checked In/Not Checked In)
                     const sessionStatus = getSessionStatus(s.session);
 
                     return (
@@ -472,7 +545,7 @@ export default function AllUpcomingSessions() {
                         style={{ background: isUnchecked && isSelected ? "#e0f2fe" : undefined }}
                       >
                         <td className="py-2 px-2 text-center">
-                          {!s.session.isCheckedIn && checkedInFilter !== "checkedIn" ? (
+                          {isUnchecked && checkedInFilter !== "checkedIn" && checkedInFilter !== "missed" ? (
                             <input
                               type="checkbox"
                               checked={isSelected}
@@ -539,9 +612,6 @@ export default function AllUpcomingSessions() {
                             {s.bookingId}
                           </div>
                         </td>
-                        {/* <td className="py-2 px-2">
-                          {s.package?.packageName || s.package?.packageType || "—"}
-                        </td> */}
                         <td className="py-2 px-2">
                           <span
                             className={[
@@ -558,6 +628,8 @@ export default function AllUpcomingSessions() {
                                 ? "bg-green-50 text-green-700"
                                 : sessionStatus.color === 'red'
                                 ? "bg-red-50 text-red-600"
+                                : sessionStatus.color === 'orange'
+                                ? "bg-orange-100 text-orange-700"
                                 : "bg-slate-100 text-slate-500"
                             ].join(' ')}
                             style={{ whiteSpace: 'nowrap' }}
@@ -566,20 +638,32 @@ export default function AllUpcomingSessions() {
                             {sessionStatus.icon}
                           </span>
                         </td>
-                   
                         <td className="py-2 px-2 text-center">
-                          {!s.session.isCheckedIn && checkedInFilter !== "checkedIn" && (
-                            <button
-                              className="rounded bg-green-600 text-white px-3 py-1 font-semibold text-xs hover:bg-green-700 transition-all"
-                              onClick={() => handleSessionCheckIn(s.session._id)}
-                              disabled={checkingIn.includes(s.session._id)}
-                              type="button"
-                              style={{ minWidth: 90 }}
-                            >
-                              {checkingIn.includes(s.session._id)
-                                ? "Checking in..."
-                                : "Check-in"}
-                            </button>
+                          {isUnchecked && checkedInFilter !== "checkedIn" && checkedInFilter !== "missed" && (
+                            <div className="flex gap-1 flex-col md:flex-row md:gap-2">
+                              <button
+                                className="rounded bg-green-600 text-white px-3 py-1 font-semibold text-xs hover:bg-green-700 transition-all"
+                                onClick={() => handleSessionCheckIn(s.session._id)}
+                                disabled={checkingIn.includes(s.session._id)}
+                                type="button"
+                                style={{ minWidth: 90 }}
+                              >
+                                {checkingIn.includes(s.session._id)
+                                  ? "Checking in..."
+                                  : "Check-in"}
+                              </button>
+                              <button
+                                className="rounded bg-red-600 text-white px-3 py-1 font-semibold text-xs hover:bg-red-700 transition-all"
+                                onClick={() => handleSessionMissed(s.session._id)}
+                                disabled={missingInProgress.includes(s.session._id)}
+                                type="button"
+                                style={{ minWidth: 98 }}
+                              >
+                                {missingInProgress.includes(s.session._id)
+                                  ? "Marking…"
+                                  : "Mark Missed"}
+                              </button>
+                            </div>
                           )}
                         </td>
                       </tr>

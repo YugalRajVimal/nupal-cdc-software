@@ -284,6 +284,33 @@ function CheckInConfirmationModal({ open, onClose, onConfirm, session, booking }
   );
 }
 
+// ─── MarkMissedConfirmationModal ─────────────────────────────────────────────────
+
+function MarkMissedConfirmationModal({ open, onClose, onConfirm, session, booking }: any) {
+  if (!open) return null;
+  return (
+    <div className="fixed z-40 inset-0 flex items-center justify-center bg-black/20">
+      <div className="bg-white rounded shadow-lg p-6 w-[95vw] max-w-xs relative">
+        <div className="flex items-center gap-2 mb-3">
+          <FiCheckCircle className="text-rose-500" size={24} />
+          <div className="font-semibold text-rose-700 text-base">Mark Session as Missed?</div>
+        </div>
+        <div className="mb-4 text-sm">
+          Are you sure you want to mark this session as <strong>Missed</strong>?
+          <div className="mt-2 text-xs p-2 rounded bg-red-50 border border-red-100">
+            <div><b>Date:</b> {session?.date ? formatDateDDMMYYYY(session.date) : ''}</div>
+            <div><b>Booking ID:</b> {booking?.appointmentId}</div>
+          </div>
+        </div>
+        <div className="flex justify-end gap-2">
+          <button onClick={onClose} className="text-xs px-3 py-1 rounded border border-slate-300 text-slate-700 hover:bg-slate-50">Cancel</button>
+          <button onClick={onConfirm} className="text-xs px-3 py-1 rounded border border-rose-500 text-rose-700 font-semibold bg-rose-100 hover:bg-rose-200">Yes, Mark Missed</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── BookingSummary ───────────────────────────────────────────────────────────
 
 type BookingSummaryProps = {
@@ -299,41 +326,52 @@ type BookingSummaryProps = {
 };
 
 // --- Utility for session time: "YYYY-MM-DD" + slotId to Date ---
-function getSessionDateTime(session: any) {
-  // s.date: ISO or YYYY-MM-DD, s.slotId: i.e. "09-10" or in SESSION_TIME_OPTIONS
-  if (!session || !session.date) return null;
-  // Find slot
-  let slotObj = undefined;
-  if (session.slotId) {
-    slotObj = SESSION_TIME_OPTIONS.find(opt => opt.id === session.slotId);
+// function getSessionDateTime(session: any) {
+//   if (!session || !session.date) return null;
+//   let slotObj = undefined;
+//   if (session.slotId) {
+//     slotObj = SESSION_TIME_OPTIONS.find(opt => opt.id === session.slotId);
+//   }
+//   let time = "09:00";
+//   if (slotObj && slotObj.label) {
+//     if (slotObj.label) {
+//       const match = slotObj.label.match(/(\d{1,2}:\d{2})\s*-/);
+//       if (match) {
+//         time = match[1];
+//       } else {
+//         const h = slotObj.label.match(/(\d{1,2})\s*-/)?.[1];
+//         if (h) time = `${h.padStart(2, "0")}:00`;
+//       }
+//     }
+//   } else if (typeof session.slotId === "string" && /\d{1,2}-\d{1,2}/.test(session.slotId)) {
+//     const hours = session.slotId.split("-")[0]?.padStart(2, "0");
+//     time = hours ? `${hours}:00` : "09:00";
+//   }
+//   let dtString = `${session.date}T${time}`;
+//   let dt = new Date(dtString);
+//   if (isNaN(dt.getTime())) {
+//     dt = new Date(session.date);
+//   }
+//   return dt;
+// }
+
+// SESSION STATUS MAPPING: 
+// "checkedIn" (or isCheckedIn: true) = Checked In, 
+// "missed" = Missed, 
+// else "notCheckedIn" (or isCheckedIn: false, status: pending, etc)
+function sessionStatusLabel(session: any) {
+  // Check for explicit session.status
+  if (session.status === "checkedIn" || session.isCheckedIn === true) {
+    return { label: "Checked In", color: "green-700" };
   }
-  let time = "09:00"; // fallback default
-  if (slotObj && slotObj.label) {
-    // Parse from label: e.g. "9:00 - 10:00 AM"
-    // But best: slotObj.startTime or .from or .start (but original has only label/id)
-    // slotObj does not have 'startTime', so only parse from label
-    if (slotObj.label) {
-      const match = slotObj.label.match(/(\d{1,2}:\d{2})\s*-/);
-      if (match) {
-        time = match[1];
-      } else {
-        const h = slotObj.label.match(/(\d{1,2})\s*-/)?.[1];
-        if (h) time = `${h.padStart(2, "0")}:00`;
-      }
-    }
-  } else if (typeof session.slotId === "string" && /\d{1,2}-\d{1,2}/.test(session.slotId)) {
-    // try to infer from slotId
-    const hours = session.slotId.split("-")[0]?.padStart(2, "0");
-    time = hours ? `${hours}:00` : "09:00";
+  if (
+    session.status === "missed" ||
+    session.isMissed === true
+  ) {
+    return { label: "Missed", color: "gray-500" };
   }
-  // Combine date and time
-  let dtString = `${session.date}T${time}`;
-  let dt = new Date(dtString);
-  // In rare case time missing or invalid, fallback to just date
-  if (isNaN(dt.getTime())) {
-    dt = new Date(session.date);
-  }
-  return dt;
+  // Fallback/default: not checked in
+  return { label: "Not Checked In", color: "red-600" };
 }
 
 export function BookingSummary({
@@ -345,25 +383,19 @@ export function BookingSummary({
   const [bookingsError, setLocalBookingsError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
-  // const [total, setTotal] = useState(0);
 
-  // Search/filter state
   const [searchTerm, setSearchTerm] = useState("");
   const [filterTherapist, setFilterTherapist] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [therapistList, setTherapistList] = useState<Therapist[]>([]);
 
   // ----------- SESSION THERAPISTS FOR DROPDOWN -----------
-  // Memoized list of unique therapists that are present in any session
   const sessionTherapistOptions = useMemo(() => {
-    // Collect all therapist objects from all sessions across all bookings
     const therapistMap: Map<string, Therapist> = new Map();
-
     bookings.forEach((booking: any) => {
       if (!Array.isArray(booking.sessions)) return;
       booking.sessions.forEach((session: any) => {
         const t = session.therapist;
-        // Prefer _id. If duplicate with different therapistId/name, first seen wins.
         if (t && typeof t === "object" && t._id) {
           if (!therapistMap.has(t._id)) {
             therapistMap.set(t._id, t);
@@ -371,10 +403,7 @@ export function BookingSummary({
         }
       });
     });
-
-    // Convert map to sorted array
     return Array.from(therapistMap.values()).sort((a, b) => {
-      // Sort by name
       const aName = (a.userId?.name || a.name || "").toLowerCase();
       const bName = (b.userId?.name || b.name || "").toLowerCase();
       if (aName < bName) return -1;
@@ -395,13 +424,16 @@ export function BookingSummary({
   const [checkInLoading, setCheckInLoading] = useState(false);
   const [checkInError, setCheckInError] = useState<string | null>(null);
 
-  // const totalPages = Math.ceil(total / pageSize);
+  // Missed Modal
+  const [missedModalOpen, setMissedModalOpen] = useState(false);
+  const [missedSession, setMissedSession] = useState<any>(null);
+  const [missedBooking, setMissedBooking] = useState<any>(null);
+  const [missedLoading, setMissedLoading] = useState(false);
+  const [missedError, setMissedError] = useState<string | null>(null);
 
-  // Fetch therapist list for filter dropdown (optional, can be optimized)
   useEffect(() => {
     let endpoint = import.meta.env.VITE_API_URL || (window as any).VITE_API_URL;
     if (endpoint) endpoint = endpoint.replace(/\/$/, "");
-    // Fetch therapists on mount only
     fetch(`${endpoint}/api/admin/therapists?limit=100`)
       .then(async (res) => {
         if (!res.ok) return;
@@ -411,20 +443,14 @@ export function BookingSummary({
       .catch(() => setTherapistList([]));
   }, []);
 
-  // --- SEARCH & FILTER HANDLING FOR LOCAL DATA ---
-
-  // Returns a normalized string for flexible search
   const normalize = (v: any) =>
     (typeof v === "string" ? v : v?.toString() ?? "")
       .toLowerCase()
       .trim();
 
-  // Main local filtered bookings
   const filteredBookings = bookings
     .filter((booking: any) => {
-      // Filtering by therapist
       if (filterTherapist) {
-        // Filter if neither booking therapist nor any of this booking's session's therapist matches
         const therapistMatch =
           booking.therapist?._id === filterTherapist ||
           booking.therapistId === filterTherapist ||
@@ -438,22 +464,16 @@ export function BookingSummary({
           );
         if (!therapistMatch) return false;
       }
-
-      // Filtering by payment status
       if (
         filterStatus &&
         normalize(booking.payment?.status) !== normalize(filterStatus)
       ) {
         return false;
       }
-
-      // Fuzzy searching on Booking ID, Patient Name/Id, Therapist name/id, Therapy name, Package, Remark, etc.
       if (searchTerm.trim()) {
         const query = normalize(searchTerm);
         const patient = booking?.patient;
         const therapist = booking?.therapist || getTherapistObject(booking);
-
-        // Compose possible searchable string fields
         const valuesToSearch = [
           booking.appointmentId,
           patient?.name,
@@ -466,7 +486,6 @@ export function BookingSummary({
           booking?.package?.name || getPackageDisplay(booking.package),
           booking?.remark,
         ].filter(Boolean).map(normalize);
-
         if (!valuesToSearch.some((field) => field.includes(query))) {
           return false;
         }
@@ -474,7 +493,6 @@ export function BookingSummary({
       return true;
     });
 
-  // Pagination logic on filtered bookings (pagination must be applied _after_ filtering)
   const pagedBookings = filteredBookings.slice(
     (page - 1) * pageSize,
     (page - 1) * pageSize + pageSize
@@ -482,21 +500,16 @@ export function BookingSummary({
   const filteredTotal = filteredBookings.length;
   const filteredPages = Math.ceil(filteredTotal / pageSize);
 
-  // Local calculation for session count on displayed bookings
   const totalSessionCount = pagedBookings && Array.isArray(pagedBookings)
     ? pagedBookings.reduce((acc, b) => acc + (Array.isArray(b.sessions) ? b.sessions.length : 0), 0)
     : 0;
 
-  // Keep selection and page valid as filters/search changes
   useEffect(() => {
-    // If page becomes out of bounds due to filtering, reset to 1
     if (page > filteredPages && filteredPages > 0) {
       setPage(1);
     }
-    // Reset page when filter/search changes
   }, [searchTerm, filterTherapist, filterStatus, filteredPages]);
 
-  // On _remote_ data load, getBookings still called as usual
   function fetchBookings() {
     setLocalBookingsLoading(true);
     setBookingsLoading(true);
@@ -505,14 +518,13 @@ export function BookingSummary({
     let endpoint = import.meta.env.VITE_API_URL || (window as any).VITE_API_URL;
     if (endpoint) endpoint = endpoint.replace(/\/$/, "");
     const params = new URLSearchParams();
-    params.append("page", "1"); // always fetch all (page 1)
-    params.append("pageSize", "10000"); // get ALL available
+    params.append("page", "1");
+    params.append("pageSize", "10000");
     fetch(`${endpoint}/api/admin/bookings?${params.toString()}`)
       .then(async (res) => {
         if (!res.ok) throw new Error("Could not fetch bookings.");
         const data = await res.json();
         setBookings(data?.bookings || []);
-        // setTotal(data?.bookings?.length || 0); // For total, show all
         setLocalBookingsLoading(false);
         setBookingsLoading(false);
       })
@@ -523,7 +535,7 @@ export function BookingSummary({
         setBookingsLoading(false);
       });
   }
-  useEffect(() => { fetchBookings(); }, []); // ONLY on mount
+  useEffect(() => { fetchBookings(); }, []);
 
   const handleModalCollectPayment = (booking: any) => {
     let discountPercent = 0;
@@ -581,7 +593,41 @@ export function BookingSummary({
     }
   };
 
-  // Handle search bar and controls
+  // Missed modal logic
+  const openMissedModal = (booking: any, session: any) => {
+    setMissedBooking(booking);
+    setMissedSession(session);
+    setMissedError(null);
+    setMissedModalOpen(true);
+  };
+  const closeMissedModal = () => {
+    setMissedBooking(null); setMissedSession(null);
+    setMissedError(null); setMissedModalOpen(false);
+  };
+
+  const handleConfirmMissed = async () => {
+    if (!missedBooking || !missedSession) return;
+    setMissedLoading(true); setMissedError(null);
+    let endpoint = import.meta.env.VITE_API_URL || (window as any).VITE_API_URL;
+    if (endpoint) endpoint = endpoint.replace(/\/$/, "");
+    try {
+      // API: POST /api/admin/bookings/mark-missed
+      const res = await fetch(`${endpoint}/api/admin/bookings/mark-missed`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `${localStorage.getItem("admin-token") || ""}`,
+        },
+        body: JSON.stringify({ bookingId: missedBooking._id, sessionId: missedSession._id }),
+      });
+      if (!res.ok) { const t = await res.text(); throw new Error(t || "Failed to mark session as missed."); }
+      closeMissedModal(); setMissedLoading(false); fetchBookings();
+    } catch (err: any) {
+      setMissedError(err.message || "Unable to mark as missed.");
+      setMissedLoading(false);
+    }
+  };
+
   const onSearchInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(e.target.value);
     setPage(1);
@@ -591,7 +637,6 @@ export function BookingSummary({
     setPage(1);
   };
 
-  // Reset filters
   const resetFilters = () => {
     setSearchTerm("");
     setFilterTherapist("");
@@ -599,17 +644,10 @@ export function BookingSummary({
     setPage(1);
   };
 
-  // Helper: Get session status text
-  function getSessionStatus(session: any) {
-    const checkedIn = session.isCheckedIn === true;
-    const dt = getSessionDateTime(session);
-    const now = new Date();
-    // If checked in, always show as checked in, regardless of time
-    if (checkedIn) return <span className="text-green-700 font-semibold">Checked In</span>;
-    // If not checked in and current time is past session time, show as "Missed"
-    if (dt && now > dt) return <span className="text-gray-500 font-semibold">Missed</span>;
-    // If not checked in and not past, normal "Not Checked In"
-    return <span className="text-red-600 font-semibold">Not Checked In</span>;
+  // Helper: Get session status label for UI
+  function getSessionStatusUI(session: any) {
+    const status = sessionStatusLabel(session);
+    return <span className={`text-${status.color} font-semibold`}>{status.label}</span>;
   }
 
   return (
@@ -626,6 +664,13 @@ export function BookingSummary({
         onConfirm={handleConfirmCheckIn}
         session={checkInSession}
         booking={checkInBooking}
+      />
+      <MarkMissedConfirmationModal
+        open={missedModalOpen}
+        onClose={closeMissedModal}
+        onConfirm={handleConfirmMissed}
+        session={missedSession}
+        booking={missedBooking}
       />
 
       <div className="bg-white border rounded-lg p-4 text-sm">
@@ -656,15 +701,12 @@ export function BookingSummary({
               onChange={e => { setFilterTherapist(e.target.value); setPage(1); }}
             >
               <option value="">All Therapists</option>
-              {/* Show all unique therapists (from sessions), then therapists from master list that are not already included */}
-              {/* Session therapists (unique by _id) */}
               {sessionTherapistOptions.map((t) =>
                 <option key={t._id} value={t._id}>
                   {(t.userId?.name || t.name) ?? ""}
                   {t.therapistId ? ` (${t.therapistId})` : ""}
                 </option>
               )}
-              {/* From master therapistList, skip if already in sessionTherapistOptions */}
               {therapistList
                 .filter(
                   masterT =>
@@ -737,7 +779,6 @@ export function BookingSummary({
               const paymentAmount = booking.payment?.amount;
               const paidAmount = booking.payment?.amountPaid;
 
-              // Calculate discount percent for display
               let discountPercent = 0;
               if (booking.discountInfo && booking.discountInfo.coupon && booking.discountInfo.coupon.discountEnabled) {
                 discountPercent = Number(booking.discountInfo.coupon.discount) || 0;
@@ -828,7 +869,6 @@ export function BookingSummary({
                       <span className="font-mono">
                         ₹
                         {(() => {
-                          // Calculate due based on paid, discount, and invoice
                           const baseAmt = typeof paymentAmount === "number"
                             ? (discountPercent > 0
                               ? calcDiscountedAmount(paymentAmount, discountPercent)
@@ -882,10 +922,13 @@ export function BookingSummary({
                         {checkInError && checkInBooking?._id === booking._id && (
                           <div className="text-xs text-red-600 mb-2">{checkInError}</div>
                         )}
-                        <table className="min-w-[900px] w-fit border-collapse text-xs">
+                        {missedError && missedBooking?._id === booking._id && (
+                          <div className="text-xs text-red-600 mb-2">{missedError}</div>
+                        )}
+                        <table className="min-w-[900px] w-full border-collapse text-xs">
                           <thead>
                             <tr>
-                              {["#", "Session ID", "Date", "Time Slot", "Therapist", "Therapy Type", "Checked In", ""].map((h) => (
+                              {["#", "Session ID", "Date", "Time Slot", "Therapist", "Therapy Type", "Status", "Actions"].map((h) => (
                                 <th key={h} className="px-2 py-1 border border-slate-200 bg-slate-100 font-semibold text-left">{h}</th>
                               ))}
                             </tr>
@@ -898,7 +941,11 @@ export function BookingSummary({
                                 s.therapyTypeId && typeof s.therapyTypeId === "object"
                                   ? s.therapyTypeId
                                   : typeof s.therapyType === "string" ? s.therapyType : undefined;
-                              // const checkedIn = s.isCheckedIn === true;
+
+                              // -- Statuses as per session.status --
+                              const status = sessionStatusLabel(s);
+                              const isCheckedIn = status.label === "Checked In";
+                              const isMissed = status.label === "Missed";
 
                               return (
                                 <tr key={s._id || s.date + "-" + idx}>
@@ -917,24 +964,28 @@ export function BookingSummary({
                                       : <span className="text-gray-400">—</span>}
                                   </td>
                                   <td className="px-2 py-1 border border-slate-200 whitespace-nowrap">
-                                    {getSessionStatus(s)}
+                                    {getSessionStatusUI(s)}
                                   </td>
-                                  <td className="px-2 py-1 border border-slate-200 whitespace-nowrap text-right">
-                                    {(s.isCheckedIn !== true && (() => {
-                                      // Show check-in button only if not checked in AND not missed
-                                      const dt = getSessionDateTime(s);
-                                      const now = new Date();
-                                      if (dt && now > dt) return null; // Don't show if missed
-                                      return (
+                                  <td className="px-2 py-1 border border-slate-200 whitespace-nowrap text-right flex gap-2">
+                                    {/* Actions: Mark as CheckedIn or Mark as Missed (if neither) */}
+                                    {!isCheckedIn && !isMissed && (
+                                      <>
                                         <button
-                                          className={`text-xs rounded px-2 py-1 border border-green-500 text-green-700 hover:bg-green-50 flex items-center gap-1 ${checkInLoading ? "opacity-60 cursor-not-allowed" : ""}`}
+                                          className={`text-xs rounded px-2 py-1 border  border-green-500 text-green-700 hover:bg-green-50 flex items-center gap-1 ${checkInLoading ? "opacity-60 cursor-not-allowed" : ""}`}
                                           disabled={checkInLoading}
                                           onClick={() => openCheckInModal(booking, s)}
                                         >
                                           <FiCheckCircle /> Mark Session Completed
                                         </button>
-                                      );
-                                    })())}
+                                        <button
+                                          className={`ml-2 text-xs rounded px-2 py-1 border border-rose-400 text-rose-700 hover:bg-rose-50 flex items-center gap-1 ${missedLoading ? "opacity-60 cursor-not-allowed" : ""}`}
+                                          disabled={missedLoading}
+                                          onClick={() => openMissedModal(booking, s)}
+                                        >
+                                          <FiX /> Mark Missed
+                                        </button>
+                                      </>
+                                    )}
                                   </td>
                                 </tr>
                               );

@@ -53,8 +53,7 @@ type Appointment = {
   therapistUserId: string;
   sessionId: string;
   time?: string;
-  status?: "scheduled" | "checked-in";
-  isCheckedIn?: boolean;
+  status?: "scheduled" | "checked-in" | "missed";
   [key: string]: any;
 };
 
@@ -72,7 +71,7 @@ type PaymentInfo = {
   amountPaid?: number | string;
   discountInfo?: DiscountInfo;
   coupon?: Coupon;
-  discountPercent?: number; // For new CollectPaymentModal logic
+  discountPercent?: number;
   [key: string]: any;
 };
 
@@ -87,26 +86,6 @@ function formatDateDDMMYYYY(dateString: string | undefined): string {
   return `${dd}/${mm}/${yyyy}`;
 }
 
-// Helper: Build a JS date for a session from today+slot
-function getSessionDateTime(todayISO: string, slotId: string | undefined): Date | null {
-  if (!todayISO || !slotId) return null;
-  // todayISO: e.g. "2024-06-14"
-  // slotId: e.g. "1000-1045"
-  // Use first 4 digits for start: "1000" => 10:00, "0830" => 8:30
-  let slot = slotId;
-  if (slot.includes('-')) slot = slot.split('-')[0]; // get start time
-  if (slot.length === 9) slot = slot.substring(0, 4); // e.g. "1000-1045" -> "1000"
-  if (!/^\d{4}$/.test(slot)) return null;
-  const hour = Number(slot.substring(0, 2));
-  const minute = Number(slot.substring(2, 4));
-  if (isNaN(hour) || isNaN(minute)) return null;
-  // Combine date and time
-  const [yyyy, mm, dd] = todayISO.split("-");
-  if (!yyyy || !mm || !dd) return null;
-  return new Date(Number(yyyy), Number(mm) - 1, Number(dd), hour, minute, 0);
-}
-
-// Utilities for new CollectPaymentModal (for prompt)
 function toNumber(v: any): number | undefined {
   if (typeof v === "number") return v;
   if (typeof v === "string" && v.trim() !== "") {
@@ -141,16 +120,13 @@ function CollectPaymentModal({ open, onClose, payment, onCollected }: CollectPay
   const [collectType, setCollectType] = useState<"full" | "partial">("full");
   const [partialValue, setPartialValue] = useState("");
   const [loading, setLoading] = useState(false);
-  // Option to apply or not apply the discount
   const [applyDiscount, setApplyDiscount] = useState(true);
 
-  // Determine discount percent (use coupon->discount or discountInfo->percent)
   const discountPercent =
     payment && typeof getDiscountPercent(payment) === "number"
       ? getDiscountPercent(payment)
       : 0;
 
-  // The original invoice amount (before discount)
   const paymentAmountOriginal = payment ? toNumber(payment.paymentAmount ?? payment.totalAmount) : undefined;
 
   const discountedAmount =
@@ -171,7 +147,6 @@ function CollectPaymentModal({ open, onClose, payment, onCollected }: CollectPay
       ? paymentAmount - amountAlreadyPaid
       : paymentAmount;
 
-  // reset state on open
   useEffect(() => {
     if (open) {
       setCollectType("full");
@@ -196,7 +171,6 @@ function CollectPaymentModal({ open, onClose, payment, onCollected }: CollectPay
         paymentType: collectType,
         applyDiscount,
       };
-      // ADD: discountApplied field if discount applied
       if (typeof discountPercent === "number" && discountPercent > 0 && applyDiscount) {
         body.discountApplied = true;
       } else {
@@ -268,7 +242,6 @@ function CollectPaymentModal({ open, onClose, payment, onCollected }: CollectPay
                 ({payment.patientId})
               </span>
               <br />
-              {/* Show original payment amount if a discount is available */}
               {typeof discountPercent === "number" && discountPercent > 0 && (
                 <span className="text-xs text-slate-400 block">
                   Original Invoice Amount:{" "}
@@ -277,8 +250,6 @@ function CollectPaymentModal({ open, onClose, payment, onCollected }: CollectPay
                   </span>
                 </span>
               )}
-         
-              {/* Show Discount options if discount is present */}
               {typeof discountPercent === "number" && discountPercent > 0 && (
                 <div>
                   <div className="mb-1 text-xs">
@@ -295,7 +266,6 @@ function CollectPaymentModal({ open, onClose, payment, onCollected }: CollectPay
                   </div>
                 </div>
               )}
-
               <span className="text-xs text-slate-500 block">
                 Invoice Amount:{" "}
                 <span className="font-semibold text-slate-700">
@@ -320,7 +290,6 @@ function CollectPaymentModal({ open, onClose, payment, onCollected }: CollectPay
                   ₹{typeof paymentDue === "number" ? paymentDue : "—"}
                 </span>
               </span>
-              {/* Show discount percent if present and option to apply is unchecked */}
               {typeof discountPercent === "number" &&
                 discountPercent > 0 &&
                 applyDiscount && (
@@ -418,9 +387,9 @@ export default function ReceptionDesk() {
   const [payments, setPayments] = useState<PaymentInfo[]>([]);
   const [today, setToday] = useState<string>("");
 
-  // Multi-select state for appointments
   const [selectedAppointments, setSelectedAppointments] = useState<{ [_id_session: string]: boolean }>({});
   const [multiCheckingIn, setMultiCheckingIn] = useState(false);
+  const [multiMarkingMissed, setMultiMarkingMissed] = useState(false); // NEW: For missed action
 
   useEffect(() => {
     let ignore = false;
@@ -436,12 +405,12 @@ export default function ReceptionDesk() {
         });
         if (!res.ok) throw new Error("Failed to load reception desk");
         const data = await res.json();
+        console.log(data);
         if (!data.success) throw new Error(data.message || "API error");
         if (ignore) return;
 
         setToday(data.today);
 
-        // ---- Today's Appointments ----
         const todays: Appointment[] = (data.todaysBookings || []).map((booking: any) => {
           const session = booking.session;
           let therapistName = "";
@@ -463,8 +432,14 @@ export default function ReceptionDesk() {
             therapistUserId = booking.therapist;
           }
 
-          let status: "scheduled" | "checked-in" = "scheduled";
-          if (session && session.isCheckedIn) status = "checked-in";
+          // Get session.status from backend for determining UI/status logic.
+          // status can be scheduled, checked-in, missed etc.
+          const status: "scheduled" | "checked-in" | "missed" =
+            session?.status === "checked-in"
+              ? "checked-in"
+              : session?.status === "missed"
+              ? "missed"
+              : "scheduled";
 
           return {
             _id: booking._id,
@@ -473,14 +448,12 @@ export default function ReceptionDesk() {
             therapistName,
             therapistId: therapistId ?? "",
             therapistUserId: therapistUserId ?? "",
-            sessionId: session?._id,
+            sessionId: session?.sessionId,
             time: session?.slotId ?? session?.time ?? "",
             status,
-            isCheckedIn: session?.isCheckedIn,
           } as Appointment;
         });
 
-        // ---- Pending Payments ----
         let pendings: PaymentInfo[] = (data.pendingPaymentBookings || []).map((booking: any) => {
           let paymentRecord = booking.payment || {};
           let patientName = booking.patient?.name || "";
@@ -502,7 +475,6 @@ export default function ReceptionDesk() {
           }
           let createdAt = paymentRecord.createdAt || booking.createdAt || undefined;
 
-          // Infer discountPercent for CollectPaymentModal
           let discountPercent: number | undefined = undefined;
           if (coupon && coupon.discountEnabled && typeof coupon.discount === "number") {
             discountPercent = coupon.discount;
@@ -565,10 +537,10 @@ export default function ReceptionDesk() {
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.message || "Failed check-in");
 
-      setAppointments((apps) =>
-        apps.map((a) =>
+      setAppointments(apps =>
+        apps.map(a =>
           a._id === _id && a.sessionId === sessionId
-            ? { ...a, status: "checked-in", isCheckedIn: true }
+            ? { ...a, status: "checked-in" }
             : a
         )
       );
@@ -579,6 +551,38 @@ export default function ReceptionDesk() {
           : err instanceof Error
           ? err.message
           : "Error checking in"
+      );
+    }
+  };
+
+  const handleMissed = async (_id: string, sessionId: string) => {
+    const token = localStorage.getItem("admin-token");
+    try {
+      const res = await fetch(`${API_URL}/api/admin/bookings/mark-missed`, {
+        method: "POST",
+        headers: {
+          Authorization: `${token || ""}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ bookingId: _id, sessionId }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.message || "Failed set as missed");
+
+      setAppointments(apps =>
+        apps.map(a =>
+          a._id === _id && a.sessionId === sessionId
+            ? { ...a, status: "missed" }
+            : a
+        )
+      );
+    } catch (err) {
+      alert(
+        typeof err === "string"
+          ? err
+          : err instanceof Error
+          ? err.message
+          : "Error marking as missed"
       );
     }
   };
@@ -613,7 +617,7 @@ export default function ReceptionDesk() {
         setAppointments((apps) =>
           apps.map((a) =>
             a._id === bookingId && a.sessionId === sessionId
-              ? { ...a, status: "checked-in", isCheckedIn: true }
+              ? { ...a, status: "checked-in" }
               : a
           )
         );
@@ -634,6 +638,58 @@ export default function ReceptionDesk() {
     setSelectedAppointments({});
   };
 
+  // NEW: Multi-mark-missed logic
+  const handleMultiMarkAsMissed = async () => {
+    const keys: string[] = Object.entries(selectedAppointments)
+      .filter(([_, checked]) => checked)
+      .map(([key]) => key);
+
+    if (keys.length === 0) {
+      alert("Please select at least one appointment to mark as missed.");
+      return;
+    }
+    setMultiMarkingMissed(true);
+    const token = localStorage.getItem("admin-token");
+
+    for (const key of keys) {
+      const [bookingId, sessionId] = key.split("||");
+      if (!bookingId || !sessionId) continue;
+      try {
+        const res = await fetch(`${API_URL}/api/admin/bookings/mark-missed`, {
+          method: "POST",
+          headers: {
+            Authorization: `${token || ""}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ bookingId, sessionId }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success)
+          throw new Error(data.message || "Failed to mark as missed");
+        setAppointments((apps) =>
+          apps.map((a) =>
+            a._id === bookingId && a.sessionId === sessionId
+              ? { ...a, status: "missed" }
+              : a
+          )
+        );
+      } catch (err) {
+        alert(
+          "Failed to mark missed for Appt#: " +
+            bookingId +
+            ". " +
+            (typeof err === "string"
+              ? err
+              : err instanceof Error
+              ? err.message
+              : "Error marking as missed")
+        );
+      }
+    }
+    setMultiMarkingMissed(false);
+    setSelectedAppointments({});
+  };
+
   const toggleAppointmentSelection = (_id: string, sessionId: string) => {
     const key = `${_id}||${sessionId}`;
     setSelectedAppointments((prev) => ({
@@ -645,7 +701,7 @@ export default function ReceptionDesk() {
   const selectAllAppointments = () => {
     const newSelection: typeof selectedAppointments = {};
     appointments.forEach((a) => {
-      if (a.status === "scheduled" && !a.isCheckedIn) {
+      if (a.status === "scheduled") {
         newSelection[`${a._id}||${a.sessionId}`] = true;
       }
     });
@@ -657,7 +713,6 @@ export default function ReceptionDesk() {
   const [collectModalVisible, setCollectModalVisible] = useState(false);
   const [collectPaymentCurrent, setCollectPaymentCurrent] = useState<PaymentInfo | null>(null);
 
-  // Handler for launching the new modal
   const openCollectModal = (payment: PaymentInfo) => {
     setCollectPaymentCurrent(payment);
     setCollectModalVisible(true);
@@ -670,26 +725,20 @@ export default function ReceptionDesk() {
     }, 200);
   };
 
-  // Remove/done handler for modal
   const handleCollected = () => {
     if (!collectPaymentCurrent) return;
     setPayments((pays) => pays.filter((p) => p._id !== collectPaymentCurrent._id));
   };
 
-  // Status Display Logic for Appointments
   function getAppointmentStatusStr(a: Appointment): {label: string, colorClass: string, bgClass?: string} {
-    // If checked-in
-    if (a.status === "checked-in" || a.isCheckedIn) {
+    if (a.status === "checked-in") {
       return {
         label: "Checked In",
         colorClass: "text-green-700",
         bgClass: "bg-green-50"
       };
     }
-    // If not checked in, check time
-    const sessionDate = getSessionDateTime(today, a.time);
-    const now = new Date();
-    if (sessionDate && now > sessionDate) {
+    if (a.status === "missed") {
       return {
         label: "Missed",
         colorClass: "text-red-700",
@@ -815,7 +864,6 @@ export default function ReceptionDesk() {
         </AnimatePresence>
       </motion.div>
 
-      {/* Payment Collection Modal (new logic) */}
       <CollectPaymentModal
         open={collectModalVisible}
         onClose={closeCollectModal}
@@ -823,7 +871,6 @@ export default function ReceptionDesk() {
         onCollected={handleCollected}
       />
 
-      {/* Bottom Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Appointments */}
         <motion.div
@@ -834,7 +881,7 @@ export default function ReceptionDesk() {
             <FiCalendar className="text-blue-600" /> Today’s Appointments
           </div>
 
-          {/* Multi-Check-in Controls */}
+          {/* Multi-Check-in and multi-missed Controls */}
           <div className="mb-3 flex flex-wrap gap-2 items-center">
             <button
               className="rounded border border-blue-400 px-3 py-1 text-xs font-medium text-blue-800 hover:bg-blue-50 bg-blue-50 transition"
@@ -860,11 +907,32 @@ export default function ReceptionDesk() {
               }`}
               onClick={handleMultiCheckIn}
               type="button"
-              disabled={multiCheckingIn || Object.entries(selectedAppointments).filter(([_, checked]) => checked).length === 0}
+              disabled={
+                multiCheckingIn ||
+                Object.entries(selectedAppointments).filter(([_, checked]) => checked).length === 0
+              }
               tabIndex={-1}
               style={{ minWidth: 88 }}
             >
               {multiCheckingIn ? "Marking as Completed…" : "Mark Session Completed"}
+            </button>
+            <button
+              className={`rounded border border-rose-600 px-3 py-1 text-xs font-semibold text-rose-700 bg-rose-50 transition ${
+                multiMarkingMissed || Object.entries(selectedAppointments).filter(([_, checked]) => checked).length === 0
+                  ? "opacity-60 cursor-not-allowed"
+                  : "hover:bg-rose-100"
+              }`}
+              onClick={handleMultiMarkAsMissed}
+              type="button"
+              disabled={
+                multiMarkingMissed ||
+                Object.entries(selectedAppointments).filter(([_, checked]) => checked).length === 0
+              }
+              tabIndex={-1}
+              style={{ minWidth: 85 }}
+              title="Mark selected as Missed"
+            >
+              {multiMarkingMissed ? "Marking as Missed…" : "Mark as Missed"}
             </button>
             <span className="text-xs text-slate-400 ml-2">
               {Object.entries(selectedAppointments).filter(([_, v]) => v).length > 0
@@ -880,38 +948,39 @@ export default function ReceptionDesk() {
               {appointments.map((a) => {
                 const key = `${a._id}||${a.sessionId}`;
                 const checked = !!selectedAppointments[key];
-                const selectable = a.status === "scheduled" && !a.isCheckedIn;
+                const selectable = a.status === "scheduled";
                 const statusObj = getAppointmentStatusStr(a);
+
                 return (
                   <div
                     key={a._id + "|" + a.sessionId}
-                    className="flex items-center justify-between border-b border-slate-100 pb-3 last:pb-0 last:border-0"
+                    className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-slate-100 pb-3 last:pb-0 last:border-0 gap-3"
                   >
-                    <div className="flex items-center">
+                    <div className="flex items-start gap-3 w-full">
                       {/* Checkbox for multi-select */}
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        disabled={!selectable}
-                        onChange={() => selectable && toggleAppointmentSelection(a._id, a.sessionId)}
-                        className="mr-2 accent-blue-600"
-                        tabIndex={selectable ? 0 : -1}
-                        aria-label={
-                          selectable
-                            ? `Select appointment ${a.appointmentId} for session completion`
-                            : "Session completed or not selectable"
-                        }
-                        style={{ width: 16, height: 16 }}
-                      />
-                      {/* Existing appointment info */}
-                      <div>
-                        <div className="font-medium text-slate-800 flex flex-col items-start gap-1 flex-wrap">
-                          <span>
-                            {/* Add a link for children name if id present */}
+                      <div className="pt-1">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          disabled={!selectable}
+                          onChange={() => selectable && toggleAppointmentSelection(a._id, a.sessionId)}
+                          className="accent-blue-600"
+                          tabIndex={selectable ? 0 : -1}
+                          aria-label={
+                            selectable
+                              ? `Select appointment ${a.appointmentId} for session completion`
+                              : "Session not selectable"
+                          }
+                          style={{ width: 16, height: 16 }}
+                        />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                          <div className="font-semibold text-blue-700 text-sm flex items-center gap-2">
                             {a.patient && a.patient._id ? (
                               <a
                                 href={`/admin/children?patientId=${encodeURIComponent(a.patient._id)}`}
-                                className="text-blue-700 hover:underline"
+                                className="hover:underline"
                                 title="View children details"
                                 target="_blank"
                                 rel="noopener noreferrer"
@@ -922,24 +991,23 @@ export default function ReceptionDesk() {
                             ) : (
                               a.patient?.name ?? "Anonymous"
                             )}
-                            <span className="text-xs text-blue-400 font-semibold ml-1">
+                            <span className="text-xs text-blue-400 font-semibold">
                               ({a.patient?.patientId || "--"})
                             </span>
+                          </div>
+
+                          <span className="text-xs text-slate-500 font-mono whitespace-nowrap mt-0.5">
+                            Session ID: {a.sessionId ?? "—"}
                           </span>
-                          <span className=" text-sm font-semibold text-slate-600">
-                            | Appt#:{" "}
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-3 mt-1">
+                          <div className="text-[13px] font-semibold text-slate-700 flex items-center gap-1">
+                            <span className="font-bold text-slate-700">Appt#:</span>
                             <span className="text-blue-700">{a.appointmentId}</span>
-                            <span className="ml-3 text-xs text-slate-400 font-normal">
-                              {
-                                SESSION_TIME_OPTIONS.find(opt => opt.id === a.time)?.label
-                                ?? a.time
-                                ?? ""
-                              }
-                            </span>
-                            {/* Show sessionId to the right */}
-                            <span className="ml-3 text-xs text-slate-500 font-mono">
-                              Session ID: {a.sessionId ?? "—"}
-                            </span>
+                          </div>
+                          <span className="text-xs text-slate-400 font-medium">
+                            {SESSION_TIME_OPTIONS.find(opt => opt.id === a.time)?.label ?? a.time ?? ""}
                           </span>
                           <span
                             className={`ml-2 ${statusObj.colorClass} text-xs font-semibold px-2 py-0.5 rounded whitespace-nowrap ${statusObj.bgClass ?? ""}`}
@@ -947,8 +1015,9 @@ export default function ReceptionDesk() {
                             {statusObj.label}
                           </span>
                         </div>
-                        <div className="text-xs text-slate-500 mt-0.5">
-                          Therapist:{" "}
+
+                        <div className="text-xs text-slate-500 mt-1 flex flex-wrap items-center gap-1">
+                          <span className="font-semibold text-slate-600">Therapist:</span>
                           <span className="font-semibold">
                             {(a.therapistName && a.therapistId) ? (
                               <a
@@ -964,34 +1033,46 @@ export default function ReceptionDesk() {
                             ) : (
                               a.therapistName || "—"
                             )}
-                          </span>{" "}
-                          <span className="text-blue-400 font-mono">
-                            {a.therapistId ? `(${a.therapistId})` : ""}
                           </span>
+                          <span className="text-blue-400 font-mono">{a.therapistId ? `(${a.therapistId})` : ""}</span>
                         </div>
                       </div>
                     </div>
-                    <div>
-                      {a.status === "scheduled" && !a.isCheckedIn ? (
-                        <button
-                          onClick={() => handleCheckIn(a._id, a.sessionId)}
-                          className="rounded-md border border-blue-500 px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 transition"
-                        >
-                          Mark Session Completed
-                        </button>
+
+                    <div className="flex flex-col gap-2 items-center justify-end mt-2 sm:mt-0 min-w-max">
+                      {a.status === "scheduled" ? (
+                        <>
+                          <button
+                            onClick={() => handleCheckIn(a._id, a.sessionId)}
+                            className="rounded-full border w-full border-blue-500 px-4 py-1.5 text-xs font-medium text-blue-700 bg-white hover:bg-blue-50 shadow-sm transition"
+                          >
+                            Mark Completed
+                          </button>
+                          <button
+                            onClick={() => handleMissed(a._id, a.sessionId)}
+                            className="rounded-full border w-full border-rose-500 px-3 py-1.5 text-xs font-medium text-rose-600 bg-white hover:bg-rose-50 shadow-sm transition"
+                            title="Mark as Missed"
+                          >
+                            Mark as Missed
+                          </button>
+                        </>
+                      ) : a.status === "missed" ? (
+                        <span className="rounded-full  border w-full border-rose-500 px-3 py-1.5 text-xs font-semibold text-rose-600 bg-rose-50 whitespace-nowrap">
+                          Marked as Missed
+                        </span>
                       ) : (
-                        <span className="rounded-md border border-green-500 px-3 py-1.5 text-xs font-semibold text-green-600 bg-green-50 whitespace-nowrap">
+                        <span className="rounded-full  border w-full border-green-500 px-3 py-1.5 text-xs font-semibold text-green-600 bg-green-50 whitespace-nowrap">
                           Session Completed
                         </span>
                       )}
                     </div>
                   </div>
+            
                 );
               })}
             </div>
           )}
         </motion.div>
-
         {/* Payments - Discount and coupon-aware */}
         <motion.div
           whileHover={{ y: -4 }}
@@ -1005,7 +1086,6 @@ export default function ReceptionDesk() {
           ) : (
             <div className="space-y-4">
               {payments.map((payment) => {
-                // Use original payment amount and percent for display, in non-modal
                 const disc =
                   typeof getDiscountPercent(payment) === "number"
                     ? Math.round(
@@ -1032,7 +1112,6 @@ export default function ReceptionDesk() {
                           Appt#: {payment.appointmentId}
                         </span>
                         <span className="font-medium text-slate-800">
-                          {/* Add a link for patientName if patientId present */}
                           {payment.patientId ? (
                             <a
                               href={`/admin/children?patientId=${encodeURIComponent(payment.patientId)}`}
@@ -1101,7 +1180,6 @@ export default function ReceptionDesk() {
                             , Due: ₹{outstanding}
                           </span>
                         )}
-                        {/* Show date - createdAt (for recency awareness) */}
                         {payment.createdAt && (
                           <span className="text-slate-400 ml-2">
                             {formatDateDDMMYYYY(payment.createdAt.slice(0, 10))}
