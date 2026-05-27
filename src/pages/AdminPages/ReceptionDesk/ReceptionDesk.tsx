@@ -44,6 +44,7 @@ const SESSION_TIME_OPTIONS = [
   { id: '1930-2015', label: '19:30 to 20:15', limited: true }
 ];
 
+// Fixed: Appointment status types to match enum: ['CheckedIn', 'NotCheckedIn', 'Missed']
 type Appointment = {
   _id: string;
   appointmentId: string;
@@ -53,7 +54,7 @@ type Appointment = {
   therapistUserId: string;
   sessionId: string;
   time?: string;
-  status?: "scheduled" | "checked-in" | "missed";
+  status?: "CheckedIn" | "NotCheckedIn" | "Missed";
   [key: string]: any;
 };
 
@@ -432,14 +433,15 @@ export default function ReceptionDesk() {
             therapistUserId = booking.therapist;
           }
 
-          // Get session.status from backend for determining UI/status logic.
-          // status can be scheduled, checked-in, missed etc.
-          const status: "scheduled" | "checked-in" | "missed" =
-            session?.status === "checked-in"
-              ? "checked-in"
-              : session?.status === "missed"
-              ? "missed"
-              : "scheduled";
+          // Map session.status (enum: ['CheckedIn', 'NotCheckedIn', 'Missed']) to Appointment.status
+          let status: "CheckedIn" | "NotCheckedIn" | "Missed" = "NotCheckedIn";
+          if (session?.status === "CheckedIn") {
+            status = "CheckedIn";
+          } else if (session?.status === "Missed") {
+            status = "Missed";
+          } else {
+            status = "NotCheckedIn";
+          }
 
           return {
             _id: booking._id,
@@ -540,7 +542,7 @@ export default function ReceptionDesk() {
       setAppointments(apps =>
         apps.map(a =>
           a._id === _id && a.sessionId === sessionId
-            ? { ...a, status: "checked-in" }
+            ? { ...a, status: "CheckedIn" }
             : a
         )
       );
@@ -572,7 +574,7 @@ export default function ReceptionDesk() {
       setAppointments(apps =>
         apps.map(a =>
           a._id === _id && a.sessionId === sessionId
-            ? { ...a, status: "missed" }
+            ? { ...a, status: "Missed" }
             : a
         )
       );
@@ -617,7 +619,7 @@ export default function ReceptionDesk() {
         setAppointments((apps) =>
           apps.map((a) =>
             a._id === bookingId && a.sessionId === sessionId
-              ? { ...a, status: "checked-in" }
+              ? { ...a, status: "CheckedIn" }
               : a
           )
         );
@@ -669,7 +671,7 @@ export default function ReceptionDesk() {
         setAppointments((apps) =>
           apps.map((a) =>
             a._id === bookingId && a.sessionId === sessionId
-              ? { ...a, status: "missed" }
+              ? { ...a, status: "Missed" }
               : a
           )
         );
@@ -701,7 +703,7 @@ export default function ReceptionDesk() {
   const selectAllAppointments = () => {
     const newSelection: typeof selectedAppointments = {};
     appointments.forEach((a) => {
-      if (a.status === "scheduled") {
+      if (a.status === "NotCheckedIn") {
         newSelection[`${a._id}||${a.sessionId}`] = true;
       }
     });
@@ -730,21 +732,23 @@ export default function ReceptionDesk() {
     setPayments((pays) => pays.filter((p) => p._id !== collectPaymentCurrent._id));
   };
 
+  // Updated to reflect Appointment.status ["CheckedIn" | "NotCheckedIn" | "Missed"]
   function getAppointmentStatusStr(a: Appointment): {label: string, colorClass: string, bgClass?: string} {
-    if (a.status === "checked-in") {
+    if (a.status === "CheckedIn") {
       return {
         label: "Checked In",
         colorClass: "text-green-700",
         bgClass: "bg-green-50"
       };
     }
-    if (a.status === "missed") {
+    if (a.status === "Missed") {
       return {
         label: "Missed",
         colorClass: "text-red-700",
         bgClass: "bg-red-50"
       };
     }
+    // Default: NotCheckedIn
     return {
       label: "Not Checked In",
       colorClass: "text-yellow-800",
@@ -948,7 +952,7 @@ export default function ReceptionDesk() {
               {appointments.map((a) => {
                 const key = `${a._id}||${a.sessionId}`;
                 const checked = !!selectedAppointments[key];
-                const selectable = a.status === "scheduled";
+                const selectable = a.status === "NotCheckedIn";
                 const statusObj = getAppointmentStatusStr(a);
 
                 return (
@@ -1040,7 +1044,7 @@ export default function ReceptionDesk() {
                     </div>
 
                     <div className="flex flex-col gap-2 items-center justify-end mt-2 sm:mt-0 min-w-max">
-                      {a.status === "scheduled" ? (
+                      {a.status === "NotCheckedIn" ? (
                         <>
                           <button
                             onClick={() => handleCheckIn(a._id, a.sessionId)}
@@ -1056,7 +1060,7 @@ export default function ReceptionDesk() {
                             Mark as Missed
                           </button>
                         </>
-                      ) : a.status === "missed" ? (
+                      ) : a.status === "Missed" ? (
                         <span className="rounded-full  border w-full border-rose-500 px-3 py-1.5 text-xs font-semibold text-rose-600 bg-rose-50 whitespace-nowrap">
                           Marked as Missed
                         </span>

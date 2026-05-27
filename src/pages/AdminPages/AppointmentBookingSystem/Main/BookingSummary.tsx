@@ -356,21 +356,17 @@ type BookingSummaryProps = {
 // }
 
 // SESSION STATUS MAPPING: 
-// "checkedIn" (or isCheckedIn: true) = Checked In, 
-// "missed" = Missed, 
-// else "notCheckedIn" (or isCheckedIn: false, status: pending, etc)
+// Status enum: ['CheckedIn', 'NotCheckedIn', 'Missed']
+// Map "CheckedIn" => Checked In (green), "Missed" => Missed (gray), "NotCheckedIn" (or undefined) => Not Checked In (red)
 function sessionStatusLabel(session: any) {
   // Check for explicit session.status
-  if (session.status === "checkedIn" || session.isCheckedIn === true) {
+  if (session.status === "CheckedIn") {
     return { label: "Checked In", color: "green-700" };
   }
-  if (
-    session.status === "missed" ||
-    session.isMissed === true
-  ) {
+  if (session.status === "Missed") {
     return { label: "Missed", color: "gray-500" };
   }
-  // Fallback/default: not checked in
+  // Fallback/default: Not Checked In
   return { label: "Not Checked In", color: "red-600" };
 }
 

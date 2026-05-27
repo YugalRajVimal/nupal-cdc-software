@@ -15,7 +15,7 @@ import { motion } from "framer-motion";
 
 // Session statuses as per booking.schema.js (1-74):
 // "scheduled", "checkedIn", "missed", "cancelled"
-type SessionStatus = 'scheduled' | 'checkedIn' | 'missed' | 'cancelled';
+type SessionStatus = 'scheduled' | 'CheckedIn' | 'Missed' | 'NotCheckedIn';
 
 const SESSION_TIME_OPTIONS = [
   { id: '1000-1045', label: '10:00 to 10:45', limited: false },
@@ -201,21 +201,21 @@ export default function AllUpcomingSessions() {
   function getSessionStatus(session: UpcomingSession["session"]) {
     // session.status should always be one of the statuses; fallback to legacy boolean
     switch (session.status) {
-      case "checkedIn":
+      case "CheckedIn":
         return {
           label: "Checked In",
           color: "green",
           icon: <FiCheckCircle size={13} />,
         };
-      case "missed":
+      case "Missed":
         return {
           label: "Missed",
           color: "red",
           icon: null,
         };
-      case "cancelled":
+      case "NotCheckedIn":
         return {
-          label: "Cancelled",
+          label: "Not Checked In",
           color: "orange",
           icon: null,
         };
@@ -375,7 +375,7 @@ export default function AllUpcomingSessions() {
   let filteredSessions = sessions;
   if (checkedInFilter === "checkedIn") {
     filteredSessions = sessions.filter(
-      (s) => s.session.status === "checkedIn" || (!s.session.status && s.session.isCheckedIn)
+      (s) => s.session.status === "CheckedIn" || (!s.session.status && s.session.isCheckedIn)
     );
   } else if (checkedInFilter === "notCheckedIn") {
     filteredSessions = sessions.filter(
@@ -383,7 +383,7 @@ export default function AllUpcomingSessions() {
     );
   } else if (checkedInFilter === "missed") {
     filteredSessions = sessions.filter(
-      (s) => s.session.status === "missed"
+      (s) => s.session.status === "Missed"
     );
   }
 
