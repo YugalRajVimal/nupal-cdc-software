@@ -293,7 +293,7 @@ export default function AllUpcomingSessions() {
       const sessionObj = sessions.find((s) => s.session._id === sessionId);
       const bookingId = sessionObj?.bookingId;
       // endpoint as per bookings-admin.routes.js @miss-session
-      const res = await fetch(`${API_URL}/api/admin/bookings/mark-missed`, {
+      const res = await fetch(`${API_URL}/api/admin/bookings/mark-session-missed`, {
         method: "POST",
         headers: {
           Authorization: `${token || ""}`,
@@ -353,7 +353,7 @@ export default function AllUpcomingSessions() {
         const sessionId = selectedSessionIds[i];
         const sessionObj = sessions.find((s) => s.session._id === sessionId);
         const bookingId = sessionObj?.bookingId;
-        await fetch(`${API_URL}/api/admin/bookings/mark-missed`, {
+        await fetch(`${API_URL}/api/admin/bookings/mark-session-missed`, {
           method: "POST",
           headers: {
             Authorization: `${token || ""}`,

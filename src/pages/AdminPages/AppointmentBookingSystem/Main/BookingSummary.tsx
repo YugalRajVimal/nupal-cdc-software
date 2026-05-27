@@ -612,7 +612,7 @@ export function BookingSummary({
     if (endpoint) endpoint = endpoint.replace(/\/$/, "");
     try {
       // API: POST /api/admin/bookings/mark-missed
-      const res = await fetch(`${endpoint}/api/admin/bookings/mark-missed`, {
+      const res = await fetch(`${endpoint}/api/admin/bookings/mark-session-missed`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

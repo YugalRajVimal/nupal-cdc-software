@@ -558,7 +558,7 @@ export default function ReceptionDesk() {
   const handleMissed = async (_id: string, sessionId: string) => {
     const token = localStorage.getItem("admin-token");
     try {
-      const res = await fetch(`${API_URL}/api/admin/bookings/mark-missed`, {
+      const res = await fetch(`${API_URL}/api/admin/bookings/mark-session-missed`, {
         method: "POST",
         headers: {
           Authorization: `${token || ""}`,
@@ -655,7 +655,7 @@ export default function ReceptionDesk() {
       const [bookingId, sessionId] = key.split("||");
       if (!bookingId || !sessionId) continue;
       try {
-        const res = await fetch(`${API_URL}/api/admin/bookings/mark-missed`, {
+        const res = await fetch(`${API_URL}/api/admin/bookings/mark-session-missed`, {
           method: "POST",
           headers: {
             Authorization: `${token || ""}`,
