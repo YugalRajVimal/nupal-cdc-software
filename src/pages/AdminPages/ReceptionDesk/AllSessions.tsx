@@ -231,7 +231,7 @@ export default function AllUpcomingSessions() {
         }
         return {
           label: "Not Checked In",
-          color: "slate",
+          color: "orange",
           icon: null,
         };
     }
@@ -534,7 +534,7 @@ export default function AllUpcomingSessions() {
                       s.session?.therapist?.therapistId ??
                       s.session?.therapist?._id ??
                       "";
-                    const isUnchecked = (s.session.status === "scheduled" || (!s.session.status && !s.session.isCheckedIn));
+                    const isUnchecked = (s.session.status === "NotCheckedIn" || (!s.session.status && !s.session.isCheckedIn));
                     const isSelected = selectedSessionIds.includes(s.session._id);
                     const sessionStatus = getSessionStatus(s.session);
 
