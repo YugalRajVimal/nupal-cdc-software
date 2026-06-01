@@ -24,6 +24,28 @@ interface PaymentDiscount {
   createdAt: string;
 }
 
+interface CashfreeInfo {
+  cf_order_id?: string;
+  order_id?: string; // THE FIELD WE WANT TO DISPLAY
+  payment_session_id?: string;
+  order_status?: string;
+  order_amount?: number;
+  order_currency?: string;
+  order_note?: string;
+  order_expiry_time?: string;
+  created_at?: string;
+  customer?: {
+    customer_id?: string;
+    name?: string;
+    email?: string;
+    phone?: string;
+  };
+  order_meta?: {
+    return_url?: string;
+    notify_url?: string;
+  };
+}
+
 interface PaymentDetailInfo {
   _id: string;
   paymentId: string;
@@ -41,7 +63,7 @@ interface PaymentDetailInfo {
   updatedAt: string;
   __v: number;
   paymentTime: string;
-  cashfree?: any;
+  cashfree?: CashfreeInfo;
 }
 
 interface PaymentDetail {
@@ -70,10 +92,12 @@ interface PaymentsResponse {
 
 const PAGE_SIZE_OPTIONS = [5, 10, 20, 50];
 
+// Updated downloadExcel: Add "Order Id"
 function downloadExcel(filename: string, rows: PaymentDetail[]) {
   const worksheetData = [
     [
       "InvoiceId",
+      "Order Id",
       "Date",
       "Children Name",
       "Amount",
@@ -87,8 +111,16 @@ function downloadExcel(filename: string, rows: PaymentDetail[]) {
       const amountPaid = getAmountPaid(row);
       const discountPercent = getDiscountPercent(row);
       const due = calculateDueAmount(row);
+
+      // Find Order Id: from paymentDetail.cashfree.order_id, else blank
+      const orderId =
+        row.paymentDetail?.cashfree?.order_id ||
+        row.paymentDetail?.cashfree?.cf_order_id ||
+        "-";
+
       return [
         row.InvoiceId,
+        orderId,
         row.date ? new Date(row.date).toLocaleDateString("en-GB") : "",
         row.childrenName,
         row.amount,
@@ -128,7 +160,6 @@ const formatPercent = (percent?: number) =>
     : "-";
 
 // Helper: Calculate discount percent from payment if present
-// Highest priority: payment.discount if enabled, then paymentDetail.discountInfo.percent, else 0
 function getDiscountPercent(payment: PaymentDetail): number {
   if (payment.discount?.discountEnabled) {
     return payment.discount.discount;
@@ -150,12 +181,6 @@ function getAmountPaid(payment: PaymentDetail) {
 }
 
 // CALCULATE DUE AMOUNT LOGIC: do NOT use dueAmount from backend, instead calculate as follows:
-// - If total invoice amount is present: use payment.amount
-// - Calculate total discount.
-// - Apply discount to (amount) to get dueBeforePayment
-// - If amountPaid exists, due = (amount - discountAmount) - amountPaid, never less than zero.
-// - Expected discount is percentage, not absolute.
-// - If no discount: due = amount - amountPaid
 function calculateDueAmount(payment: PaymentDetail): number | "-" {
   const amount = typeof payment.amount === "number" ? payment.amount : 0;
   const amountPaid = getAmountPaid(payment);
@@ -192,6 +217,9 @@ export default function InvoiveAndPaymentsPage() {
     null
   );
 
+  // For "Check Status" button loading state
+  const [statusCheckInProgressId, setStatusCheckInProgressId] = useState<string | null>(null);
+
   // Search & Pagination UI state (controlled separately)
   const [searchText, setSearchText] = useState("");
   const debouncedSearchText = useDebouncedValue(searchText, 500);
@@ -205,7 +233,7 @@ export default function InvoiveAndPaymentsPage() {
   useEffect(() => {
     const initializeSDK = async () => {
       const sdk = await load({
-        mode: "sandbox",
+        mode: "production",
       });
       setCashfree(sdk);
     };
@@ -236,6 +264,7 @@ export default function InvoiveAndPaymentsPage() {
       )
       .then((response) => {
         setPaymentsData(response.data);
+        console.log(response.data, "paymentsData");
         setLoading(false);
       })
       .catch((e) => {
@@ -286,6 +315,15 @@ export default function InvoiveAndPaymentsPage() {
       console.error("Error generating sessionId:", error);
       return null;
     }
+  };
+
+  // Function for Check Payment Status button: redirect to payment-confirmation page
+  const handleCheckStatus = (orderId: string) => {
+    if (!orderId || orderId === "-") {
+      alert("Order Id is not available for this payment.");
+      return;
+    }
+    window.location.href = `${window.location.origin}/parent/payment-confirmation?orderId=${orderId}`;
   };
 
   // --- Pagination controls ---
@@ -348,7 +386,7 @@ export default function InvoiveAndPaymentsPage() {
       }
       let checkoutOptions = {
         paymentSessionId: sessionData.sessionId,
-        returnUrl: `${window.location.origin}/parent/payment-confirmation`,
+        returnUrl: `${window.location.origin}/parent/payment-confirmation?orderId=${sessionData.orderId}`,
         notifyUrl: `${import.meta.env.VITE_API_URL}/cashfreeWebhook`,
       };
       await cashfree
@@ -474,100 +512,130 @@ export default function InvoiveAndPaymentsPage() {
 
       {!loading && !error && paymentsData && (
         <div className="bg-white border rounded-lg overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-100">
-              <tr>
-                <th className="px-4 py-3 text-left">Invoice ID</th>
-                <th className="px-4 py-3 text-left">Date</th>
-                <th className="px-4 py-3 text-left">Children Name</th>
-                <th className="px-4 py-3 text-right">Amount</th>
-                <th className="px-4 py-3 text-right">Paid</th>
-                <th className="px-4 py-3 text-right">Due</th>
-                <th className="px-4 py-3 text-center">Discount (%)</th>
-                <th className="px-4 py-3 text-center">Status</th>
-                <th className="px-4 py-3 text-center">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {displayedRows && displayedRows.length > 0 ? (
-                displayedRows.map((payment, idx) => {
-                  const amountPaid = getAmountPaid(payment);
-                  const amountDue = calculateDueAmount(payment);
-                  const discountPercent = getDiscountPercent(payment);
-                  return (
-                    <tr key={idx} className="border-t">
-                      <td className="px-4 py-3 font-mono">{payment.InvoiceId}</td>
-                      <td className="px-4 py-3">
-                        {payment.date
-                          ? new Date(payment.date).toLocaleDateString("en-GB")
-                          : "-"}
-                      </td>
-                      <td className="px-4 py-3">{payment.childrenName}</td>
-                      <td className="px-4 py-3 text-right">
-                        ₹{Number(payment.amount).toLocaleString("en-IN")}
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        ₹{amountPaid ? Number(amountPaid).toLocaleString("en-IN") : 0}
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        {typeof amountDue === "number"
-                          ? `₹${Number(amountDue).toLocaleString("en-IN")}`
-                          : "-"}
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        {formatPercent(discountPercent)}
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        <span
-                          className={
-                            payment.status === "paid"
-                              ? "text-green-600 font-semibold"
-                              : payment.status === "pending"
-                              ? "text-yellow-600 font-semibold"
-                              : payment.status === "partiallypaid"
-                              ? "text-orange-600 font-semibold"
-                              : "text-slate-800"
-                          }
-                        >
-                          {payment.status
-                            ? payment.status.charAt(0).toUpperCase() +
-                              payment.status.slice(1)
-                            : ""}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        {(payment.status === "pending" ||
-                          payment.status === "partiallypaid") &&
-                        typeof amountDue === "number" &&
-                        amountDue > 0 ? (
-                          <button
-                            className="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 transition text-sm disabled:opacity-50"
-                            disabled={paymentInProgressId === payment.InvoiceId}
-                            onClick={() => handlePayment(payment)}
-                          >
-                            {paymentInProgressId === payment.InvoiceId
-                              ? "Processing..."
-                              : "Pay Now"}
-                          </button>
-                        ) : (
-                          <span className="text-gray-400 text-xs">-</span>
-                        )}
+          {/* Make the table horizontally scrollable if its width exceeds the container,
+              and give the table body a max height and make it vertically scrollable */}
+          <div className="w-full overflow-x-auto">
+            <div style={{ maxHeight: 420, overflowY: "auto" }}>
+              <table className="w-full text-sm min-w-[900px]">
+                <thead className="bg-slate-100 sticky top-0 z-10">
+                  <tr>
+                    <th className="px-4 py-3 text-left">Invoice ID</th>
+                    <th className="px-4 py-3 text-left">Order Id</th>
+                    <th className="px-4 py-3 text-left">Date</th>
+                    <th className="px-4 py-3 text-left">Children Name</th>
+                    <th className="px-4 py-3 text-right">Amount</th>
+                    <th className="px-4 py-3 text-right">Paid</th>
+                    <th className="px-4 py-3 text-right">Due</th>
+                    <th className="px-4 py-3 text-center">Discount (%)</th>
+                    <th className="px-4 py-3 text-center">Status</th>
+                    <th className="px-4 py-3 text-center">Action</th>
+                    <th className="px-4 py-3 text-center">Check Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {displayedRows && displayedRows.length > 0 ? (
+                    displayedRows.map((payment, idx) => {
+                      const amountPaid = getAmountPaid(payment);
+                      const amountDue = calculateDueAmount(payment);
+                      const discountPercent = getDiscountPercent(payment);
+                      // Get Order Id from payment.paymentDetail.cashfree.order_id (preferred),
+                      // fallback to cf_order_id, else blank
+                      const orderIdVal =
+                        payment.paymentDetail?.cashfree?.order_id ||
+                        payment.paymentDetail?.cashfree?.cf_order_id ||
+                        "-";
+                      return (
+                        <tr key={idx} className="border-t">
+                          <td className="px-4 py-3 font-mono">{payment.InvoiceId}</td>
+                          <td className="px-4 py-3 font-mono">
+                            {orderIdVal}
+                          </td>
+                          <td className="px-4 py-3">
+                            {payment.date
+                              ? new Date(payment.date).toLocaleDateString("en-GB")
+                              : "-"}
+                          </td>
+                          <td className="px-4 py-3">{payment.childrenName}</td>
+                          <td className="px-4 py-3 text-right">
+                            ₹{Number(payment.amount).toLocaleString("en-IN")}
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            ₹{amountPaid ? Number(amountPaid).toLocaleString("en-IN") : 0}
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            {typeof amountDue === "number"
+                              ? `₹${Number(amountDue).toLocaleString("en-IN")}`
+                              : "-"}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            {formatPercent(discountPercent)}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <span
+                              className={
+                                payment.status === "paid"
+                                  ? "text-green-600 font-semibold"
+                                  : payment.status === "pending"
+                                  ? "text-yellow-600 font-semibold"
+                                  : payment.status === "partiallypaid"
+                                  ? "text-orange-600 font-semibold"
+                                  : "text-slate-800"
+                              }
+                            >
+                              {payment.status
+                                ? payment.status.charAt(0).toUpperCase() +
+                                  payment.status.slice(1)
+                                : ""}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            {(payment.status === "pending" ||
+                              payment.status === "partiallypaid") &&
+                            typeof amountDue === "number" &&
+                            amountDue > 0 ? (
+                              <button
+                                className="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 transition text-sm disabled:opacity-50"
+                                disabled={paymentInProgressId === payment.InvoiceId}
+                                onClick={() => handlePayment(payment)}
+                              >
+                                {paymentInProgressId === payment.InvoiceId
+                                  ? "Processing..."
+                                  : "Pay Now"}
+                              </button>
+                            ) : (
+                              <span className="text-gray-400 text-xs">-</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            {orderIdVal && orderIdVal !== "-" ? (
+                              <button
+                                className="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700 transition text-sm disabled:opacity-50"
+                                disabled={statusCheckInProgressId === orderIdVal}
+                                onClick={() => handleCheckStatus(orderIdVal)}
+                              >
+                                Check Status
+                              </button>
+                            ) : (
+                              <span className="text-gray-400 text-xs">-</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  ) : (
+                    <tr>
+                      <td
+                        colSpan={11}
+                        className="px-4 py-6 text-center text-slate-400"
+                      >
+                        No payment records found.
                       </td>
                     </tr>
-                  );
-                })
-              ) : (
-                <tr>
-                  <td
-                    colSpan={9}
-                    className="px-4 py-6 text-center text-slate-400"
-                  >
-                    No payment records found.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       )}
 

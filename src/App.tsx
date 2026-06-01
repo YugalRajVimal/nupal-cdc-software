@@ -250,8 +250,8 @@ export default function App() {
           <Route
             path="/parent/payment-confirmation"
             element={<PaymentConfirmation />}
-             
           />
+    
 
           <Route path="/parent/logout" element={<LogOutParent />} />
 
