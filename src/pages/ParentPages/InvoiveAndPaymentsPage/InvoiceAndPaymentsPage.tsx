@@ -217,8 +217,7 @@ export default function InvoiveAndPaymentsPage() {
     null
   );
 
-  // For "Check Status" button loading state
-  const [statusCheckInProgressId, setStatusCheckInProgressId] = useState<string | null>(null);
+
 
   // Search & Pagination UI state (controlled separately)
   const [searchText, setSearchText] = useState("");
@@ -610,7 +609,6 @@ export default function InvoiveAndPaymentsPage() {
                             {orderIdVal && orderIdVal !== "-" ? (
                               <button
                                 className="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700 transition text-sm disabled:opacity-50"
-                                disabled={statusCheckInProgressId === orderIdVal}
                                 onClick={() => handleCheckStatus(orderIdVal)}
                               >
                                 Check Status
