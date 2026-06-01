@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import {
   FiCheckCircle,
   FiInfo,
@@ -44,7 +44,6 @@ const SESSION_TIME_OPTIONS = [
   { id: '1930-2015', label: '19:30 to 20:15', limited: true }
 ];
 
-// Fixed: Appointment status types to match enum: ['CheckedIn', 'NotCheckedIn', 'Missed']
 type Appointment = {
   _id: string;
   appointmentId: string;
@@ -53,6 +52,7 @@ type Appointment = {
   therapistId: string;
   therapistUserId: string;
   sessionId: string;
+  sessionDbId?: string;   // ADD THIS
   time?: string;
   status?: "CheckedIn" | "NotCheckedIn" | "Missed";
   [key: string]: any;
@@ -392,139 +392,138 @@ export default function ReceptionDesk() {
   const [multiCheckingIn, setMultiCheckingIn] = useState(false);
   const [multiMarkingMissed, setMultiMarkingMissed] = useState(false); // NEW: For missed action
 
-  useEffect(() => {
-    let ignore = false;
-    async function fetchData() {
-      setLoading(true);
-      try {
-        const token = localStorage.getItem("admin-token");
-        const res = await fetch(`${API_URL}/api/admin/bookings/reception-desk`, {
-          headers: {
-            Authorization: token || "",
-            "Content-Type": "application/json",
-          },
-        });
-        if (!res.ok) throw new Error("Failed to load reception desk");
-        const data = await res.json();
-        console.log(data);
-        if (!data.success) throw new Error(data.message || "API error");
-        if (ignore) return;
+  // Move fetchData outside to be reusable
+  const fetchReceptionDeskData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const token = localStorage.getItem("admin-token");
+      const res = await fetch(`${API_URL}/api/admin/bookings/reception-desk`, {
+        headers: {
+          Authorization: token || "",
+          "Content-Type": "application/json",
+        },
+      });
+      if (!res.ok) throw new Error("Failed to load reception desk");
+      const data = await res.json();
+      // console.log(data);
+      if (!data.success) throw new Error(data.message || "API error");
 
-        setToday(data.today);
+      setToday(data.today);
 
-        const todays: Appointment[] = (data.todaysBookings || []).map((booking: any) => {
-          const session = booking.session;
-          let therapistName = "";
-          let therapistId = "";
-          let therapistUserId = "";
+      const todays: Appointment[] = (data.todaysBookings || []).map((booking: any) => {
+        const session = booking.session;
+        let therapistName = "";
+        let therapistId = "";
+        let therapistUserId = "";
 
-          if (session?.therapist && session.therapist.userId && session.therapist.userId.name) {
-            therapistName = session.therapist.userId.name;
-            therapistId = session.therapist.therapistId ?? session.therapist._id ?? "";
-            therapistUserId = session.therapist._id ?? "";
-          }
+        if (session?.therapist && session.therapist.userId && session.therapist.userId.name) {
+          therapistName = session.therapist.userId.name;
+          therapistId = session.therapist.therapistId ?? session.therapist._id ?? "";
+          therapistUserId = session.therapist._id ?? "";
+        }
 
-          if (!therapistName && booking.therapist && typeof booking.therapist === "object" && booking.therapist._id) {
-            therapistId = booking.therapist._id;
-            therapistName = booking.therapist.name ?? "";
-            therapistUserId = booking.therapist._id;
-          } else if (!therapistName && typeof booking.therapist === "string") {
-            therapistId = booking.therapist;
-            therapistUserId = booking.therapist;
-          }
+        if (!therapistName && booking.therapist && typeof booking.therapist === "object" && booking.therapist._id) {
+          therapistId = booking.therapist._id;
+          therapistName = booking.therapist.name ?? "";
+          therapistUserId = booking.therapist._id;
+        } else if (!therapistName && typeof booking.therapist === "string") {
+          therapistId = booking.therapist;
+          therapistUserId = booking.therapist;
+        }
 
-          // Map session.status (enum: ['CheckedIn', 'NotCheckedIn', 'Missed']) to Appointment.status
-          let status: "CheckedIn" | "NotCheckedIn" | "Missed" = "NotCheckedIn";
-          if (session?.status === "CheckedIn") {
-            status = "CheckedIn";
-          } else if (session?.status === "Missed") {
-            status = "Missed";
-          } else {
-            status = "NotCheckedIn";
-          }
+        // Map session.status (enum: ['CheckedIn', 'NotCheckedIn', 'Missed']) to Appointment.status
+        let status: "CheckedIn" | "NotCheckedIn" | "Missed" = "NotCheckedIn";
+        if (session?.status === "CheckedIn") {
+          status = "CheckedIn";
+        } else if (session?.status === "Missed") {
+          status = "Missed";
+        } else {
+          status = "NotCheckedIn";
+        }
 
-          return {
-            _id: booking._id,
-            appointmentId: booking.appointmentId,
-            patient: booking.patient || null,
-            therapistName,
-            therapistId: therapistId ?? "",
-            therapistUserId: therapistUserId ?? "",
-            sessionId: session?.sessionId,
-            time: session?.slotId ?? session?.time ?? "",
-            status,
-          } as Appointment;
-        });
+        return {
+          _id: booking._id,
+          appointmentId: booking.appointmentId,
+          patient: booking.patient || null,
+          therapistName,
+          therapistId: therapistId ?? "",
+          therapistUserId: therapistUserId ?? "",
+          sessionId: session?.sessionId,
+          sessionDbId: session?._id, 
+          time: session?.slotId ?? session?.time ?? "",
+          status,
+        } as Appointment;
+      });
 
-        let pendings: PaymentInfo[] = (data.pendingPaymentBookings || []).map((booking: any) => {
-          let paymentRecord = booking.payment || {};
-          let patientName = booking.patient?.name || "";
-          let patientId = booking.patient?.patientId || "";
-          let paymentId = paymentRecord.paymentId || undefined;
-          let paymentStatus = paymentRecord.status || undefined;
-          let paymentAmount = (typeof paymentRecord.amount !== "undefined" ? paymentRecord.amount : undefined);
-          let totalAmount = typeof paymentRecord.totalAmount !== "undefined" ? paymentRecord.totalAmount : undefined;
-          let paymentMethod = paymentRecord.paymentMethod || "";
-          let paymentRecordId = paymentRecord._id || undefined;
-          let amountPaid = (typeof paymentRecord.amountPaid !== "undefined" ? paymentRecord.amountPaid : 0);
-          let discountInfo: DiscountInfo | undefined = undefined;
-          let coupon: Coupon | undefined = undefined;
-          if (paymentRecord.discountInfo) discountInfo = paymentRecord.discountInfo;
-          if (booking.discountInfo && booking.discountInfo.coupon) {
-            coupon = booking.discountInfo.coupon;
-          } else if (paymentRecord.coupon) {
-            coupon = paymentRecord.coupon;
-          }
-          let createdAt = paymentRecord.createdAt || booking.createdAt || undefined;
+      let pendings: PaymentInfo[] = (data.pendingPaymentBookings || []).map((booking: any) => {
+        let paymentRecord = booking.payment || {};
+        let patientName = booking.patient?.name || "";
+        let patientId = booking.patient?.patientId || "";
+        let paymentId = paymentRecord.paymentId || undefined;
+        let paymentStatus = paymentRecord.status || undefined;
+        let paymentAmount = (typeof paymentRecord.amount !== "undefined" ? paymentRecord.amount : undefined);
+        let totalAmount = typeof paymentRecord.totalAmount !== "undefined" ? paymentRecord.totalAmount : undefined;
+        let paymentMethod = paymentRecord.paymentMethod || "";
+        let paymentRecordId = paymentRecord._id || undefined;
+        let amountPaid = (typeof paymentRecord.amountPaid !== "undefined" ? paymentRecord.amountPaid : 0);
+        let discountInfo: DiscountInfo | undefined = undefined;
+        let coupon: Coupon | undefined = undefined;
+        if (paymentRecord.discountInfo) discountInfo = paymentRecord.discountInfo;
+        if (booking.discountInfo && booking.discountInfo.coupon) {
+          coupon = booking.discountInfo.coupon;
+        } else if (paymentRecord.coupon) {
+          coupon = paymentRecord.coupon;
+        }
+        let createdAt = paymentRecord.createdAt || booking.createdAt || undefined;
 
-          let discountPercent: number | undefined = undefined;
-          if (coupon && coupon.discountEnabled && typeof coupon.discount === "number") {
-            discountPercent = coupon.discount;
-          } else if (discountInfo && typeof discountInfo.percent === "number") {
-            discountPercent = discountInfo.percent;
-          }
+        let discountPercent: number | undefined = undefined;
+        if (coupon && coupon.discountEnabled && typeof coupon.discount === "number") {
+          discountPercent = coupon.discount;
+        } else if (discountInfo && typeof discountInfo.percent === "number") {
+          discountPercent = discountInfo.percent;
+        }
 
-          return {
-            _id: booking._id,
-            appointmentId: booking.appointmentId,
-            patientName,
-            patientId,
-            paymentId,
-            paymentStatus,
-            paymentAmount,
-            totalAmount,
-            paymentMethod,
-            paymentRecordId,
-            amountPaid,
-            discountInfo,
-            coupon,
-            createdAt,
-            discountPercent,
-          };
-        });
+        return {
+          _id: booking._id,
+          appointmentId: booking.appointmentId,
+          patientName,
+          patientId,
+          paymentId,
+          paymentStatus,
+          paymentAmount,
+          totalAmount,
+          paymentMethod,
+          paymentRecordId,
+          amountPaid,
+          discountInfo,
+          coupon,
+          createdAt,
+          discountPercent,
+        };
+      });
 
-        pendings.sort((a, b) => {
-          const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-          const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-          return bTime - aTime;
-        });
+      pendings.sort((a, b) => {
+        const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return bTime - aTime;
+      });
 
-        setAppointments(todays);
-        setPayments(pendings);
-      } catch (err) {
-        setAppointments([]);
-        setPayments([]);
-      } finally {
-        setLoading(false);
-      }
+      setAppointments(todays);
+      setPayments(pendings);
+    } catch (err) {
+      setAppointments([]);
+      setPayments([]);
+    } finally {
+      setLoading(false);
     }
-
-    fetchData();
-    return () => {
-      ignore = true;
-    };
   }, []);
 
+  // Use fetchReceptionDeskData in useEffect for mount
+  useEffect(() => {
+    fetchReceptionDeskData();
+  }, [fetchReceptionDeskData]);
+
+  // When check-in or missed happens, refresh via fetchReceptionDeskData
   const handleCheckIn = async (_id: string, sessionId: string) => {
     const token = localStorage.getItem("admin-token");
     try {
@@ -539,13 +538,8 @@ export default function ReceptionDesk() {
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.message || "Failed check-in");
 
-      setAppointments(apps =>
-        apps.map(a =>
-          a._id === _id && a.sessionId === sessionId
-            ? { ...a, status: "CheckedIn" }
-            : a
-        )
-      );
+      // Refresh all data
+      await fetchReceptionDeskData();
     } catch (err) {
       alert(
         typeof err === "string"
@@ -571,13 +565,8 @@ export default function ReceptionDesk() {
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.message || "Failed set as missed");
 
-      setAppointments(apps =>
-        apps.map(a =>
-          a._id === _id && a.sessionId === sessionId
-            ? { ...a, status: "Missed" }
-            : a
-        )
-      );
+      // Refresh all data
+      await fetchReceptionDeskData();
     } catch (err) {
       alert(
         typeof err === "string"
@@ -601,9 +590,11 @@ export default function ReceptionDesk() {
     setMultiCheckingIn(true);
     const token = localStorage.getItem("admin-token");
 
+    // let hadError = false;
+
     for (const key of keys) {
-      const [bookingId, sessionId] = key.split("||");
-      if (!bookingId || !sessionId) continue;
+      const [bookingId, sessionDbId] = key.split("||");
+      if (!bookingId || !sessionDbId) continue;
       try {
         const res = await fetch(`${API_URL}/api/admin/bookings/check-in`, {
           method: "POST",
@@ -611,19 +602,13 @@ export default function ReceptionDesk() {
             Authorization: `${token || ""}`,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ bookingId, sessionId }),
+          body: JSON.stringify({ bookingId, sessionId:sessionDbId}),
         });
         const data = await res.json();
         if (!res.ok || !data.success)
           throw new Error(data.message || "Failed to mark session complete");
-        setAppointments((apps) =>
-          apps.map((a) =>
-            a._id === bookingId && a.sessionId === sessionId
-              ? { ...a, status: "CheckedIn" }
-              : a
-          )
-        );
       } catch (err) {
+        // hadError = true;
         alert(
           "Failed to mark session complete for Appt#: " +
             bookingId +
@@ -638,6 +623,8 @@ export default function ReceptionDesk() {
     }
     setMultiCheckingIn(false);
     setSelectedAppointments({});
+    // Always refresh all data after multi check-in
+    await fetchReceptionDeskData();
   };
 
   // NEW: Multi-mark-missed logic
@@ -653,9 +640,12 @@ export default function ReceptionDesk() {
     setMultiMarkingMissed(true);
     const token = localStorage.getItem("admin-token");
 
+    // let hadError = false;
+
+    // Loop over the API for each appointment (sequentially)
     for (const key of keys) {
-      const [bookingId, sessionId] = key.split("||");
-      if (!bookingId || !sessionId) continue;
+      const [bookingId, sessionDbId] = key.split("||");
+      if (!bookingId || !sessionDbId) continue;
       try {
         const res = await fetch(`${API_URL}/api/admin/bookings/mark-session-missed`, {
           method: "POST",
@@ -663,19 +653,22 @@ export default function ReceptionDesk() {
             Authorization: `${token || ""}`,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ bookingId, sessionId }),
+          body: JSON.stringify({ bookingId, sessionId: sessionDbId }),
         });
-        const data = await res.json();
-        if (!res.ok || !data.success)
+
+        let data;
+        try {
+          data = await res.json();
+        } catch (jsonErr) {
+          // Likely received HTML (server error, like 500), not JSON
+          throw new Error("Server returned invalid response (possibly not JSON).");
+        }
+
+        if (!res.ok || !data.success) {
           throw new Error(data.message || "Failed to mark as missed");
-        setAppointments((apps) =>
-          apps.map((a) =>
-            a._id === bookingId && a.sessionId === sessionId
-              ? { ...a, status: "Missed" }
-              : a
-          )
-        );
+        }
       } catch (err) {
+        // hadError = true;
         alert(
           "Failed to mark missed for Appt#: " +
             bookingId +
@@ -688,8 +681,10 @@ export default function ReceptionDesk() {
         );
       }
     }
+
     setMultiMarkingMissed(false);
     setSelectedAppointments({});
+    await fetchReceptionDeskData();
   };
 
   const toggleAppointmentSelection = (_id: string, sessionId: string) => {
@@ -704,7 +699,7 @@ export default function ReceptionDesk() {
     const newSelection: typeof selectedAppointments = {};
     appointments.forEach((a) => {
       if (a.status === "NotCheckedIn") {
-        newSelection[`${a._id}||${a.sessionId}`] = true;
+        newSelection[`${a._id}||${a.sessionDbId}`] = true;
       }
     });
     setSelectedAppointments(newSelection);
@@ -950,7 +945,7 @@ export default function ReceptionDesk() {
           ) : (
             <div className="space-y-4">
               {appointments.map((a) => {
-                const key = `${a._id}||${a.sessionId}`;
+                const key = `${a._id}||${a.sessionDbId}`;
                 const checked = !!selectedAppointments[key];
                 const selectable = a.status === "NotCheckedIn";
                 const statusObj = getAppointmentStatusStr(a);
@@ -967,7 +962,8 @@ export default function ReceptionDesk() {
                           type="checkbox"
                           checked={checked}
                           disabled={!selectable}
-                          onChange={() => selectable && toggleAppointmentSelection(a._id, a.sessionId)}
+                          onChange={() => selectable && a._id && a.sessionDbId && toggleAppointmentSelection(a._id, a.sessionDbId)}
+                     
                           className="accent-blue-600"
                           tabIndex={selectable ? 0 : -1}
                           aria-label={
@@ -1047,18 +1043,22 @@ export default function ReceptionDesk() {
                       {a.status === "NotCheckedIn" ? (
                         <>
                           <button
-                            onClick={() => handleCheckIn(a._id, a.sessionId)}
+                            onClick={() => a.sessionDbId ? handleCheckIn(a._id, a.sessionDbId) : undefined}
                             className="rounded-full border w-full border-blue-500 px-4 py-1.5 text-xs font-medium text-blue-700 bg-white hover:bg-blue-50 shadow-sm transition"
+                            disabled={!a.sessionDbId}
+                            title={!a.sessionDbId ? "Invalid session ID" : undefined}
                           >
                             Mark Completed
                           </button>
                           <button
-                            onClick={() => handleMissed(a._id, a.sessionId)}
+                            onClick={() => a.sessionDbId ? handleMissed(a._id, a.sessionDbId) : undefined}
                             className="rounded-full border w-full border-rose-500 px-3 py-1.5 text-xs font-medium text-rose-600 bg-white hover:bg-rose-50 shadow-sm transition"
-                            title="Mark as Missed"
+                            title={!a.sessionDbId ? "Invalid session ID" : "Mark as Missed"}
+                            disabled={!a.sessionDbId}
                           >
                             Mark as Missed
                           </button>
+                     
                         </>
                       ) : a.status === "Missed" ? (
                         <span className="rounded-full  border w-full border-rose-500 px-3 py-1.5 text-xs font-semibold text-rose-600 bg-rose-50 whitespace-nowrap">

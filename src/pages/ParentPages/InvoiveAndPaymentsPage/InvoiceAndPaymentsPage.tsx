@@ -14,18 +14,50 @@ import clsx from "clsx";
 
 import { load } from "@cashfreepayments/cashfree-js";
 
+// Extended PaymentDetail interface to support new fields from backend contract
+interface PaymentDiscount {
+  _id: string;
+  discountEnabled: boolean;
+  discount: number; // percentage
+  couponCode: string;
+  validityDays: number;
+  createdAt: string;
+}
 
-// Interface for each payment detail coming from backend
+interface PaymentDetailInfo {
+  _id: string;
+  paymentId: string;
+  totalAmount: number;
+  discountInfo: {
+    code: string | null;
+    percent: number;
+    amount: number;
+  };
+  amount: number;
+  amountPaid: number;
+  status: string;
+  paymentMethod: string;
+  createdAt: string;
+  updatedAt: string;
+  __v: number;
+  paymentTime: string;
+  cashfree?: any;
+}
+
 interface PaymentDetail {
   InvoiceId: string;
   date: string;
-  patientName: string;
-  patientId: string;
-  amount: number;
+  childrenName: string;
+  childrenId?: string;
+  amount: number; // original invoice amount
   status: string;
+  originalInvoiceAmount?: number;
+  invoiceAmount?: number;
+  dueAmount?: number; // (deprecated: will now be recalculated in frontend)
+  discount?: PaymentDiscount;
+  paymentDetail?: PaymentDetailInfo;
 }
 
-// Response interface from backend for payments
 interface PaymentsResponse {
   success: boolean;
   payments: PaymentDetail[];
@@ -40,21 +72,41 @@ const PAGE_SIZE_OPTIONS = [5, 10, 20, 50];
 
 function downloadExcel(filename: string, rows: PaymentDetail[]) {
   const worksheetData = [
-    ["InvoiceId", "Date", "Children Id", "Children Name", "Amount", "Status"],
-    ...rows.map((row) => [
-      row.InvoiceId,
-      row.date ? new Date(row.date).toLocaleDateString("en-GB") : "",
-      row.patientId,
-      row.patientName,
-      row.amount,
-      row.status,
-    ]),
+    [
+      "InvoiceId",
+      "Date",
+      "Children Name",
+      "Amount",
+      "Paid",
+      "Due",
+      "Discount (%)",
+      "Status",
+    ],
+    ...rows.map((row) => {
+      // Use the same functions as table to decide "Paid", "Due", "Discount"
+      const amountPaid = getAmountPaid(row);
+      const discountPercent = getDiscountPercent(row);
+      const due = calculateDueAmount(row);
+      return [
+        row.InvoiceId,
+        row.date ? new Date(row.date).toLocaleDateString("en-GB") : "",
+        row.childrenName,
+        row.amount,
+        amountPaid ?? "-", // paid from paymentDetail
+        typeof due === "number" ? due : "-", // frontend calculated due
+        discountPercent ?? "-", // percent discount if any
+        row.status,
+      ];
+    }),
   ];
 
   const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, "Invoices & Payments");
-  XLSX.writeFile(workbook, filename.endsWith(".xlsx") ? filename : filename + ".xlsx");
+  XLSX.writeFile(
+    workbook,
+    filename.endsWith(".xlsx") ? filename : filename + ".xlsx"
+  );
 }
 
 // Debounce helper
@@ -67,17 +119,78 @@ function useDebouncedValue<T>(value: T, delay = 500): T {
   return debounced;
 }
 
+// Helper to show percent, fixed 2 decimals if needed
+const formatPercent = (percent?: number) =>
+  typeof percent === "number"
+    ? percent % 1 !== 0
+      ? percent.toFixed(2) + "%"
+      : percent + "%"
+    : "-";
+
+// Helper: Calculate discount percent from payment if present
+// Highest priority: payment.discount if enabled, then paymentDetail.discountInfo.percent, else 0
+function getDiscountPercent(payment: PaymentDetail): number {
+  if (payment.discount?.discountEnabled) {
+    return payment.discount.discount;
+  }
+  if (
+    payment.paymentDetail?.discountInfo &&
+    payment.paymentDetail.discountInfo.percent
+  ) {
+    return payment.paymentDetail.discountInfo.percent;
+  }
+  return 0;
+}
+
+function getAmountPaid(payment: PaymentDetail) {
+  if (typeof payment.paymentDetail?.amountPaid === "number")
+    return payment.paymentDetail.amountPaid;
+  // fallback: no paid? assume 0
+  return 0;
+}
+
+// CALCULATE DUE AMOUNT LOGIC: do NOT use dueAmount from backend, instead calculate as follows:
+// - If total invoice amount is present: use payment.amount
+// - Calculate total discount.
+// - Apply discount to (amount) to get dueBeforePayment
+// - If amountPaid exists, due = (amount - discountAmount) - amountPaid, never less than zero.
+// - Expected discount is percentage, not absolute.
+// - If no discount: due = amount - amountPaid
+function calculateDueAmount(payment: PaymentDetail): number | "-" {
+  const amount = typeof payment.amount === "number" ? payment.amount : 0;
+  const amountPaid = getAmountPaid(payment);
+
+  // get percent discount
+  let percent = getDiscountPercent(payment);
+
+  // Defensive: percent could be null/undefined
+  percent = typeof percent === "number" && !isNaN(percent) ? percent : 0;
+
+  let discountAmount = (amount * percent) / 100;
+
+  // Defensive: discountAmount should never exceed amount
+  discountAmount = Math.min(discountAmount, amount);
+
+  const due = Math.max(amount - discountAmount - amountPaid, 0);
+
+  // If payment.amount is invalid, return "-"
+  if (!amount || typeof due !== "number" || isNaN(due)) return "-";
+  return due;
+}
+
 export default function InvoiveAndPaymentsPage() {
   // Table state
-  const [paymentsData, setPaymentsData] = useState<PaymentsResponse | null>(null);
+  const [paymentsData, setPaymentsData] = useState<PaymentsResponse | null>(
+    null
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Cashfree
   const [cashfree, setCashfree] = useState<any>(null);
-  // const [sessionId, setSessionId] = useState<string | null>(null);
-  // const [orderDetails, setOrderDetails] = useState<any>(null);
-  const [paymentInProgress, setPaymentInProgress] = useState(false);
+  const [paymentInProgressId, setPaymentInProgressId] = useState<string | null>(
+    null
+  );
 
   // Search & Pagination UI state (controlled separately)
   const [searchText, setSearchText] = useState("");
@@ -88,7 +201,6 @@ export default function InvoiveAndPaymentsPage() {
 
   // For preventing state reset when table data refreshes
   const pageSizeRef = useRef(pageSize);
-
 
   useEffect(() => {
     const initializeSDK = async () => {
@@ -104,7 +216,7 @@ export default function InvoiveAndPaymentsPage() {
   useEffect(() => {
     setLoading(true);
     setError(null);
-    const baseUrl = import.meta.env.VITE_API_URL  || "";
+    const baseUrl = import.meta.env.VITE_API_URL || "";
     const token = localStorage.getItem("patient-token");
     const params = new URLSearchParams();
     params.append("page", String(currentPage));
@@ -114,11 +226,14 @@ export default function InvoiveAndPaymentsPage() {
     }
 
     axios
-      .get(`${baseUrl}/api/parent/invoice-and-payment?${params.toString()}`, {
-        headers: {
-          Authorization: token ? token : undefined,
-        },
-      })
+      .get(
+        `${baseUrl}/api/parent/invoice-and-payment?${params.toString()}`,
+        {
+          headers: {
+            Authorization: token ? token : undefined,
+          },
+        }
+      )
       .then((response) => {
         setPaymentsData(response.data);
         setLoading(false);
@@ -134,25 +249,19 @@ export default function InvoiveAndPaymentsPage() {
       });
   }, [debouncedSearchText, currentPage, pageSize]);
 
-  // Load Cashfree SDK on mount
-  // useEffect(() => {
-  //   let isMounted = true;
-  //   load().then((cf) => {
-  //     if (isMounted) setCashfree(cf);
-  //   });
-  //   return () => {
-  //     isMounted = false;
-  //   };
-  // }, []);
-
   // Get session ID
-  const getSessionId = async (paymentId: string, name: string, email: string, phone: string) => {
+  const getSessionId = async (
+    paymentId: string,
+    name: string,
+    email: string,
+    phone: string,
+    amount: number // add amount to session id
+  ) => {
     try {
       const API_URL = import.meta.env.VITE_API_URL || "";
-      // Pass paymentId to backend; name/email/phone optional for redundancy
       const response = await axios.post(
         `${API_URL}/api/cashfree/generate-session-id`,
-        { paymentId, name, email, phone }, // paymentId is required
+        { paymentId, name, email, phone, amount },
         { headers: { "Content-Type": "application/json" } }
       );
       if (response.status === 200) {
@@ -165,9 +274,6 @@ export default function InvoiveAndPaymentsPage() {
           customerEmail: data.customer_details?.customer_email,
           customerPhone: data.customer_details?.customer_phone,
         };
-        // setOrderDetails(orderInfo);
-        // setSessionId(data.payment_session_id);
-        console.log(data, "Session Id");
         return {
           ...orderInfo,
           sessionId: data.payment_session_id,
@@ -202,7 +308,9 @@ export default function InvoiveAndPaymentsPage() {
   };
 
   // --- Search bar controls ---
-  const handleSearchInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleSearchInputChange = (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
     setSearchText(e.target.value);
     setCurrentPage(1);
   };
@@ -212,23 +320,29 @@ export default function InvoiveAndPaymentsPage() {
 
   // Handle Payment via Cashfree for a given payment row
   const handlePayment = async (payment: PaymentDetail) => {
-    setPaymentInProgress(true);
+    setPaymentInProgressId(payment.InvoiceId);
     try {
       // Get children details from the row
-      const { patientName, InvoiceId } = payment;
-      // We'll need a valid email and phone for cashfree
-      // (These should be retrieved in real implementation from user info or backfill)
-      // Using dummy for now:
+      const { childrenName, InvoiceId } = payment;
       const email = "parent@email.com";
       const phone = "9999999999";
-      const sessionData = await getSessionId(InvoiceId, patientName, email, phone);
+      // Calculate paid + due + discount info (frontend calculation)
+      let amountToPay = calculateDueAmount(payment);
+
+      if (typeof amountToPay !== "number" || amountToPay < 1) {
+        setPaymentInProgressId(null);
+        alert("Nothing due for this invoice.");
+        return;
+      }
+      // Pass frontend calculated due as 'amount'
+      const sessionData = await getSessionId(InvoiceId, childrenName, email, phone, amountToPay);
       if (!cashfree) {
-        setPaymentInProgress(false);
+        setPaymentInProgressId(null);
         console.error("Cashfree SDK not initialized.");
         return;
       }
       if (!sessionData?.sessionId) {
-        setPaymentInProgress(false);
+        setPaymentInProgressId(null);
         console.error("Session Id not found.");
         return;
       }
@@ -249,7 +363,7 @@ export default function InvoiveAndPaymentsPage() {
     } catch (error) {
       console.log(error);
     }
-    setPaymentInProgress(false);
+    setPaymentInProgressId(null);
   };
 
   return (
@@ -264,7 +378,9 @@ export default function InvoiveAndPaymentsPage() {
         </h1>
         {!loading && !error && paymentsData?.payments?.length ? (
           <button
-            onClick={() => downloadExcel("invoices-payments", paymentsData.payments)}
+            onClick={() =>
+              downloadExcel("invoices-payments", paymentsData.payments)
+            }
             className="flex items-center gap-2 px-3 py-2 border rounded text-sm text-slate-700 hover:bg-slate-100 transition"
           >
             <FiDownload /> Download Excel
@@ -279,7 +395,7 @@ export default function InvoiveAndPaymentsPage() {
           <FiSearch className="text-slate-400" />
           <input
             type="text"
-            placeholder="Search by children name, Children Id or Invoice ID"
+            placeholder="Search by children name or Invoice ID"
             value={searchText}
             onChange={handleSearchInputChange}
             className="outline-none flex-1 px-1 py-2 bg-transparent text-slate-800 placeholder:text-slate-400"
@@ -294,38 +410,52 @@ export default function InvoiveAndPaymentsPage() {
             onChange={handlePageSizeChange}
           >
             {PAGE_SIZE_OPTIONS.map((size) => (
-              <option key={size} value={size}>{size}</option>
+              <option key={size} value={size}>
+                {size}
+              </option>
             ))}
           </select>
         </div>
         {/* PAGINATION */}
         <div className="flex items-center gap-1 ml-auto">
           <button
-            className={clsx("px-1 py-1", currentPage <= 1 && "opacity-50 pointer-events-none")}
+            className={clsx(
+              "px-1 py-1",
+              currentPage <= 1 && "opacity-50 pointer-events-none"
+            )}
             onClick={() => goToPage(1)}
             aria-label="First page"
           >
             <FiChevronsLeft size={18} />
           </button>
           <button
-            className={clsx("px-1 py-1", currentPage <= 1 && "opacity-50 pointer-events-none")}
+            className={clsx(
+              "px-1 py-1",
+              currentPage <= 1 && "opacity-50 pointer-events-none"
+            )}
             onClick={() => goToPage(currentPage - 1)}
             aria-label="Previous page"
           >
             <FiChevronLeft size={18} />
           </button>
           <span className="px-2 text-slate-700 text-sm font-semibold select-none">
-            Page {currentPage} / {numPages || 1}
+            Page {paymentsData?.page ?? currentPage} / {numPages || 1}
           </span>
           <button
-            className={clsx("px-1 py-1", currentPage >= numPages && "opacity-50 pointer-events-none")}
+            className={clsx(
+              "px-1 py-1",
+              currentPage >= numPages && "opacity-50 pointer-events-none"
+            )}
             onClick={() => goToPage(currentPage + 1)}
             aria-label="Next page"
           >
             <FiChevronRight size={18} />
           </button>
           <button
-            className={clsx("px-1 py-1", currentPage >= numPages && "opacity-50 pointer-events-none")}
+            className={clsx(
+              "px-1 py-1",
+              currentPage >= numPages && "opacity-50 pointer-events-none"
+            )}
             onClick={() => goToPage(numPages)}
             aria-label="Last page"
           >
@@ -349,62 +479,89 @@ export default function InvoiveAndPaymentsPage() {
               <tr>
                 <th className="px-4 py-3 text-left">Invoice ID</th>
                 <th className="px-4 py-3 text-left">Date</th>
-                <th className="px-4 py-3 text-left">Children Name & Id</th>
+                <th className="px-4 py-3 text-left">Children Name</th>
                 <th className="px-4 py-3 text-right">Amount</th>
+                <th className="px-4 py-3 text-right">Paid</th>
+                <th className="px-4 py-3 text-right">Due</th>
+                <th className="px-4 py-3 text-center">Discount (%)</th>
                 <th className="px-4 py-3 text-center">Status</th>
                 <th className="px-4 py-3 text-center">Action</th>
               </tr>
             </thead>
             <tbody>
               {displayedRows && displayedRows.length > 0 ? (
-                displayedRows.map((payment, idx) => (
-                  <tr key={idx} className="border-t">
-                    <td className="px-4 py-3 font-mono">{payment.InvoiceId}</td>
-                    <td className="px-4 py-3">
-                      {payment.date
-                        ? new Date(payment.date).toLocaleDateString("en-GB")
-                        : "-"}
-                    </td>
-                    <td className="px-4 py-3">
-                      {payment.patientName}
-                      <span className="px-1"></span>
-                      ({payment.patientId})
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      ₹{Number(payment.amount).toLocaleString("en-IN")}
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <span
-                        className={
-                          payment.status === "paid"
-                            ? "text-green-600 font-semibold"
-                            : payment.status === "pending"
-                            ? "text-yellow-600 font-semibold"
-                            : "text-slate-800"
-                        }
-                      >
-                        {payment.status?.charAt(0).toUpperCase() +
-                          payment.status.slice(1)}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      {payment.status === "pending" ? (
-                        <button
-                          className="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 transition text-sm disabled:opacity-50"
-                          disabled={paymentInProgress}
-                          onClick={() => handlePayment(payment)}
+                displayedRows.map((payment, idx) => {
+                  const amountPaid = getAmountPaid(payment);
+                  const amountDue = calculateDueAmount(payment);
+                  const discountPercent = getDiscountPercent(payment);
+                  return (
+                    <tr key={idx} className="border-t">
+                      <td className="px-4 py-3 font-mono">{payment.InvoiceId}</td>
+                      <td className="px-4 py-3">
+                        {payment.date
+                          ? new Date(payment.date).toLocaleDateString("en-GB")
+                          : "-"}
+                      </td>
+                      <td className="px-4 py-3">{payment.childrenName}</td>
+                      <td className="px-4 py-3 text-right">
+                        ₹{Number(payment.amount).toLocaleString("en-IN")}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        ₹{amountPaid ? Number(amountPaid).toLocaleString("en-IN") : 0}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        {typeof amountDue === "number"
+                          ? `₹${Number(amountDue).toLocaleString("en-IN")}`
+                          : "-"}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        {formatPercent(discountPercent)}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <span
+                          className={
+                            payment.status === "paid"
+                              ? "text-green-600 font-semibold"
+                              : payment.status === "pending"
+                              ? "text-yellow-600 font-semibold"
+                              : payment.status === "partiallypaid"
+                              ? "text-orange-600 font-semibold"
+                              : "text-slate-800"
+                          }
                         >
-                          {paymentInProgress ? "Processing..." : "Pay Now"}
-                        </button>
-                      ) : (
-                        <span className="text-gray-400 text-xs">-</span>
-                      )}
-                    </td>
-                  </tr>
-                ))
+                          {payment.status
+                            ? payment.status.charAt(0).toUpperCase() +
+                              payment.status.slice(1)
+                            : ""}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        {(payment.status === "pending" ||
+                          payment.status === "partiallypaid") &&
+                        typeof amountDue === "number" &&
+                        amountDue > 0 ? (
+                          <button
+                            className="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 transition text-sm disabled:opacity-50"
+                            disabled={paymentInProgressId === payment.InvoiceId}
+                            onClick={() => handlePayment(payment)}
+                          >
+                            {paymentInProgressId === payment.InvoiceId
+                              ? "Processing..."
+                              : "Pay Now"}
+                          </button>
+                        ) : (
+                          <span className="text-gray-400 text-xs">-</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
               ) : (
                 <tr>
-                  <td colSpan={6} className="px-4 py-6 text-center text-slate-400">
+                  <td
+                    colSpan={9}
+                    className="px-4 py-6 text-center text-slate-400"
+                  >
                     No payment records found.
                   </td>
                 </tr>
@@ -417,14 +574,20 @@ export default function InvoiveAndPaymentsPage() {
       {/* Display total summary/pagination below table if desired */}
       <div className="flex flex-row flex-wrap items-center justify-between gap-2 mt-4">
         <div className="text-sm text-slate-500">
-          Showing {(currentPage - 1) * pageSize + 1}
-          -
-          {Math.min((currentPage - 1) * pageSize + (paymentsData?.payments?.length || 0), totalCount)}
-          {" "}of {totalCount} record{totalCount !== 1 ? "s" : ""}
+          {/* Show the correct record indices and correct page */}
+          {(() => {
+            if (!paymentsData || paymentsData.total === 0) return "Showing 0 of 0 records";
+            const startIdx =
+              ((paymentsData.page ?? 1) - 1) * (paymentsData.limit ?? 10) + 1;
+            const endIdx =
+              ((paymentsData.page ?? 1) - 1) * (paymentsData.limit ?? 10) +
+              (paymentsData.payments?.length || 0);
+            return `Showing ${startIdx}-${endIdx} of ${paymentsData.total} record${
+              paymentsData.total !== 1 ? "s" : ""
+            }`;
+          })()}
         </div>
-        <div>
-          {/* Duplicate pagination controls below if desired */}
-        </div>
+        <div>{/* Duplicate pagination controls below if desired */}</div>
       </div>
       {/* Optionally, your PaymentConfirmation modal/dialog here if you want */}
       {/* <PaymentConfirmation orderDetails={orderDetails} /> */}

@@ -22,7 +22,7 @@ interface FormDataState {
   fatherFullName: string;
   motherFullName: string;
   parentOccupation: string;
-  motherOccupation: string; // <--- added
+  motherOccupation: string;
   parentEmail: string;
   mobile1: string;
   mobile2: string;
@@ -59,34 +59,19 @@ interface FileProps {
   required?: boolean;
 }
 
+// Only these three fields are mandatory for registration
 const mandatoryFields: (keyof FormDataState)[] = [
-  "email",
   "childFullName",
-  "gender",
-  "childDOB",
-  "fatherFullName",
-  "motherFullName",
-  "motherOccupation", // <--- added
-  "parentEmail",
   "mobile1",
-  "mobile2", // <-- Father Mobile Number now mandatory
   "address",
-  "areaName",
-  "pincode",
-  "diagnosisInfo",
-  "childReference",
-  "parentOccupation",
 ];
 
 // --- Date utilities for DD/MM/YYYY (frontend only) ---
 function formatToDisplayDate(ddmmyyyy: string | undefined): string {
-  // In this frontend, stored date is always in dd/mm/yyyy, so we just return as is (or blank)
   if (!ddmmyyyy) return "";
-  // Optionally, could validate format
   return ddmmyyyy;
 }
 
-// Converts Date to 'dd/mm/yyyy' for frontend display/state
 function dateToDDMMYYYY(d: Date | null | undefined): string {
   if (!d) return "";
   const dd = String(d.getDate()).padStart(2, "0");
@@ -95,7 +80,6 @@ function dateToDDMMYYYY(d: Date | null | undefined): string {
   return `${dd}/${mm}/${yyyy}`;
 }
 
-// Converts 'dd/mm/yyyy' string to Date
 function ddmmyyyyToDate(s: string): Date | null {
   if (!s) return null;
   const match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(s);
@@ -106,7 +90,6 @@ function ddmmyyyyToDate(s: string): Date | null {
   return date;
 }
 
-// Converts 'dd/mm/yyyy' string to 'yyyy-mm-dd' for backend
 function ddmmyyyyToISO(dateStr: string): string {
   const parts = dateStr.split("/");
   if (parts.length !== 3) return "";
@@ -124,7 +107,7 @@ export default function PatientRegistration() {
     childDOB: "",
     fatherFullName: "",
     motherFullName: "",
-    motherOccupation: "", // <--- added
+    motherOccupation: "",
     parentEmail: "",
     mobile1: "",
     mobile2: "",
@@ -155,34 +138,12 @@ export default function PatientRegistration() {
 
   const canProceed = () => {
     if (step === 1) {
-      return mandatoryFields
-        .filter(
-          (f) =>
-            [
-              "email",
-              "childFullName",
-              "gender",
-              "childDOB",
-              "fatherFullName",
-              "motherFullName",
-              "motherOccupation", // <--- added
-              "parentEmail",
-              "mobile1", // Mother Mobile Number
-              "mobile2", // Father Mobile Number now mandatory
-              "address",
-              "areaName",
-              "pincode",
-              "diagnosisInfo",
-              "childReference",
-              "parentOccupation",
-            ].includes(f)
-        )
-        .every(
-          (field) =>
-            formData[field] &&
-            (typeof formData[field] !== "string" ||
-              (formData[field] as string).trim() !== "")
-        );
+      return mandatoryFields.every(
+        (field) =>
+          formData[field] &&
+          (typeof formData[field] !== "string" ||
+            (formData[field] as string).trim() !== "")
+      );
     }
     return true;
   };
@@ -236,7 +197,7 @@ export default function PatientRegistration() {
         }
 
         if (errorMsg.toLowerCase().includes("duplicate")) {
-          toast.error("A children with this email already exists.", { position: "top-right" });
+          toast.error("A child with this email/number already exists.", { position: "top-right" });
         } else if (errorObj.errors && typeof errorObj.errors === "object") {
           const firstError = Object.values(errorObj.errors)[0];
           if (typeof firstError === "string") {
@@ -278,8 +239,6 @@ export default function PatientRegistration() {
     }
     setStep((prev) => prev + 1);
   };
-
-  // No ISO to Date/Date to ISO helpers exposed to the frontend. Everything is DD/MM/YYYY in the frontend after this point.
 
   return (
     <>
@@ -328,17 +287,6 @@ export default function PatientRegistration() {
               {step === 1 && (
                 <Section title="Children & Parent Details">
                   <Input
-                    label="Email (for login)*"
-                    value={formData.email}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) => update("email", e.target.value)}
-                    type="email"
-                    required
-                    autoComplete="email"
-                    style={
-                      shouldShowError("email") ? { borderColor: "red" } : {}
-                    }
-                  />
-                  <Input
                     label="Child Full Name (CAPITAL LETTERS)*"
                     value={formData.childFullName}
                     onChange={(e: ChangeEvent<HTMLInputElement>) => update("childFullName", e.target.value)}
@@ -347,100 +295,14 @@ export default function PatientRegistration() {
                       shouldShowError("childFullName") ? { borderColor: "red" } : {}
                     }
                   />
-                  <div className="mb-4">
-                    <label className="block text-gray-700 font-semibold mb-2">
-                      Gender*
-                    </label>
-                    <select
-                      value={formData.gender}
-                      onChange={(e: ChangeEvent<HTMLSelectElement>) => update("gender", e.target.value)}
-                      required
-                      className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-300"
-                      style={shouldShowError("gender") ? { borderColor: "red" } : {}}
-                    >
-                      <option value="">Select Gender</option>
-                      <option value="Male">Male</option>
-                      <option value="Female">Female</option>
-                      <option value="Other">Other</option>
-                    </select>
-                  </div>
-                  {/* Date of birth */}
-                  <DateInput
-                    label="Date of Birth*"
-                    value={formData.childDOB}
-                    onChange={(value: string) => {
-                      // Store in state as dd/mm/yyyy only
-                      update("childDOB", value);
-                    }}
-                    required
-                    style={
-                      shouldShowError("childDOB") ? { borderColor: "red" } : {}
-                    }
-                  />
                   <Input
-                    label="Father's Full Name*"
-                    value={formData.fatherFullName}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) => update("fatherFullName", e.target.value)}
-                    required
-                    style={
-                      shouldShowError("fatherFullName") ? { borderColor: "red" } : {}
-                    }
-                  />
-                  <Input
-                    label="Mother's Full Name*"
-                    value={formData.motherFullName}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) => update("motherFullName", e.target.value)}
-                    required
-                    style={
-                      shouldShowError("motherFullName") ? { borderColor: "red" } : {}
-                    }
-                  />
-                  <Input
-                    label="Father Occupation*"
-                    value={formData.parentOccupation}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) => update("parentOccupation", e.target.value)}
-                    required
-                    style={
-                      shouldShowError("parentOccupation") ? { borderColor: "red" } : {}
-                    }
-                  />
-                  <Input
-                    label="Mother's Occupation*"
-                    value={formData.motherOccupation}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) => update("motherOccupation", e.target.value)}
-                    required
-                    style={
-                      shouldShowError("motherOccupation") ? { borderColor: "red" } : {}
-                    }
-                  />
-                  <Input
-                    label="Parent Email*"
-                    value={formData.parentEmail}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) => update("parentEmail", e.target.value)}
-                    type="email"
-                    required
-                    style={
-                      shouldShowError("parentEmail") ? { borderColor: "red" } : {}
-                    }
-                  />
-                  <Input
-                    label="Mother Mobile Number*"
+                    label="Primary Contact Number*"
                     value={formData.mobile1}
                     onChange={(e: ChangeEvent<HTMLInputElement>) => update("mobile1", e.target.value)}
                     type="tel"
                     required
                     style={
                       shouldShowError("mobile1") ? { borderColor: "red" } : {}
-                    }
-                  />
-                  <Input
-                    label="Father Mobile Number*"
-                    value={formData.mobile2}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) => update("mobile2", e.target.value)}
-                    type="tel"
-                    required
-                    style={
-                      shouldShowError("mobile2") ? { borderColor: "red" } : {}
                     }
                   />
                   <Input
@@ -452,43 +314,89 @@ export default function PatientRegistration() {
                       shouldShowError("address") ? { borderColor: "red" } : {}
                     }
                   />
+
+                  {/* All fields below are optional */}
                   <Input
-                    label="Area Name*"
+                    label="Email (for login)"
+                    value={formData.email}
+                    onChange={(e: ChangeEvent<HTMLInputElement>) => update("email", e.target.value)}
+                    type="email"
+                    autoComplete="email"
+                  />
+                  <div className="mb-4">
+                    <label className="block text-gray-700 font-semibold mb-2">
+                      Gender
+                    </label>
+                    <select
+                      value={formData.gender}
+                      onChange={(e: ChangeEvent<HTMLSelectElement>) => update("gender", e.target.value)}
+                      className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-300"
+                    >
+                      <option value="">Select Gender</option>
+                      <option value="Male">Male</option>
+                      <option value="Female">Female</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+                  {/* Date of birth */}
+                  <DateInput
+                    label="Date of Birth"
+                    value={formData.childDOB}
+                    onChange={(value: string) => update("childDOB", value)}
+                  />
+                  <Input
+                    label="Father's Full Name"
+                    value={formData.fatherFullName}
+                    onChange={(e: ChangeEvent<HTMLInputElement>) => update("fatherFullName", e.target.value)}
+                  />
+                  <Input
+                    label="Mother's Full Name"
+                    value={formData.motherFullName}
+                    onChange={(e: ChangeEvent<HTMLInputElement>) => update("motherFullName", e.target.value)}
+                  />
+                  <Input
+                    label="Father Occupation"
+                    value={formData.parentOccupation}
+                    onChange={(e: ChangeEvent<HTMLInputElement>) => update("parentOccupation", e.target.value)}
+                  />
+                  <Input
+                    label="Mother's Occupation"
+                    value={formData.motherOccupation}
+                    onChange={(e: ChangeEvent<HTMLInputElement>) => update("motherOccupation", e.target.value)}
+                  />
+                  <Input
+                    label="Parent Email"
+                    value={formData.parentEmail}
+                    onChange={(e: ChangeEvent<HTMLInputElement>) => update("parentEmail", e.target.value)}
+                    type="email"
+                  />
+                  <Input
+                    label="Father Mobile Number"
+                    value={formData.mobile2}
+                    onChange={(e: ChangeEvent<HTMLInputElement>) => update("mobile2", e.target.value)}
+                    type="tel"
+                  />
+                  <Input
+                    label="Area Name"
                     value={formData.areaName}
                     onChange={(e: ChangeEvent<HTMLInputElement>) => update("areaName", e.target.value)}
-                    required
-                    style={
-                      shouldShowError("areaName") ? { borderColor: "red" } : {}
-                    }
                   />
                   <Input
-                    label="Pincode*"
+                    label="Pincode"
                     value={formData.pincode}
                     onChange={(e: ChangeEvent<HTMLInputElement>) => update("pincode", e.target.value)}
-                    required
-                    style={
-                      shouldShowError("pincode") ? { borderColor: "red" } : {}
-                    }
                   />
                   <Input
-                    label="Brief Information on Diagnosis*"
+                    label="Brief Information on Diagnosis"
                     value={formData.diagnosisInfo}
                     onChange={(e: ChangeEvent<HTMLInputElement>) => update("diagnosisInfo", e.target.value)}
-                    required
-                    style={
-                      shouldShowError("diagnosisInfo") ? { borderColor: "red" } : {}
-                    }
                   />
                   <Input
-                    label="Child Reference*"
+                    label="Child Reference"
                     value={formData.childReference}
                     onChange={(e: ChangeEvent<HTMLInputElement>) => update("childReference", e.target.value)}
-                    required
-                    style={
-                      shouldShowError("childReference") ? { borderColor: "red" } : {}
-                    }
                   />
-               
+
                   <File
                     label="Profile Photo (optional, JPG/PNG)"
                     onChange={(file: File) => update("profilePhoto", file)}
@@ -518,8 +426,10 @@ export default function PatientRegistration() {
                     <div className="bg-slate-50 p-6 rounded-xl grid grid-cols-1 md:grid-cols-2 gap-6 text-base">
                       <div>
                         <h3 className="font-semibold text-gray-700 mb-2 border-b pb-1">Children Details</h3>
-                        <Detail label="Email" value={formData.email} />
                         <Detail label="Child Name" value={formData.childFullName} />
+                        <Detail label="Primary Contact Number" value={formData.mobile1} />
+                        <Detail label="Address" value={formData.address} />
+                        <Detail label="Email" value={formData.email} />
                         <Detail label="Gender" value={formData.gender} />
                         <Detail label="Date of Birth" value={formatToDisplayDate(formData.childDOB)} />
                         <Detail label="Diagnosis Info" value={formData.diagnosisInfo} />
@@ -532,11 +442,9 @@ export default function PatientRegistration() {
                         <Detail label="Mother's Occupation" value={formData.motherOccupation} />
                         <Detail label="Parent Email" value={formData.parentEmail} />
                         <Detail label="Parent Occupation" value={formData.parentOccupation} />
-                        <Detail label="Mother Mobile Number" value={formData.mobile1} />
                         <Detail label="Father Mobile Number" value={formData.mobile2} />
                         <Detail label="Area Name" value={formData.areaName} />
                         <Detail label="Pincode" value={formData.pincode} />
-                        <Detail label="Address" value={formData.address} />
                       </div>
                       <div>
                         <h3 className="font-semibold text-gray-700 mb-2 border-b pb-1">Uploaded Documents</h3>
@@ -648,7 +556,7 @@ function DateInput({
   value,
   onChange,
   required,
-  // style, 
+
 }: {
   label: string;
   value: string;
@@ -656,10 +564,6 @@ function DateInput({
   required?: boolean;
   style?: React.CSSProperties;
 }) {
-  // Receive and emit date in 'dd/mm/yyyy' only (frontend format)
-  // Parse dd/mm/yyyy to Date for DatePicker, and on select, emit dd/mm/yyyy to parent
-
-  // If the value is in dd/mm/yyyy, turn into Date
   const selectedDate = value ? ddmmyyyyToDate(value) : null;
 
   return (
