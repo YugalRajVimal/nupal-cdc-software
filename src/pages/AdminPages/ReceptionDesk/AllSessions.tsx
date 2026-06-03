@@ -153,7 +153,7 @@ export default function AllUpcomingSessions() {
   const [multiMissingIn, setMultiMissingIn] = useState(false);
 
   // Filter state: 'all', 'checkedIn', 'notCheckedIn', 'missed'
-  const [checkedInFilter, setCheckedInFilter] = useState<'all' | 'checkedIn' | 'notCheckedIn' | 'missed'>('all');
+  const [checkedInFilter, setCheckedInFilter] = useState<'all' | 'CheckedIn' | 'NotCheckedIn' | 'Missed'>('all');
 
   // Fetch all sessions (no filter)
   const fetchSessions = async () => {
@@ -373,15 +373,15 @@ export default function AllUpcomingSessions() {
 
   // Filtering logic
   let filteredSessions = sessions;
-  if (checkedInFilter === "checkedIn") {
+  if (checkedInFilter === "CheckedIn") {
     filteredSessions = sessions.filter(
       (s) => s.session.status === "CheckedIn" || (!s.session.status && s.session.isCheckedIn)
     );
-  } else if (checkedInFilter === "notCheckedIn") {
+  } else if (checkedInFilter === "NotCheckedIn") {
     filteredSessions = sessions.filter(
-      (s) => s.session.status === "scheduled" || (!s.session.status && !s.session.isCheckedIn)
+      (s) => s.session.status === "NotCheckedIn" || (!s.session.status && !s.session.isCheckedIn)
     );
-  } else if (checkedInFilter === "missed") {
+  } else if (checkedInFilter === "Missed") {
     filteredSessions = sessions.filter(
       (s) => s.session.status === "Missed"
     );
@@ -419,15 +419,15 @@ export default function AllUpcomingSessions() {
           value={checkedInFilter}
           onChange={e =>
             setCheckedInFilter(
-              e.target.value as 'all' | 'checkedIn' | 'notCheckedIn' | 'missed'
+              e.target.value as 'all' | 'CheckedIn' | 'NotCheckedIn' | 'Missed'
             )
           }
           style={{ minWidth: 170 }}
         >
           <option value="all">All Sessions</option>
-          <option value="notCheckedIn">Not Checked-In</option>
-          <option value="checkedIn">Checked-In</option>
-          <option value="missed">Missed</option>
+          <option value="NotCheckedIn">Not Checked-In</option>
+          <option value="CheckedIn">Checked-In</option>
+          <option value="Missed">Missed</option>
         </select>
       </div>
 
@@ -457,7 +457,7 @@ export default function AllUpcomingSessions() {
               {filteredSessions.length} result{filteredSessions.length === 1 ? "" : "s"}
             </span>
           </div>
-          {notCheckedInCount > 0 && checkedInFilter !== "checkedIn" && checkedInFilter !== "missed" && (
+          {notCheckedInCount > 0 && checkedInFilter !== "CheckedIn" && checkedInFilter !== "Missed" && (
             <div className="flex gap-4 items-center mb-3">
               <div className="flex items-center select-none">
                 <input
@@ -545,7 +545,7 @@ export default function AllUpcomingSessions() {
                         style={{ background: isUnchecked && isSelected ? "#e0f2fe" : undefined }}
                       >
                         <td className="py-2 px-2 text-center">
-                          {isUnchecked && checkedInFilter !== "checkedIn" && checkedInFilter !== "missed" ? (
+                          {isUnchecked && checkedInFilter !== "CheckedIn" && checkedInFilter !== "Missed" ? (
                             <input
                               type="checkbox"
                               checked={isSelected}
@@ -639,7 +639,7 @@ export default function AllUpcomingSessions() {
                           </span>
                         </td>
                         <td className="py-2 px-2 text-center">
-                          {isUnchecked && checkedInFilter !== "checkedIn" && checkedInFilter !== "missed" && (
+                          {isUnchecked && checkedInFilter !== "CheckedIn" && checkedInFilter !== "Missed" && (
                             <div className="flex gap-1 flex-col md:flex-row md:gap-2">
                               <button
                                 className="rounded bg-green-600 text-white px-3 py-1 font-semibold text-xs hover:bg-green-700 transition-all"
