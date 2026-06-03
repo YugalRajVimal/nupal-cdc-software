@@ -1652,7 +1652,7 @@ export function BookingFormPanel({
           placeholder="Enter Coupon Code"
           value={couponInput}
           onChange={e => { setCouponInput(e.target.value); setCouponStatus(null); }}
-          disabled={!!editBookingId}
+          // disabled={!!editBookingId}
         />
         <button
           type="button"
