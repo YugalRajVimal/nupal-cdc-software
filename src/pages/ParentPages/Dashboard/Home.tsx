@@ -30,8 +30,8 @@ const SESSION_TIME_OPTIONS = [
 interface PaymentDetail {
   InvoiceId: string;
   date: string;
-  patientName: string;
-  patientId: string;
+  childrenName: string;
+  childrenId: string;
   amount: number;
   status: string;
 }
@@ -45,7 +45,8 @@ interface UncheckedSessionTherapist {
 }
 
 interface UncheckedSession {
-  patientId: string;
+
+  childrenId:string;
   name: string;
   notCheckedInSession: {
     date: string;
@@ -260,7 +261,9 @@ const ParentDashboard: React.FC = () => {
                   <th className="px-3 py-2 text-left">Invoice ID</th>
                   <th className="px-3 py-2 text-left">Date</th>
                   <th className="px-3 py-2 text-left">Children Name</th>
+                  <th className="px-3 py-2 text-left">Children ID</th>
                   <th className="px-3 py-2 text-right">Amount</th>
+                  <th className="px-3 py-2 text-left">Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -273,12 +276,16 @@ const ParentDashboard: React.FC = () => {
                         : "-"}
                     </td>
                     <td className="px-3 py-2">
-                      {payment.patientName}
-                      <span className="px-1"></span>
-                      ({payment.patientId})
+                      {payment.childrenName}
+                    </td>
+                    <td className="px-3 py-2">
+                      {payment.childrenId}
                     </td>
                     <td className="px-3 py-2 text-right">
                       ₹{Number(payment.amount).toLocaleString("en-IN")}
+                    </td>
+                    <td className="px-3 py-2">
+                      {payment.status ? payment.status.charAt(0).toUpperCase() + payment.status.slice(1) : "-"}
                     </td>
                   </tr>
                 ))}
@@ -400,7 +407,7 @@ const ParentDashboard: React.FC = () => {
                       {getSlotLabel(session.notCheckedInSession.slotId)}
                     </td>
                     <td className="px-3 py-2">
-                      {session.name ? session.name : "-"} ({session.patientId})
+                      {session.name ? session.name : "-"} ({session.childrenId})
                     </td>
                     <td className="px-3 py-2">
                       {getTherapistName(session.notCheckedInSession.therapist)} ({getTherapistId(session.notCheckedInSession.therapist)})
