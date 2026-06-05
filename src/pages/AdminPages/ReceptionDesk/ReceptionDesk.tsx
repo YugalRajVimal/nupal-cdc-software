@@ -8,6 +8,7 @@ import {
   FiChevronUp,
   FiX,
 } from "react-icons/fi";
+import { FiDollarSign, FiSmartphone } from "react-icons/fi";
 import { motion, AnimatePresence } from "framer-motion";
 
 // --- BEGIN: Discount related :: align to BookingSummary logic ---
@@ -117,11 +118,18 @@ type CollectPaymentModalProps = {
   payment?: PaymentInfo | null;
   onCollected: () => void;
 };
+
+// Add paymentMethod (cash/online) and UTR number, with UI and submission (using BookingSummary.tsx as reference)
+
+type PaymentMethod = "cash" | "online" | "";
+
 function CollectPaymentModal({ open, onClose, payment, onCollected }: CollectPaymentModalProps) {
   const [collectType, setCollectType] = useState<"full" | "partial">("full");
   const [partialValue, setPartialValue] = useState("");
   const [loading, setLoading] = useState(false);
   const [applyDiscount, setApplyDiscount] = useState(true);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("");
+  const [utr, setUtr] = useState("");
 
   const discountPercent =
     payment && typeof getDiscountPercent(payment) === "number"
@@ -148,22 +156,26 @@ function CollectPaymentModal({ open, onClose, payment, onCollected }: CollectPay
       ? paymentAmount - amountAlreadyPaid
       : paymentAmount;
 
+  // Payment method details (new)
+  const needsUtr = paymentMethod === "online";
+  const utrMissing = needsUtr && utr.trim() === "";
+  const canSubmit = !loading && !isPartialOverDue && paymentMethod !== "" && !utrMissing &&
+    (collectType === "full" || (!isNaN(partialNumeric) && partialNumeric > 0));
+
   useEffect(() => {
     if (open) {
       setCollectType("full");
       setPartialValue("");
       setLoading(false);
       setApplyDiscount(true);
+      setPaymentMethod("");
+      setUtr("");
     }
   }, [open, payment]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!payment || loading || isPartialOverDue) return;
-    if (collectType === "partial" && (isNaN(partialNumeric) || partialNumeric <= 0)) {
-      alert("Please enter a valid partial amount.");
-      return;
-    }
+    if (!payment || !canSubmit) return;
     let endpoint = import.meta.env.VITE_API_URL || (window as any).VITE_API_URL;
     if (endpoint) endpoint = endpoint.replace(/\/$/, "");
     setLoading(true);
@@ -171,13 +183,15 @@ function CollectPaymentModal({ open, onClose, payment, onCollected }: CollectPay
       const body: Record<string, any> = {
         paymentType: collectType,
         applyDiscount,
+        paymentMethod,
+        ...(needsUtr && utr.trim() ? { utr: utr.trim() } : {}),
+        ...(collectType === "partial" ? { partialAmount: partialNumeric } : {}),
       };
       if (typeof discountPercent === "number" && discountPercent > 0 && applyDiscount) {
         body.discountApplied = true;
       } else {
         body.discountApplied = false;
       }
-      if (collectType === "partial") body.partialAmount = partialNumeric;
 
       const res = await fetch(
         `${endpoint}/api/admin/bookings/${payment._id}/collect-payment`,
@@ -236,7 +250,7 @@ function CollectPaymentModal({ open, onClose, payment, onCollected }: CollectPay
             <div className="text-sm mb-3">
               <span className="font-medium text-blue-700">
                 Appt#: {payment.appointmentId}
-              </span>
+              </span>{" "}
               <br />
               <span className="text-slate-800">{payment.patientName}</span>{" "}
               <span className="text-xs text-blue-300 font-mono">
@@ -353,14 +367,58 @@ function CollectPaymentModal({ open, onClose, payment, onCollected }: CollectPay
                   )}
                 </div>
               )}
+              {/* ── Payment Method Select (Cash, Online) ── */}
+              <div className="mb-3">
+                <label className="block font-medium text-slate-700 mb-1">
+                  Payment Method <span className="text-red-500">*</span>
+                </label>
+                <div className="flex gap-2">
+                  {(["cash", "online"] as PaymentMethod[]).map((m) => (
+                    <button
+                      type="button"
+                      key={m}
+                      onClick={() => { setPaymentMethod(m); if (m === "cash") setUtr(""); }}
+                      className={`flex-1 py-1.5 text-xs font-medium rounded border transition-colors ${
+                        paymentMethod === m
+                          ? "border-blue-500 bg-blue-50 text-blue-800"
+                          : "border-slate-300 bg-slate-50 text-slate-600 hover:bg-slate-100"
+                      }`}
+                      disabled={loading}
+                    >
+                      {m === "cash" && <FiDollarSign className="inline mr-1" />}
+                      {m === "online" && <FiSmartphone className="inline mr-1" />}
+                      {m === "cash" ? "Cash" : "Online / UPI"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {/* ── UTR input, only if Online selected ── */}
+              {needsUtr && (
+                <div className="mb-3 bg-slate-50 border border-slate-200 rounded px-3 py-2">
+                  <label className="block text-xs font-medium text-slate-700 mb-1">
+                    UTR / transaction reference <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={utr}
+                    onChange={(e) => setUtr(e.target.value)}
+                    className="w-full px-2 py-1 rounded border border-slate-300 text-slate-800 focus:ring focus:ring-blue-200 text-sm font-mono"
+                    placeholder="e.g. SBIN00024981234"
+                    maxLength={50}
+                    required
+                    disabled={loading}
+                  />
+                  <p className="text-xs text-slate-400 mt-1">
+                    Visible on the bank / UPI app transaction receipt.
+                  </p>
+                </div>
+              )}
               <button
                 type="submit"
                 className={`mt-3 w-full rounded-md border border-green-500 px-4 py-2 text-sm font-semibold text-green-700 ${
-                  loading || isPartialOverDue
-                    ? "bg-green-50 opacity-80 cursor-not-allowed"
-                    : "hover:bg-green-50"
+                  !canSubmit ? "bg-green-50 opacity-80 cursor-not-allowed" : "hover:bg-green-50"
                 }`}
-                disabled={loading || isPartialOverDue}
+                disabled={!canSubmit}
               >
                 {loading
                   ? "Processing…"
@@ -369,7 +427,9 @@ function CollectPaymentModal({ open, onClose, payment, onCollected }: CollectPay
                   : "Collect Partial Amount"}
               </button>
               <div className="mt-1 text-xs text-slate-400 text-center">
-                {collectType === "partial"
+                {!paymentMethod
+                  ? "Select a payment method to continue."
+                  : collectType === "partial"
                   ? "Collects a partial payment; the remaining will appear as pending."
                   : "Marks the invoice as fully paid."}
               </div>
@@ -381,6 +441,7 @@ function CollectPaymentModal({ open, onClose, payment, onCollected }: CollectPay
   );
 }
 
+// ----------- NEW Handler for Mark As Not Checked In (single & multi) ------------
 export default function ReceptionDesk() {
   const [loading, setLoading] = useState(true);
   const [guideOpen, setGuideOpen] = useState(false);
@@ -390,9 +451,10 @@ export default function ReceptionDesk() {
 
   const [selectedAppointments, setSelectedAppointments] = useState<{ [_id_session: string]: boolean }>({});
   const [multiCheckingIn, setMultiCheckingIn] = useState(false);
-  const [multiMarkingMissed, setMultiMarkingMissed] = useState(false); // NEW: For missed action
+  const [multiMarkingMissed, setMultiMarkingMissed] = useState(false);
+  const [multiMarkingNotCheckedIn, setMultiMarkingNotCheckedIn] = useState(false); // NEW: For multi-mark-not-checkedin
 
-  // Move fetchData outside to be reusable
+  // Fetch data logic same as before ...
   const fetchReceptionDeskData = useCallback(async () => {
     setLoading(true);
     try {
@@ -405,7 +467,6 @@ export default function ReceptionDesk() {
       });
       if (!res.ok) throw new Error("Failed to load reception desk");
       const data = await res.json();
-      // console.log(data);
       if (!data.success) throw new Error(data.message || "API error");
 
       setToday(data.today);
@@ -437,7 +498,7 @@ export default function ReceptionDesk() {
           status = "CheckedIn";
         } else if (session?.status === "Missed") {
           status = "Missed";
-        } else {
+        } else if (session?.status === "NotCheckedIn") {
           status = "NotCheckedIn";
         }
 
@@ -449,7 +510,7 @@ export default function ReceptionDesk() {
           therapistId: therapistId ?? "",
           therapistUserId: therapistUserId ?? "",
           sessionId: session?.sessionId,
-          sessionDbId: session?._id, 
+          sessionDbId: session?._id,
           time: session?.slotId ?? session?.time ?? "",
           status,
         } as Appointment;
@@ -518,12 +579,10 @@ export default function ReceptionDesk() {
     }
   }, []);
 
-  // Use fetchReceptionDeskData in useEffect for mount
   useEffect(() => {
     fetchReceptionDeskData();
   }, [fetchReceptionDeskData]);
 
-  // When check-in or missed happens, refresh via fetchReceptionDeskData
   const handleCheckIn = async (_id: string, sessionId: string) => {
     const token = localStorage.getItem("admin-token");
     try {
@@ -537,8 +596,6 @@ export default function ReceptionDesk() {
       });
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.message || "Failed check-in");
-
-      // Refresh all data
       await fetchReceptionDeskData();
     } catch (err) {
       alert(
@@ -564,8 +621,6 @@ export default function ReceptionDesk() {
       });
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.message || "Failed set as missed");
-
-      // Refresh all data
       await fetchReceptionDeskData();
     } catch (err) {
       alert(
@@ -574,6 +629,32 @@ export default function ReceptionDesk() {
           : err instanceof Error
           ? err.message
           : "Error marking as missed"
+      );
+    }
+  };
+
+  // NEW: Mark as Not Checked In (single)
+  const handleMarkNotCheckedIn = async (_id: string, sessionId: string) => {
+    const token = localStorage.getItem("admin-token");
+    try {
+      const res = await fetch(`${API_URL}/api/admin/bookings/mark-session-not-checked-in`, {
+        method: "POST",
+        headers: {
+          Authorization: `${token || ""}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ bookingId: _id, sessionId }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.message || "Failed mark as Not Checked In");
+      await fetchReceptionDeskData();
+    } catch (err) {
+      alert(
+        typeof err === "string"
+          ? err
+          : err instanceof Error
+          ? err.message
+          : "Error marking as Not Checked In"
       );
     }
   };
@@ -590,8 +671,6 @@ export default function ReceptionDesk() {
     setMultiCheckingIn(true);
     const token = localStorage.getItem("admin-token");
 
-    // let hadError = false;
-
     for (const key of keys) {
       const [bookingId, sessionDbId] = key.split("||");
       if (!bookingId || !sessionDbId) continue;
@@ -602,13 +681,12 @@ export default function ReceptionDesk() {
             Authorization: `${token || ""}`,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ bookingId, sessionId:sessionDbId}),
+          body: JSON.stringify({ bookingId, sessionId: sessionDbId }),
         });
         const data = await res.json();
         if (!res.ok || !data.success)
           throw new Error(data.message || "Failed to mark session complete");
       } catch (err) {
-        // hadError = true;
         alert(
           "Failed to mark session complete for Appt#: " +
             bookingId +
@@ -623,11 +701,9 @@ export default function ReceptionDesk() {
     }
     setMultiCheckingIn(false);
     setSelectedAppointments({});
-    // Always refresh all data after multi check-in
     await fetchReceptionDeskData();
   };
 
-  // NEW: Multi-mark-missed logic
   const handleMultiMarkAsMissed = async () => {
     const keys: string[] = Object.entries(selectedAppointments)
       .filter(([_, checked]) => checked)
@@ -640,9 +716,6 @@ export default function ReceptionDesk() {
     setMultiMarkingMissed(true);
     const token = localStorage.getItem("admin-token");
 
-    // let hadError = false;
-
-    // Loop over the API for each appointment (sequentially)
     for (const key of keys) {
       const [bookingId, sessionDbId] = key.split("||");
       if (!bookingId || !sessionDbId) continue;
@@ -655,20 +728,16 @@ export default function ReceptionDesk() {
           },
           body: JSON.stringify({ bookingId, sessionId: sessionDbId }),
         });
-
         let data;
         try {
           data = await res.json();
         } catch (jsonErr) {
-          // Likely received HTML (server error, like 500), not JSON
           throw new Error("Server returned invalid response (possibly not JSON).");
         }
-
         if (!res.ok || !data.success) {
           throw new Error(data.message || "Failed to mark as missed");
         }
       } catch (err) {
-        // hadError = true;
         alert(
           "Failed to mark missed for Appt#: " +
             bookingId +
@@ -681,8 +750,59 @@ export default function ReceptionDesk() {
         );
       }
     }
-
     setMultiMarkingMissed(false);
+    setSelectedAppointments({});
+    await fetchReceptionDeskData();
+  };
+
+  // NEW: Multi-mark-not-checked-in handler
+  const handleMultiMarkAsNotCheckedIn = async () => {
+    const keys: string[] = Object.entries(selectedAppointments)
+      .filter(([_, checked]) => checked)
+      .map(([key]) => key);
+
+    if (keys.length === 0) {
+      alert("Please select at least one appointment to mark as Not Checked In.");
+      return;
+    }
+    setMultiMarkingNotCheckedIn(true);
+    const token = localStorage.getItem("admin-token");
+
+    for (const key of keys) {
+      const [bookingId, sessionDbId] = key.split("||");
+      if (!bookingId || !sessionDbId) continue;
+      try {
+        const res = await fetch(`${API_URL}/api/admin/bookings/mark-session-not-checked-in`, {
+          method: "POST",
+          headers: {
+            Authorization: `${token || ""}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ bookingId, sessionId: sessionDbId }),
+        });
+        let data;
+        try {
+          data = await res.json();
+        } catch (jsonErr) {
+          throw new Error("Server returned invalid response (possibly not JSON).");
+        }
+        if (!res.ok || !data.success) {
+          throw new Error(data.message || "Failed to mark as Not Checked In");
+        }
+      } catch (err) {
+        alert(
+          "Failed to mark Not Checked In for Appt#: " +
+            bookingId +
+            ". " +
+            (typeof err === "string"
+              ? err
+              : err instanceof Error
+              ? err.message
+              : "Error marking as Not Checked In")
+        );
+      }
+    }
+    setMultiMarkingNotCheckedIn(false);
     setSelectedAppointments({});
     await fetchReceptionDeskData();
   };
@@ -698,7 +818,8 @@ export default function ReceptionDesk() {
   const selectAllAppointments = () => {
     const newSelection: typeof selectedAppointments = {};
     appointments.forEach((a) => {
-      if (a.status === "NotCheckedIn") {
+      // selectable: all types, we allow selection to "reset" any session that isn't NotCheckedIn
+      if (a.status === "CheckedIn" || a.status === "Missed" || a.status === "NotCheckedIn") {
         newSelection[`${a._id}||${a.sessionDbId}`] = true;
       }
     });
@@ -727,8 +848,7 @@ export default function ReceptionDesk() {
     setPayments((pays) => pays.filter((p) => p._id !== collectPaymentCurrent._id));
   };
 
-  // Updated to reflect Appointment.status ["CheckedIn" | "NotCheckedIn" | "Missed"]
-  function getAppointmentStatusStr(a: Appointment): {label: string, colorClass: string, bgClass?: string} {
+  function getAppointmentStatusStr(a: Appointment): { label: string; colorClass: string; bgClass?: string } {
     if (a.status === "CheckedIn") {
       return {
         label: "Checked In",
@@ -843,6 +963,9 @@ export default function ReceptionDesk() {
                     <li>
                       Click "Collect" to mark an invoice as paid.
                     </li>
+                    <li>
+                      Use "Mark as Not Checked In" to revert a checked-in or missed session's status back to Not Checked In (reset). Available in the multi-select menu too.
+                    </li>
                   </ol>
                 </div>
 
@@ -880,7 +1003,7 @@ export default function ReceptionDesk() {
             <FiCalendar className="text-blue-600" /> Today’s Appointments
           </div>
 
-          {/* Multi-Check-in and multi-missed Controls */}
+          {/* Multi-Check-in, multi-missed, and multi-not-checked-in Controls */}
           <div className="mb-3 flex flex-wrap gap-2 items-center">
             <button
               className="rounded border border-blue-400 px-3 py-1 text-xs font-medium text-blue-800 hover:bg-blue-50 bg-blue-50 transition"
@@ -933,6 +1056,24 @@ export default function ReceptionDesk() {
             >
               {multiMarkingMissed ? "Marking as Missed…" : "Mark as Missed"}
             </button>
+            <button
+              className={`rounded border border-yellow-500 px-3 py-1 text-xs font-semibold text-yellow-700 bg-yellow-50 transition ${
+                multiMarkingNotCheckedIn || Object.entries(selectedAppointments).filter(([_, checked]) => checked).length === 0
+                  ? "opacity-60 cursor-not-allowed"
+                  : "hover:bg-yellow-100"
+              }`}
+              onClick={handleMultiMarkAsNotCheckedIn}
+              type="button"
+              disabled={
+                multiMarkingNotCheckedIn ||
+                Object.entries(selectedAppointments).filter(([_, checked]) => checked).length === 0
+              }
+              tabIndex={-1}
+              style={{ minWidth: 120 }}
+              title="Mark selected as Not Checked In (reset)"
+            >
+              {multiMarkingNotCheckedIn ? "Marking as Not Checked In…" : "Mark as Not Checked In"}
+            </button>
             <span className="text-xs text-slate-400 ml-2">
               {Object.entries(selectedAppointments).filter(([_, v]) => v).length > 0
                 ? `(${Object.entries(selectedAppointments).filter(([_, checked]) => checked).length} selected)`
@@ -947,7 +1088,8 @@ export default function ReceptionDesk() {
               {appointments.map((a) => {
                 const key = `${a._id}||${a.sessionDbId}`;
                 const checked = !!selectedAppointments[key];
-                const selectable = a.status === "NotCheckedIn";
+                // Now allow mark as not checked-in for both not-checked-in/missed/checkedin
+                const selectable = typeof a.sessionDbId === 'string' && !!a.sessionDbId;
                 const statusObj = getAppointmentStatusStr(a);
 
                 return (
@@ -963,12 +1105,11 @@ export default function ReceptionDesk() {
                           checked={checked}
                           disabled={!selectable}
                           onChange={() => selectable && a._id && a.sessionDbId && toggleAppointmentSelection(a._id, a.sessionDbId)}
-                     
                           className="accent-blue-600"
                           tabIndex={selectable ? 0 : -1}
                           aria-label={
                             selectable
-                              ? `Select appointment ${a.appointmentId} for session completion`
+                              ? `Select appointment ${a.appointmentId} for multi actions`
                               : "Session not selectable"
                           }
                           style={{ width: 16, height: 16 }}
@@ -1058,20 +1199,31 @@ export default function ReceptionDesk() {
                           >
                             Mark as Missed
                           </button>
-                     
                         </>
-                      ) : a.status === "Missed" ? (
-                        <span className="rounded-full  border w-full border-rose-500 px-3 py-1.5 text-xs font-semibold text-rose-600 bg-rose-50 whitespace-nowrap">
-                          Marked as Missed
-                        </span>
                       ) : (
-                        <span className="rounded-full  border w-full border-green-500 px-3 py-1.5 text-xs font-semibold text-green-600 bg-green-50 whitespace-nowrap">
-                          Session Completed
-                        </span>
+                        <>
+                          {/* Show Mark as Not Checked In for both Missed and CheckedIn */}
+                          <button
+                            onClick={() => a.sessionDbId ? handleMarkNotCheckedIn(a._id, a.sessionDbId) : undefined}
+                            className="rounded-full border w-full border-yellow-500 px-3 py-1.5 text-xs font-medium text-yellow-700 bg-white hover:bg-yellow-50 shadow-sm transition"
+                            title={!a.sessionDbId ? "Invalid session ID" : "Reset to Not Checked In"}
+                            disabled={!a.sessionDbId}
+                          >
+                            Mark as Not Checked In
+                          </button>
+                          {a.status === "Missed" ? (
+                            <span className="rounded-full  border w-full border-rose-500 px-3 py-1.5 text-xs font-semibold text-rose-600 bg-rose-50 whitespace-nowrap">
+                              Marked as Missed
+                            </span>
+                          ) : (
+                            <span className="rounded-full  border w-full border-green-500 px-3 py-1.5 text-xs font-semibold text-green-600 bg-green-50 whitespace-nowrap">
+                              Session Completed
+                            </span>
+                          )}
+                        </>
                       )}
                     </div>
                   </div>
-            
                 );
               })}
             </div>

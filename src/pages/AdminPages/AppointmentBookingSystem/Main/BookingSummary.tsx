@@ -4,6 +4,7 @@ import {
   FiUser, FiTag, FiPackage, FiChevronDown, FiHash,
   FiEdit2, FiX, FiCreditCard, FiCheckCircle, FiSearch,
 } from "react-icons/fi";
+import { FiDollarSign, FiSmartphone } from "react-icons/fi";
 import {
   Booking, Therapist, PAGE_SIZE_OPTIONS, SESSION_TIME_OPTIONS,
   formatDateDDMMYYYY, getPatientDisplayName, getPackageDisplay,
@@ -42,46 +43,275 @@ function calcDiscountedAmount(amount: number, percent?: number) {
   return Math.round(amount - (amount * percent) / 100);
 }
 
+// function CollectPaymentModal({ open, onClose, payment, onCollected }: CollectPaymentModalProps) {
+//   const [collectType, setCollectType] = useState<"full" | "partial">("full");
+//   const [partialValue, setPartialValue] = useState("");
+//   const [loading, setLoading] = useState(false);
+
+//   // Option to apply or not apply the discount
+//   const [applyDiscount, setApplyDiscount] = useState(true);
+
+//   const paymentAmountOriginal = payment ? toNumber(payment.paymentAmount) : undefined;
+//   const discountPercent = (payment && typeof payment.discountPercent === "number") ? payment.discountPercent : 0;
+//   const discountedAmount = paymentAmountOriginal !== undefined ? calcDiscountedAmount(paymentAmountOriginal, applyDiscount ? discountPercent : 0) : undefined;
+//   const paymentAmount = discountedAmount;
+
+//   const amountAlreadyPaid = (payment && toNumber(payment.amountPaid)) ?? 0;
+//   const partialNumeric = parseFloat(partialValue);
+//   const isPartialOverDue =
+//     collectType === "partial" &&
+//     typeof paymentAmount === "number" &&
+//     !isNaN(partialNumeric) &&
+//     partialNumeric + (typeof amountAlreadyPaid === "number" ? amountAlreadyPaid : 0) > paymentAmount;
+//   const paymentDue =
+//     typeof paymentAmount === "number" && typeof amountAlreadyPaid === "number"
+//       ? paymentAmount - amountAlreadyPaid
+//       : paymentAmount;
+
+//   useEffect(() => {
+//     if (open) {
+//       setCollectType("full");
+//       setPartialValue("");
+//       setLoading(false);
+//       setApplyDiscount(true); // reset to "apply" by default on open
+//     }
+//   }, [open, payment]);
+
+//   const handleSubmit = async (e: React.FormEvent) => {
+//     e.preventDefault();
+//     if (!payment || loading || isPartialOverDue) return;
+//     if (collectType === "partial" && (isNaN(partialNumeric) || partialNumeric <= 0)) {
+//       alert("Please enter a valid partial amount."); return;
+//     }
+//     let endpoint = import.meta.env.VITE_API_URL || (window as any).VITE_API_URL;
+//     if (endpoint) endpoint = endpoint.replace(/\/$/, "");
+//     setLoading(true);
+//     try {
+//       const body: Record<string, any> = {
+//         paymentType: collectType,
+//         applyDiscount,
+//       };
+//       // ADD: discountApplied field if discount applied
+//       if (typeof discountPercent === "number" && discountPercent > 0 && applyDiscount) {
+//         body.discountApplied = true;
+//       } else {
+//         body.discountApplied = false;
+//       }
+//       if (collectType === "partial") body.partialAmount = partialNumeric;
+//       const res = await fetch(`${endpoint}/api/admin/bookings/${payment._id}/collect-payment`, {
+//         method: "POST",
+//         headers: {
+//           "Content-Type": "application/json",
+//           Authorization: `${localStorage.getItem("admin-token") || ""}`,
+//         },
+//         body: JSON.stringify(body),
+//       });
+//       const data = await res.json();
+//       if (!res.ok) throw new Error(data?.error || data?.message || "Failed to collect payment.");
+//       onCollected();
+//       onClose();
+//     } catch (err: any) {
+//       alert(err.message || "Failed to collect payment.");
+//     } finally {
+//       setLoading(false);
+//     }
+//   };
+
+//   if (!open || !payment) return null;
+//   return (
+//     <AnimatePresence>
+//       <motion.div
+//         key="collect-modal"
+//         className="fixed inset-0 z-50 flex items-center justify-center bg-black/30"
+//         initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+//         style={{ backdropFilter: "blur(2px)" }}
+//         onClick={onClose}
+//       >
+//         <motion.div
+//           initial={{ scale: 0.96, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+//           transition={{ type: "spring", stiffness: 280, damping: 30 }}
+//           className="bg-white rounded-lg shadow-lg max-w-sm w-full border border-slate-200 relative"
+//           onClick={(e) => e.stopPropagation()}
+//         >
+//           <button className="absolute top-3 right-3 text-slate-400 hover:text-slate-700" onClick={onClose} tabIndex={-1} type="button">
+//             <FiX size={20} />
+//           </button>
+//           <div className="p-6 pb-2">
+//             <div className="font-semibold text-lg text-slate-800 mb-2">Collect Payment</div>
+//             <div className="text-sm mb-3">
+//               <span className="font-medium text-blue-700">Appt#: {payment.appointmentId}</span><br />
+//               <span className="text-slate-800">{payment.patientName}</span>{" "}
+//               <span className="text-xs text-blue-300 font-mono">({payment.patientId})</span><br />
+//               {/* Show original payment amount if a discount is available */}
+//               {typeof discountPercent === "number" && discountPercent > 0 && (
+//                 <span className="text-xs text-slate-400 block">
+//                   Original Invoice Amount:{" "}
+//                   <span className="font-semibold text-slate-600">
+//                     ₹
+//                     {typeof paymentAmountOriginal === "number"
+//                       ? paymentAmountOriginal
+//                       : String(payment.paymentAmount ?? "—")}
+//                   </span>
+//                 </span>
+//               )}
+
+//               {/* Show Discount options if discount is present */}
+//               {typeof discountPercent === "number" && discountPercent > 0 && (
+//                 <div>
+//                   <div className="mb-1 text-xs">
+//                     <label className="font-semibold text-green-700 flex items-center gap-2 cursor-pointer">
+//                       <input
+//                         type="checkbox"
+//                         className="mr-1 accent-green-600"
+//                         checked={applyDiscount}
+//                         onChange={e => setApplyDiscount(!!e.target.checked)}
+//                         disabled={loading}
+//                       />
+//                       Apply Discount ({discountPercent}%)
+//                     </label>
+//                   </div>
+//                 </div>
+//               )}
+//               <span className="text-xs text-slate-500 block">
+//                 Invoice Amount:{" "}
+//                 <span className="font-semibold text-slate-700">
+//                   ₹
+//                   {paymentAmount !== undefined
+//                     ? paymentAmount
+//                     : String(payment.paymentAmount ?? "—")}
+//                 </span>
+//                 {typeof discountPercent === "number" &&
+//                   discountPercent > 0 &&
+//                   applyDiscount && (
+//                     <span className="ml-1 text-green-800 font-semibold bg-green-100 px-1 rounded">
+//                       (after discount)
+//                     </span>
+//                   )}
+//               </span>
+//               {payment.amountPaid && (
+//                 <span className="text-xs text-slate-400 block">
+//                   Already paid: ₹{String(payment.amountPaid)}
+//                 </span>
+//               )}
+//               <span className="text-xs text-rose-600 block">
+//                 Due Amount:{" "}
+//                 <span className="font-semibold">
+//                   ₹{typeof paymentDue === "number" ? paymentDue : "—"}
+//                 </span>
+//               </span>
+//               {/* Show discount percent if present and option to apply is unchecked */}
+//               {typeof discountPercent === "number" && discountPercent > 0 && applyDiscount && (
+//                 <div className="text-xs mt-1 text-green-700 font-medium">
+//                   Discount Applied: {discountPercent}%
+//                 </div>
+//               )}
+//             </div>
+//             <form onSubmit={handleSubmit}>
+//               <div className="mb-4 mt-1">
+//                 <label className="block font-medium text-slate-700 mb-1">Collection Type</label>
+//                 <div className="flex gap-4 items-center">
+//                   <label className="flex items-center gap-1 cursor-pointer">
+//                     <input type="radio" name="collectType" value="full" checked={collectType === "full"} onChange={() => setCollectType("full")} disabled={loading} />
+//                     <span className="text-sm">Full Amount</span>
+//                   </label>
+//                   <label className="flex items-center gap-1 cursor-pointer">
+//                     <input type="radio" name="collectType" value="partial" checked={collectType === "partial"} onChange={() => setCollectType("partial")} disabled={loading} />
+//                     <span className="text-sm">Partial Amount</span>
+//                   </label>
+//                 </div>
+//               </div>
+//               {collectType === "partial" && (
+//                 <div className="mb-2">
+//                   <label className="block mb-1 text-slate-700 text-xs">Enter Partial Amount <span className="text-red-500">*</span></label>
+//                   <input
+//                     type="number" min={1} step={1} value={partialValue}
+//                     onChange={(e) => setPartialValue(e.target.value)}
+//                     className="w-full px-2 py-1 rounded border border-slate-300 text-slate-800 focus:ring focus:ring-green-200 text-sm"
+//                     placeholder="E.g. 800" required disabled={loading} max={paymentDue ?? undefined}
+//                   />
+//                   {isPartialOverDue && (
+//                     <div className="text-xs text-red-500 mt-1">
+//                       Partial amount plus already paid cannot exceed the invoice total ({paymentAmount}).
+//                     </div>
+//                   )}
+//                 </div>
+//               )}
+//               <button
+//                 type="submit"
+//                 className={`mt-3 w-full rounded-md border border-green-500 px-4 py-2 text-sm font-semibold text-green-700 ${
+//                   loading || isPartialOverDue ? "bg-green-50 opacity-80 cursor-not-allowed" : "hover:bg-green-50"
+//                 }`}
+//                 disabled={loading || isPartialOverDue}
+//               >
+//                 {loading ? "Processing…" : collectType === "full" ? "Collect Full Amount" : "Collect Partial Amount"}
+//               </button>
+//               <div className="mt-1 text-xs text-slate-400 text-center">
+//                 {collectType === "partial"
+//                   ? "Collects a partial payment; the remaining will appear as pending."
+//                   : "Marks the invoice as fully paid."}
+//               </div>
+//             </form>
+//           </div>
+//         </motion.div>
+//       </motion.div>
+//     </AnimatePresence>
+//   );
+// }
+
+// ─── CheckInConfirmationModal ─────────────────────────────────────────────────
+
+
+// ─── CollectPaymentModal ──────────────────────────────────────────────────────
+
+type PaymentMethod = "cash" | "online" | "";
+
 function CollectPaymentModal({ open, onClose, payment, onCollected }: CollectPaymentModalProps) {
   const [collectType, setCollectType] = useState<"full" | "partial">("full");
   const [partialValue, setPartialValue] = useState("");
   const [loading, setLoading] = useState(false);
-
-  // Option to apply or not apply the discount
   const [applyDiscount, setApplyDiscount] = useState(true);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("");
+  const [utr, setUtr] = useState("");
 
   const paymentAmountOriginal = payment ? toNumber(payment.paymentAmount) : undefined;
   const discountPercent = (payment && typeof payment.discountPercent === "number") ? payment.discountPercent : 0;
-  const discountedAmount = paymentAmountOriginal !== undefined ? calcDiscountedAmount(paymentAmountOriginal, applyDiscount ? discountPercent : 0) : undefined;
+  const discountedAmount = paymentAmountOriginal !== undefined
+    ? calcDiscountedAmount(paymentAmountOriginal, applyDiscount ? discountPercent : 0)
+    : undefined;
   const paymentAmount = discountedAmount;
-
   const amountAlreadyPaid = (payment && toNumber(payment.amountPaid)) ?? 0;
   const partialNumeric = parseFloat(partialValue);
-  const isPartialOverDue =
-    collectType === "partial" &&
-    typeof paymentAmount === "number" &&
-    !isNaN(partialNumeric) &&
-    partialNumeric + (typeof amountAlreadyPaid === "number" ? amountAlreadyPaid : 0) > paymentAmount;
   const paymentDue =
     typeof paymentAmount === "number" && typeof amountAlreadyPaid === "number"
       ? paymentAmount - amountAlreadyPaid
       : paymentAmount;
+
+  const isPartialOverDue =
+    collectType === "partial" &&
+    typeof paymentDue === "number" &&
+    !isNaN(partialNumeric) &&
+    partialNumeric > paymentDue;
+
+  const needsUtr = paymentMethod === "online";
+  const utrMissing = needsUtr && utr.trim() === "";
+  const canSubmit = !loading && !isPartialOverDue && paymentMethod !== "" && !utrMissing &&
+    (collectType === "full" || (!isNaN(partialNumeric) && partialNumeric > 0));
 
   useEffect(() => {
     if (open) {
       setCollectType("full");
       setPartialValue("");
       setLoading(false);
-      setApplyDiscount(true); // reset to "apply" by default on open
+      setApplyDiscount(true);
+      setPaymentMethod("");
+      setUtr("");
     }
   }, [open, payment]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!payment || loading || isPartialOverDue) return;
-    if (collectType === "partial" && (isNaN(partialNumeric) || partialNumeric <= 0)) {
-      alert("Please enter a valid partial amount."); return;
-    }
+    if (!payment || !canSubmit) return;
+
     let endpoint = import.meta.env.VITE_API_URL || (window as any).VITE_API_URL;
     if (endpoint) endpoint = endpoint.replace(/\/$/, "");
     setLoading(true);
@@ -89,14 +319,11 @@ function CollectPaymentModal({ open, onClose, payment, onCollected }: CollectPay
       const body: Record<string, any> = {
         paymentType: collectType,
         applyDiscount,
+        discountApplied: typeof discountPercent === "number" && discountPercent > 0 && applyDiscount,
+        paymentMethod,
+        ...(needsUtr && utr.trim() ? { utr: utr.trim() } : {}),
+        ...(collectType === "partial" ? { partialAmount: partialNumeric } : {}),
       };
-      // ADD: discountApplied field if discount applied
-      if (typeof discountPercent === "number" && discountPercent > 0 && applyDiscount) {
-        body.discountApplied = true;
-      } else {
-        body.discountApplied = false;
-      }
-      if (collectType === "partial") body.partialAmount = partialNumeric;
       const res = await fetch(`${endpoint}/api/admin/bookings/${payment._id}/collect-payment`, {
         method: "POST",
         headers: {
@@ -135,119 +362,151 @@ function CollectPaymentModal({ open, onClose, payment, onCollected }: CollectPay
           <button className="absolute top-3 right-3 text-slate-400 hover:text-slate-700" onClick={onClose} tabIndex={-1} type="button">
             <FiX size={20} />
           </button>
-          <div className="p-6 pb-2">
+          <div className="p-6 pb-4">
             <div className="font-semibold text-lg text-slate-800 mb-2">Collect Payment</div>
+
+            {/* Booking info */}
             <div className="text-sm mb-3">
               <span className="font-medium text-blue-700">Appt#: {payment.appointmentId}</span><br />
               <span className="text-slate-800">{payment.patientName}</span>{" "}
               <span className="text-xs text-blue-300 font-mono">({payment.patientId})</span><br />
-              {/* Show original payment amount if a discount is available */}
+
               {typeof discountPercent === "number" && discountPercent > 0 && (
                 <span className="text-xs text-slate-400 block">
-                  Original Invoice Amount:{" "}
-                  <span className="font-semibold text-slate-600">
-                    ₹
-                    {typeof paymentAmountOriginal === "number"
-                      ? paymentAmountOriginal
-                      : String(payment.paymentAmount ?? "—")}
-                  </span>
+                  Original Amount:{" "}
+                  <span className="font-semibold text-slate-600">₹{paymentAmountOriginal ?? "—"}</span>
                 </span>
               )}
-
-              {/* Show Discount options if discount is present */}
               {typeof discountPercent === "number" && discountPercent > 0 && (
-                <div>
-                  <div className="mb-1 text-xs">
-                    <label className="font-semibold text-green-700 flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        className="mr-1 accent-green-600"
-                        checked={applyDiscount}
-                        onChange={e => setApplyDiscount(!!e.target.checked)}
-                        disabled={loading}
-                      />
-                      Apply Discount ({discountPercent}%)
-                    </label>
-                  </div>
+                <div className="mb-1 text-xs">
+                  <label className="font-semibold text-green-700 flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" className="mr-1 accent-green-600" checked={applyDiscount}
+                      onChange={e => setApplyDiscount(!!e.target.checked)} disabled={loading} />
+                    Apply Discount ({discountPercent}%)
+                  </label>
                 </div>
               )}
               <span className="text-xs text-slate-500 block">
                 Invoice Amount:{" "}
                 <span className="font-semibold text-slate-700">
-                  ₹
-                  {paymentAmount !== undefined
-                    ? paymentAmount
-                    : String(payment.paymentAmount ?? "—")}
+                  ₹{paymentAmount ?? String(payment.paymentAmount ?? "—")}
                 </span>
-                {typeof discountPercent === "number" &&
-                  discountPercent > 0 &&
-                  applyDiscount && (
-                    <span className="ml-1 text-green-800 font-semibold bg-green-100 px-1 rounded">
-                      (after discount)
-                    </span>
-                  )}
+                {discountPercent > 0 && applyDiscount && (
+                  <span className="ml-1 text-green-800 font-semibold bg-green-100 px-1 rounded">(after discount)</span>
+                )}
               </span>
               {payment.amountPaid && (
-                <span className="text-xs text-slate-400 block">
-                  Already paid: ₹{String(payment.amountPaid)}
-                </span>
+                <span className="text-xs text-slate-400 block">Already paid: ₹{String(payment.amountPaid)}</span>
               )}
               <span className="text-xs text-rose-600 block">
-                Due Amount:{" "}
-                <span className="font-semibold">
-                  ₹{typeof paymentDue === "number" ? paymentDue : "—"}
-                </span>
+                Due: <span className="font-semibold">₹{typeof paymentDue === "number" ? paymentDue : "—"}</span>
               </span>
-              {/* Show discount percent if present and option to apply is unchecked */}
-              {typeof discountPercent === "number" && discountPercent > 0 && applyDiscount && (
-                <div className="text-xs mt-1 text-green-700 font-medium">
-                  Discount Applied: {discountPercent}%
-                </div>
-              )}
             </div>
+
             <form onSubmit={handleSubmit}>
-              <div className="mb-4 mt-1">
-                <label className="block font-medium text-slate-700 mb-1">Collection Type</label>
+              {/* Collection Type */}
+              <div className="mb-3">
+                <label className="block font-medium text-slate-700 mb-1 text-sm">Collection type</label>
                 <div className="flex gap-4 items-center">
-                  <label className="flex items-center gap-1 cursor-pointer">
-                    <input type="radio" name="collectType" value="full" checked={collectType === "full"} onChange={() => setCollectType("full")} disabled={loading} />
-                    <span className="text-sm">Full Amount</span>
+                  <label className="flex items-center gap-1 cursor-pointer text-sm">
+                    <input type="radio" name="collectType" value="full"
+                      checked={collectType === "full"} onChange={() => setCollectType("full")} disabled={loading} />
+                    Full amount
                   </label>
-                  <label className="flex items-center gap-1 cursor-pointer">
-                    <input type="radio" name="collectType" value="partial" checked={collectType === "partial"} onChange={() => setCollectType("partial")} disabled={loading} />
-                    <span className="text-sm">Partial Amount</span>
+                  <label className="flex items-center gap-1 cursor-pointer text-sm">
+                    <input type="radio" name="collectType" value="partial"
+                      checked={collectType === "partial"} onChange={() => setCollectType("partial")} disabled={loading} />
+                    Partial amount
                   </label>
                 </div>
               </div>
+
               {collectType === "partial" && (
-                <div className="mb-2">
-                  <label className="block mb-1 text-slate-700 text-xs">Enter Partial Amount <span className="text-red-500">*</span></label>
+                <div className="mb-3">
+                  <label className="block mb-1 text-slate-700 text-xs font-medium">
+                    Partial amount <span className="text-red-500">*</span>
+                  </label>
                   <input
                     type="number" min={1} step={1} value={partialValue}
                     onChange={(e) => setPartialValue(e.target.value)}
                     className="w-full px-2 py-1 rounded border border-slate-300 text-slate-800 focus:ring focus:ring-green-200 text-sm"
-                    placeholder="E.g. 800" required disabled={loading} max={paymentDue ?? undefined}
+                    placeholder="e.g. 800" required disabled={loading} max={paymentDue ?? undefined}
                   />
                   {isPartialOverDue && (
                     <div className="text-xs text-red-500 mt-1">
-                      Partial amount plus already paid cannot exceed the invoice total ({paymentAmount}).
+                      Cannot exceed the due amount (₹{paymentDue}).
                     </div>
                   )}
                 </div>
               )}
+
+              {/* ── Payment Method ── */}
+              <div className="mb-3">
+                <label className="block font-medium text-slate-700 mb-1 text-sm">
+                  Payment method <span className="text-red-500">*</span>
+                </label>
+                <div className="flex gap-2">
+                  {(["cash", "online"] as const).map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      disabled={loading}
+                      onClick={() => { setPaymentMethod(m); if (m === "cash") setUtr(""); }}
+                      className={`flex-1 py-1.5 text-xs font-medium rounded border transition-colors ${
+                        paymentMethod === m
+                          ? "border-blue-500 bg-blue-50 text-blue-800"
+                          : "border-slate-300 bg-slate-50 text-slate-600 hover:bg-slate-100"
+                      }`}
+                    >
+                      {m === "cash" && <FiDollarSign className="inline mr-1" />}
+                      {m === "online" && <FiSmartphone className="inline mr-1" />}
+                      {m === "cash" ? "Cash" : "Online / UPI"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* ── UTR (shown only for online) ── */}
+              {needsUtr && (
+                <div className="mb-3 bg-slate-50 border border-slate-200 rounded px-3 py-2">
+                  <label className="block text-xs font-medium text-slate-700 mb-1">
+                    UTR / transaction reference <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={utr}
+                    onChange={(e) => setUtr(e.target.value)}
+                    className="w-full px-2 py-1 rounded border border-slate-300 text-slate-800 focus:ring focus:ring-blue-200 text-sm font-mono"
+                    placeholder="e.g. SBIN00024981234"
+                    maxLength={50}
+                    required
+                    disabled={loading}
+                  />
+                  <p className="text-xs text-slate-400 mt-1">
+                    Visible on the bank / UPI app transaction receipt.
+                  </p>
+                </div>
+              )}
+
               <button
                 type="submit"
-                className={`mt-3 w-full rounded-md border border-green-500 px-4 py-2 text-sm font-semibold text-green-700 ${
-                  loading || isPartialOverDue ? "bg-green-50 opacity-80 cursor-not-allowed" : "hover:bg-green-50"
+                className={`mt-1 w-full rounded-md border border-green-500 px-4 py-2 text-sm font-semibold text-green-700 transition-colors ${
+                  !canSubmit ? "bg-green-50 opacity-60 cursor-not-allowed" : "hover:bg-green-50"
                 }`}
-                disabled={loading || isPartialOverDue}
+                disabled={!canSubmit}
               >
-                {loading ? "Processing…" : collectType === "full" ? "Collect Full Amount" : "Collect Partial Amount"}
+                {loading
+                  ? "Processing…"
+                  : collectType === "full"
+                    ? "Collect full amount"
+                    : "Collect partial amount"}
               </button>
               <div className="mt-1 text-xs text-slate-400 text-center">
-                {collectType === "partial"
-                  ? "Collects a partial payment; the remaining will appear as pending."
-                  : "Marks the invoice as fully paid."}
+                {!paymentMethod
+                  ? "Select a payment method to continue."
+                  : collectType === "partial"
+                    ? "Remaining balance will stay pending."
+                    : "Marks the invoice as fully paid."}
               </div>
             </form>
           </div>
@@ -256,8 +515,6 @@ function CollectPaymentModal({ open, onClose, payment, onCollected }: CollectPay
     </AnimatePresence>
   );
 }
-
-// ─── CheckInConfirmationModal ─────────────────────────────────────────────────
 
 function CheckInConfirmationModal({ open, onClose, onConfirm, session, booking }: any) {
   if (!open) return null;

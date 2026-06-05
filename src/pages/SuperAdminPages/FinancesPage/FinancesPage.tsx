@@ -5,13 +5,18 @@ import axios from "axios";
 // @ts-ignore
 import * as XLSX from "xlsx";
 
-// Finance log matches backend controller export structure
+// Finance log full interface with all details
 interface FinanceLog {
+  _id: string;
   Date: string;
   Description: string;
   Type: string;
   Amount: number;
   CreditDebitStatus?: string;
+  PaymentMethod?: string;
+  Utr?: string[];
+  CreatedAt?: string;
+  UpdatedAt?: string;
 }
 
 // The server returns an object matching finance.controller.js
@@ -29,18 +34,27 @@ interface FinanceDetailsResponse {
   error?: string;
 }
 
+// Updated Excel function to capture all details
 function downloadExcel(filename: string, rows: FinanceLog[]) {
-  // Prepare data for Excel, ensure header order
+  // Prepare data for Excel with all details and proper UTR handling (concatenated if array)
   const worksheetRows = rows.map((row) => ({
-    Date: row.Date ? new Date(row.Date).toLocaleDateString("en-GB") : "",
+    _id: row._id || "",
+    Date: row.Date ? new Date(row.Date).toLocaleString("en-GB", { timeZone: "Asia/Kolkata" }) : "",
     Description: row.Description,
     Type: row.Type,
     Amount: row.Amount,
     CreditDebitStatus: row.CreditDebitStatus || "",
+    PaymentMethod: row.PaymentMethod || "",
+    Utr: Array.isArray(row.Utr) ? row.Utr.join(", ") : (row.Utr ? String(row.Utr) : ""),
+    CreatedAt: row.CreatedAt ? new Date(row.CreatedAt).toLocaleString("en-GB", { timeZone: "Asia/Kolkata" }) : "",
+    UpdatedAt: row.UpdatedAt ? new Date(row.UpdatedAt).toLocaleString("en-GB", { timeZone: "Asia/Kolkata" }) : ""
   }));
 
   const worksheet = XLSX.utils.json_to_sheet(worksheetRows, {
-    header: ["Date", "Description", "Type", "Amount", "CreditDebitStatus"],
+    header: [
+      "_id", "Date", "Description", "Type", "Amount",
+      "CreditDebitStatus", "PaymentMethod", "Utr", "CreatedAt", "UpdatedAt"
+    ],
   });
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, "Finances");
@@ -111,7 +125,7 @@ export default function FinancesSuperAdminPage() {
     if (financeData && financeData.page < financeData.totalPages) setPage(page + 1);
   };
 
-  // For full Excel export (all data, not just paginated)
+  // For full Excel export (all data, not just paginated), all details
   const handleExportExcel = async () => {
     if (!financeData) return;
     setExcelLoading(true);
@@ -141,6 +155,17 @@ export default function FinancesSuperAdminPage() {
     }
   };
 
+  // Table headers for all details
+  const financeHeaders = [
+    { label: "Date", key: "Date" },
+    { label: "Description", key: "Description" },
+    { label: "Type", key: "Type" },
+    { label: "Amount", key: "Amount" },
+    { label: "Credit/Debit", key: "CreditDebitStatus" },
+    { label: "Payment Method", key: "PaymentMethod" },
+    { label: "UTR", key: "Utr" },
+  ];
+
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="min-h-screen p-8">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
@@ -151,8 +176,10 @@ export default function FinancesSuperAdminPage() {
               value={search}
               onChange={handleChangeSearch}
               type="text"
-              placeholder="Search (desc, type, status, amount, date)..."
+              placeholder="Search (desc, type, status, amount, date, method, UTR)..."
               className="px-3 py-2 border rounded-l outline-none text-sm"
+              autoCorrect="off"
+              autoComplete="off"
             />
             <button type="submit" className="bg-slate-100 px-3 py-2 rounded-r border-l border-slate-200 text-slate-600 hover:bg-slate-200">
               <FiSearch />
@@ -211,15 +238,15 @@ export default function FinancesSuperAdminPage() {
             </div>
           </div>
 
-          <div className="bg-white border rounded-lg overflow-hidden">
-            <table className="w-full text-sm">
+          <div className="bg-white border rounded-lg overflow-x-auto">
+            <table className="w-full text-sm min-w-[1100px]">
               <thead className="bg-slate-100">
                 <tr>
-                  <th className="px-4 py-3 text-left">Date</th>
-                  <th className="px-4 py-3 text-left">Description</th>
-                  <th className="px-4 py-3 text-left">Type</th>
-                  <th className="px-4 py-3 text-left">Credit/Debit</th>
-                  <th className="px-4 py-3 text-right">Amount</th>
+                  {financeHeaders.map((header) => (
+                    <th key={header.key} className={`px-4 py-3 text-left`}>
+                      {header.label}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
@@ -228,28 +255,36 @@ export default function FinancesSuperAdminPage() {
                     <tr key={idx} className="border-t">
                       <td className="px-4 py-3">
                         {log.Date
-                          ? new Date(log.Date).toLocaleDateString("en-GB")
+                          ? new Date(log.Date).toLocaleString("en-GB", { timeZone: "Asia/Kolkata" })
                           : "-"}
                       </td>
-                      <td className="px-4 py-3">{log.Description}</td>
-                      <td className="px-4 py-3">{log.Type}</td>
-                      <td className="px-4 py-3">{log.CreditDebitStatus || "-"}</td>
-                      <td
-                        className={`px-4 py-3 text-right ${
+                      <td className="px-4 py-3">{log.Description || "-"}</td>
+                      <td className="px-4 py-3">{log.Type || "-"}</td>
+                      <td className={`px-4 py-3 text-right ${
                           log.Type === "Income"
                             ? "text-green-600"
                             : log.Type === "Expense"
                             ? "text-red-500"
                             : "text-slate-800"
-                        }`}
-                      >
-                        ₹{Number(log.Amount).toLocaleString("en-IN")}
+                        }`}>
+                        ₹{typeof log.Amount !== "undefined" ? Number(log.Amount).toLocaleString("en-IN") : "-"}
                       </td>
+                      <td className="px-4 py-3">{log.CreditDebitStatus || "-"}</td>
+                      <td className="px-4 py-3">{log.PaymentMethod || "-"}</td>
+                      <td className="px-4 py-3 whitespace-pre-line">
+                        {Array.isArray(log.Utr) && log.Utr.length > 0
+                          ? log.Utr[log.Utr.length - 1]
+                          : log.Utr
+                          ? String(log.Utr)
+                          : "-"}
+                      </td>
+                 
+                     
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={5} className="px-4 py-6 text-center text-slate-400">
+                    <td colSpan={financeHeaders.length} className="px-4 py-6 text-center text-slate-400">
                       No finance logs found.
                     </td>
                   </tr>

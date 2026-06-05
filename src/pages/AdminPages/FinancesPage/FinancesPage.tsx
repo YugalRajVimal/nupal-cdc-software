@@ -6,11 +6,16 @@ import axios from "axios";
 import * as XLSX from "xlsx";
 
 interface FinanceLog {
+  _id: string;
   Date: string;
   Description: string;
   Type: string;
   Amount: number;
   CreditDebitStatus?: string;
+  PaymentMethod?: string;
+  Utr?: string[];
+  CreatedAt?: string;
+  UpdatedAt?: string;
 }
 
 interface FinanceDetailsResponse {
@@ -31,17 +36,31 @@ const DEFAULT_PAGE_SIZE = 10;
 
 function downloadExcel(filename: string, rows: FinanceLog[]) {
   const worksheetRows = rows.map((row) => ({
-    Date: row.Date
-      ? new Date(row.Date).toLocaleDateString("en-GB")
-      : "",
+    _id: row._id,
+    Date: row.Date ? new Date(row.Date).toLocaleDateString("en-GB") : "",
     Description: row.Description,
     Type: row.Type,
     Amount: row.Amount,
     CreditDebitStatus: row.CreditDebitStatus ?? "",
+    PaymentMethod: row.PaymentMethod ?? "",
+    Utr: row.Utr && row.Utr.length > 0 ? row.Utr.join(", ") : "",
+    CreatedAt: row.CreatedAt ? new Date(row.CreatedAt).toLocaleString("en-GB") : "",
+    UpdatedAt: row.UpdatedAt ? new Date(row.UpdatedAt).toLocaleString("en-GB") : "",
   }));
 
   const worksheet = XLSX.utils.json_to_sheet(worksheetRows, {
-    header: ["Date", "Description", "Type", "Amount", "CreditDebitStatus"],
+    header: [
+      "_id",
+      "Date",
+      "Description",
+      "Type",
+      "Amount",
+      "CreditDebitStatus",
+      "PaymentMethod",
+      "Utr",
+      "CreatedAt",
+      "UpdatedAt",
+    ],
   });
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, "Finances");
@@ -119,7 +138,7 @@ export default function FinancesPage() {
             <input
               type="text"
               className="py-2 px-3 outline-none bg-transparent placeholder:text-slate-400 text-sm"
-              placeholder="Search by description, amount, type, date..."
+              placeholder="Search by description, amount, type, date, payment method, UTR, etc..."
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               autoCorrect="off"
@@ -164,14 +183,18 @@ export default function FinancesPage() {
             </div>
           </div>
 
-          <div className="bg-white border rounded-lg overflow-hidden">
+          <div className="bg-white border rounded-lg overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-slate-100">
                 <tr>
                   <th className="px-4 py-3 text-left">Date</th>
                   <th className="px-4 py-3 text-left">Description</th>
-                  <th className="px-4 py-3 text-left">Type</th>
+
                   <th className="px-4 py-3 text-left">Credit/Debit</th>
+                  <th className="px-4 py-3 text-left">Payment Method</th>
+                  <th className="px-4 py-3 text-left">UTR</th>
+                  <th className="px-4 py-3 text-left">Created At</th>
+                  <th className="px-4 py-3 text-left">Updated At</th>
                   <th className="px-4 py-3 text-right">Amount</th>
                 </tr>
               </thead>
@@ -185,8 +208,30 @@ export default function FinancesPage() {
                           : "-"}
                       </td>
                       <td className="px-4 py-3">{log.Description}</td>
-                      <td className="px-4 py-3">{log.Type}</td>
+
                       <td className="px-4 py-3">{log.CreditDebitStatus ?? "-"}</td>
+                      <td className="px-4 py-3">{log.PaymentMethod ?? "-"}</td>
+                      <td className="px-4 py-3 ">
+                        {log.Utr && log.Utr.length > 0 ? (
+                          <span className="break-all inline-block mr-2 whitespace-nowrap">
+                            {log.Utr[log.Utr.length - 1]}
+                          </span>
+                        ) : (
+                          "-"
+                        )}
+                      </td>
+                 
+                 
+                      <td className="px-4 py-3">
+                        {log.CreatedAt
+                          ? new Date(log.CreatedAt).toLocaleString("en-GB")
+                          : "-"}
+                      </td>
+                      <td className="px-4 py-3">
+                        {log.UpdatedAt
+                          ? new Date(log.UpdatedAt).toLocaleString("en-GB")
+                          : "-"}
+                      </td>
                       <td
                         className={`px-4 py-3 text-right ${
                           log.Type === "Income"
@@ -202,7 +247,7 @@ export default function FinancesPage() {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={5} className="px-4 py-6 text-center text-slate-400">
+                    <td colSpan={10} className="px-4 py-6 text-center text-slate-400">
                       No finance logs found.
                     </td>
                   </tr>
