@@ -4,6 +4,8 @@ import {
   FiCalendar,
 } from "react-icons/fi";
 import { motion } from "framer-motion";
+import DatePicker from "react-datepicker";
+import "react-datepicker/dist/react-datepicker.css";
 
 /**
  * All Upcoming Sessions Page
@@ -11,10 +13,9 @@ import { motion } from "framer-motion";
  * backend admin endpoint `/api/admin/bookings/all-sessions`
  * - Accessible for admin/reception
  * - Filter bar for date, therapist, patient, therapyType, isCheckedIn/Missed
+ * - Supports "from"/"to" date filter and text search
  */
 
-// Session statuses as per booking.schema.js (1-74):
-// "scheduled", "checkedIn", "missed", "cancelled"
 type SessionStatus = 'scheduled' | 'CheckedIn' | 'Missed' | 'NotCheckedIn';
 
 const SESSION_TIME_OPTIONS = [
@@ -69,9 +70,9 @@ type UpcomingSession = {
     slotId?: string;
     time?: string;
     therapist?: any;
-    status?: SessionStatus; // added: session status from backend ("scheduled", "checkedIn", "missed", "cancelled")
-    sessionId?: string; // not reliable, but used for old display
-    isCheckedIn?: boolean; // backward compat
+    status?: SessionStatus;
+    sessionId?: string;
+    isCheckedIn?: boolean;
     [k: string]: any;
   };
 };
@@ -95,11 +96,64 @@ function formatDateDDMMYYYY(dateStr: string): string {
   return dateStr;
 }
 
+// // Helper: correct value YYYY-MM-DD for input[type=date]
+// function yyyyMMdd(dateStr: string | null | undefined): string {
+//   if (!dateStr) return "";
+//   if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
+//   if (/^\d{4}\/\d{2}\/\d{2}$/.test(dateStr)) return dateStr.replace(/\//g, "-");
+//   if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(dateStr)) {
+//     // e.g. 2023-7-5 -> 2023-07-05
+//     const match = dateStr.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+//     if (match) {
+//       const y = match[1];
+//       const m = match[2].padStart(2, "0");
+//       const d = match[3].padStart(2, "0");
+//       return `${y}-${m}-${d}`;
+//     }
+//   }
+//   const d = new Date(dateStr);
+//   if (!isNaN(d.getTime()))
+//     return `${d.getFullYear()}-${("0" + (d.getMonth() + 1)).slice(-2)}-${("0" + d.getDate()).slice(-2)}`;
+//   return "";
+// }
+
+function valueToDate(val: string) {
+  if (!val) return null;
+  const d = new Date(val);
+  if (isNaN(d.getTime())) return null;
+  // This ensures correct handling for "YYYY-MM-DD" format & browser date parsing
+  if (val.length === 10) {
+    const [yyyy, mm, dd] = val.split(/[-/]/);
+    if (yyyy && mm && dd) {
+      return new Date(Number(yyyy), Number(mm) - 1, Number(dd));
+    }
+  }
+  return d;
+}
+
+function dateToValue(date: Date | null) {
+  if (!date) return "";
+  const yyyy = date.getFullYear();
+  const mm = ("0" + (date.getMonth() + 1)).slice(-2);
+  const dd = ("0" + date.getDate()).slice(-2);
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 export default function AllUpcomingSessions() {
   const [loading, setLoading] = useState(true);
   const [sessions, setSessions] = useState<UpcomingSession[]>([]);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [shownDate, setShownDate] = useState<string>("");
+
+  // From/to date as string for API, but also handle as Date for react-datepicker
+  const [fromDate, setFromDate] = useState<string>("");
+  const [toDate, setToDate] = useState<string>("");
+
+  // Date objects for react-datepicker display
+  const [fromDateObj, setFromDateObj] = useState<Date | null>(valueToDate(fromDate));
+  const [toDateObj, setToDateObj] = useState<Date | null>(valueToDate(toDate));
+
+  const [search, setSearch] = useState<string>("");
 
   // Multi-select and check-in logic
   const [selectedSessionIds, setSelectedSessionIds] = useState<string[]>([]);
@@ -108,21 +162,36 @@ export default function AllUpcomingSessions() {
   const [missingInProgress, setMissingInProgress] = useState<string[]>([]);
   const [multiMissingIn, setMultiMissingIn] = useState(false);
 
-  // NEW: notCheckedIn in-progress states
+  // NOT Checked In states
   const [notCheckInInProgress, setNotCheckInInProgress] = useState<string[]>([]);
   const [multiNotCheckInIn, setMultiNotCheckInIn] = useState(false);
 
-  // Filter state: 'all', 'checkedIn', 'notCheckedIn', 'missed'
+  // Filter state for status
   const [checkedInFilter, setCheckedInFilter] = useState<'all' | 'CheckedIn' | 'NotCheckedIn' | 'Missed'>('all');
 
-  // Fetch all sessions (no filter)
+  // Ensure string for API is synced with DatePicker's date obj for fromDate/toDate
+  useEffect(() => {
+    setFromDate(fromDateObj ? dateToValue(fromDateObj) : "");
+  }, [fromDateObj]);
+
+  useEffect(() => {
+    setToDate(toDateObj ? dateToValue(toDateObj) : "");
+  }, [toDateObj]);
+
+  // Effect: fetch sessions from API with filters (from, to, search)
   const fetchSessions = async () => {
     setFetchError(null);
+    setLoading(true);
     try {
       const token = localStorage.getItem("admin-token");
-      const endpoint = `${API_URL}/api/admin/bookings/sessions`;
+      // Compose query string
+      const params = new URLSearchParams();
+      if (fromDate) params.append("from", fromDate);
+      if (toDate) params.append("to", toDate);
+      if (search.trim() !== "") params.append("search", search.trim());
 
-      setLoading(true);
+      const endpoint = `${API_URL}/api/admin/bookings/sessions${params.size > 0 ? "?" + params.toString() : ""}`;
+
       const res = await fetch(endpoint, {
         headers: {
           Authorization: token || "",
@@ -133,9 +202,10 @@ export default function AllUpcomingSessions() {
       if (!res.ok) throw new Error("Failed to fetch upcoming sessions");
 
       const data = await res.json();
+      console.log(data);
       if (!data.success) throw new Error(data.message || "API error");
-      setShownDate(data.date);
 
+      setShownDate(data.date);
       setSessions(Array.isArray(data.sessions) ? data.sessions : []);
     } catch (e: any) {
       setFetchError(e.message ?? "Could not fetch sessions");
@@ -145,10 +215,11 @@ export default function AllUpcomingSessions() {
     }
   };
 
+  // Fetch on mount and whenever filters change
   useEffect(() => {
     fetchSessions();
     // eslint-disable-next-line
-  }, []);
+  }, [fromDate, toDate, search]);
 
   function getSessionTimeLabel(session: UpcomingSession["session"]) {
     if (!session) return "";
@@ -202,7 +273,6 @@ export default function AllUpcomingSessions() {
     );
   }
 
-  // Select all for not-checked-in, checked-in, missed, not-checked-in, according to filter
   function handleAllCheckSelect(e: React.ChangeEvent<HTMLInputElement>) {
     if (e.target.checked) {
       let toSelect: string[];
@@ -219,7 +289,6 @@ export default function AllUpcomingSessions() {
           s => s.session.status === "NotCheckedIn" || (!s.session.status && !s.session.isCheckedIn)
         ).map(s => s.session._id);
       } else {
-        // default (all): select all visible in table (filteredSessions)
         toSelect = filteredSessions.map(s => s.session._id);
       }
       setSelectedSessionIds(toSelect);
@@ -228,7 +297,7 @@ export default function AllUpcomingSessions() {
     }
   }
 
-  // Handle single session check-in
+  // Single session actions: check-in, not checked-in, missed
   async function handleSessionCheckIn(sessionId: string) {
     setCheckingIn((prev) => [...prev, sessionId]);
     setFetchError(null);
@@ -256,7 +325,6 @@ export default function AllUpcomingSessions() {
     }
   }
 
-  // NEW: Handle single session "mark as Not Checked-In"
   async function handleSessionNotCheckedIn(sessionId: string) {
     setNotCheckInInProgress((prev) => [...prev, sessionId]);
     setFetchError(null);
@@ -264,7 +332,6 @@ export default function AllUpcomingSessions() {
       const token = localStorage.getItem("admin-token");
       const sessionObj = sessions.find((s) => s.session._id === sessionId);
       const bookingId = sessionObj?.bookingId;
-      // Use the backend route for marking not checked-in
       const res = await fetch(`${API_URL}/api/admin/bookings/mark-session-not-checked-in`, {
         method: "POST",
         headers: {
@@ -285,7 +352,6 @@ export default function AllUpcomingSessions() {
     }
   }
 
-  // Handle single session Missed ("Mark as Missed")
   async function handleSessionMissed(sessionId: string) {
     setMissingInProgress((prev) => [...prev, sessionId]);
     setFetchError(null);
@@ -312,7 +378,7 @@ export default function AllUpcomingSessions() {
     }
   }
 
-  // Multi check-in
+  // Multi actions
   async function handleMultiCheckIn() {
     if (selectedSessionIds.length === 0) return;
     setMultiCheckingIn(true);
@@ -341,7 +407,6 @@ export default function AllUpcomingSessions() {
     }
   }
 
-  // Multi mark-missed
   async function handleMultiMissed() {
     if (selectedSessionIds.length === 0) return;
     setMultiMissingIn(true);
@@ -370,7 +435,6 @@ export default function AllUpcomingSessions() {
     }
   }
 
-  // NEW: Multi Not Checked-In
   async function handleMultiNotCheckedIn() {
     if (selectedSessionIds.length === 0) return;
     setMultiNotCheckInIn(true);
@@ -399,7 +463,7 @@ export default function AllUpcomingSessions() {
     }
   }
 
-  // Filtering logic
+  // Filtering for status (CheckedIn/NotCheckedIn/Missed)
   let filteredSessions = sessions;
   if (checkedInFilter === "CheckedIn") {
     filteredSessions = sessions.filter(
@@ -415,7 +479,6 @@ export default function AllUpcomingSessions() {
     );
   }
 
-  // For select-all: get currently filtered session count
   const filteredCount = filteredSessions.length;
 
   return (
@@ -428,15 +491,78 @@ export default function AllUpcomingSessions() {
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-slate-800">
           All Sessions{" "}
-          <span className="text-slate-400">
-            – {(shownDate && `Date: ${formatDateDDMMYYYY(shownDate)}`) || ""}
-          </span>
+          {(shownDate && (
+            <span className="text-slate-400">
+              {/* If only single-date response, show date */}
+              – Date: {formatDateDDMMYYYY(shownDate)}
+            </span>
+          )) || ""}
         </h1>
       </div>
 
-      {/* Filter Bar: Checked-in / Missed / Not Checked-in */}
-      <div className="mb-4 flex gap-4 items-center">
-        <label className="font-medium text-slate-700">Show:</label>
+      {/* Filter Bar: Date (from/to), search, Checked-in / Missed / Not Checked-in */}
+      <div className="mb-4 flex flex-wrap gap-4 items-center">
+        <div className="flex items-end gap-4">
+          <div className="flex flex-col">
+            <label htmlFor="fromDate" className="font-medium text-slate-700 mb-1">
+              From date:
+            </label>
+            <div className="relative">
+              <DatePicker
+                id="fromDate"
+                selected={fromDateObj}
+                onChange={(date: Date | null) => setFromDateObj(date)}
+                dateFormat="yyyy-MM-dd"
+                placeholderText="Select from date"
+                className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-44 pl-10 bg-white shadow-sm transition"
+                isClearable
+                maxDate={toDateObj ?? undefined}
+                calendarClassName="calendar"
+                popperPlacement="bottom-start"
+              />
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+                <FiCalendar size={17} />
+              </span>
+            </div>
+          </div>
+          <div className="flex flex-col">
+            <label htmlFor="toDate" className="font-medium text-slate-700 mb-1">
+              To date:
+            </label>
+            <div className="relative">
+              <DatePicker
+                id="toDate"
+                selected={toDateObj}
+                onChange={(date: Date | null) => setToDateObj(date)}
+                dateFormat="yyyy-MM-dd"
+                placeholderText="Select to date"
+                className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-44 pl-10 bg-white shadow-sm transition"
+                isClearable
+                minDate={fromDateObj ?? undefined}
+                calendarClassName="calendar"
+                popperPlacement="bottom-start"
+              />
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+                <FiCalendar size={17} />
+              </span>
+            </div>
+          </div>
+        </div>
+ 
+        <label className="font-medium text-slate-700 ml-2">Search:</label>
+        <input
+          type="text"
+          placeholder="Session ID, Patient, Therapist, Booking, Date, etc."
+          className="border border-slate-300 rounded px-2 py-1 text-sm"
+          style={{ minWidth: 210 }}
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === "Enter") fetchSessions();
+          }}
+        />
+
+        <label className="font-medium text-slate-700 ml-2">Show:</label>
         <select
           className="rounded border border-slate-300 px-2 py-1 text-sm"
           value={checkedInFilter}
@@ -452,6 +578,21 @@ export default function AllUpcomingSessions() {
           <option value="CheckedIn">Checked-In</option>
           <option value="Missed">Missed</option>
         </select>
+        <button
+          type="button"
+          className="bg-slate-200 rounded px-3 py-0.5 text-xs font-semibold ml-2"
+          style={{ marginLeft: 8 }}
+          onClick={() => {
+            setFromDateObj(null);
+            setToDateObj(null);
+            setFromDate("");
+            setToDate("");
+            setSearch("");
+            fetchSessions();
+          }}
+        >
+          Clear Filters
+        </button>
       </div>
 
       {/* List of ALL Upcoming/Future Sessions */}
@@ -577,13 +718,9 @@ export default function AllUpcomingSessions() {
                       s.session?.therapist?.therapistId ??
                       s.session?.therapist?._id ??
                       "";
-                    // const isUnchecked = (s.session.status === "NotCheckedIn" || (!s.session.status && !s.session.isCheckedIn));
-                    // const isMissed = s.session.status === "Missed";
-                    // const isCheckedIn = s.session.status === "CheckedIn" || (!s.session.status && s.session.isCheckedIn);
                     const isSelected = selectedSessionIds.includes(s.session._id);
                     const sessionStatus = getSessionStatus(s.session);
 
-                    // For all 3 types - always show checkbox on current filtered row
                     const showCheckbox = true;
 
                     return (
@@ -716,7 +853,7 @@ export default function AllUpcomingSessions() {
                                   : "Mark Missed"}
                               </button>
                             )}
-                       
+
                             {/* Show Mark Not Checked-In button only if status is NOT NotCheckedIn */}
                             {s.session.status !== "NotCheckedIn" && (
                               <button
@@ -730,11 +867,11 @@ export default function AllUpcomingSessions() {
                                   ? "Marking…"
                                   : "Mark Not Checked-In"}
                               </button>
-                         
+
                             )}
                           </div>
                         </td>
-                   
+
                       </tr>
                     );
                   })}
