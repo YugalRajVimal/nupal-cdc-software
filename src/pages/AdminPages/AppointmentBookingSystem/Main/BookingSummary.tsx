@@ -273,6 +273,13 @@ function CollectPaymentModal({ open, onClose, payment, onCollected }: CollectPay
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("");
   const [utr, setUtr] = useState("");
 
+  // Payment time state
+  const [paymentTime, setPaymentTime] = useState(() => {
+    // Default value: now, formatted as yyyy-MM-ddTHH:mm for input
+    const now = new Date();
+    return now.toISOString().slice(0, 16);
+  });
+
   const paymentAmountOriginal = payment ? toNumber(payment.paymentAmount) : undefined;
   const discountPercent = (payment && typeof payment.discountPercent === "number") ? payment.discountPercent : 0;
   const discountedAmount = paymentAmountOriginal !== undefined
@@ -294,7 +301,11 @@ function CollectPaymentModal({ open, onClose, payment, onCollected }: CollectPay
 
   const needsUtr = paymentMethod === "online";
   const utrMissing = needsUtr && utr.trim() === "";
-  const canSubmit = !loading && !isPartialOverDue && paymentMethod !== "" && !utrMissing &&
+
+  // Validate paymentTime is present and non-empty
+  const paymentTimeMissing = !paymentTime || paymentTime.trim() === "";
+
+  const canSubmit = !loading && !isPartialOverDue && paymentMethod !== "" && !utrMissing && !paymentTimeMissing &&
     (collectType === "full" || (!isNaN(partialNumeric) && partialNumeric > 0));
 
   useEffect(() => {
@@ -305,6 +316,9 @@ function CollectPaymentModal({ open, onClose, payment, onCollected }: CollectPay
       setApplyDiscount(true);
       setPaymentMethod("");
       setUtr("");
+      // On modal open, default paymentTime to now
+      const now = new Date();
+      setPaymentTime(now.toISOString().slice(0, 16));
     }
   }, [open, payment]);
 
@@ -321,6 +335,7 @@ function CollectPaymentModal({ open, onClose, payment, onCollected }: CollectPay
         applyDiscount,
         discountApplied: typeof discountPercent === "number" && discountPercent > 0 && applyDiscount,
         paymentMethod,
+        paymentTime: paymentTime ? new Date(paymentTime).toISOString() : undefined, // Send as ISO string
         ...(needsUtr && utr.trim() ? { utr: utr.trim() } : {}),
         ...(collectType === "partial" ? { partialAmount: partialNumeric } : {}),
       };
@@ -439,6 +454,27 @@ function CollectPaymentModal({ open, onClose, payment, onCollected }: CollectPay
                   )}
                 </div>
               )}
+
+              {/* Payment Time */}
+              <div className="mb-3">
+                <label className="block font-medium text-slate-700 mb-1 text-sm">
+                  Payment date & time <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="datetime-local"
+                  value={paymentTime}
+                  onChange={e => setPaymentTime(e.target.value)}
+                  required
+                  disabled={loading}
+                  className="w-full px-2 py-1 rounded border border-slate-300 text-slate-800 focus:ring focus:ring-blue-100 text-sm"
+                  max={new Date().toISOString().slice(0, 16)}
+                />
+                {paymentTimeMissing && (
+                  <div className="text-xs text-red-500 mt-1">
+                    Please select the date and time of payment.
+                  </div>
+                )}
+              </div>
 
               {/* ── Payment Method ── */}
               <div className="mb-3">

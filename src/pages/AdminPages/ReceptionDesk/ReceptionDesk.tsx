@@ -130,6 +130,7 @@ function CollectPaymentModal({ open, onClose, payment, onCollected }: CollectPay
   const [applyDiscount, setApplyDiscount] = useState(true);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("");
   const [utr, setUtr] = useState("");
+  const [paymentTime, setPaymentTime] = useState<string>(""); // new
 
   const discountPercent =
     payment && typeof getDiscountPercent(payment) === "number"
@@ -156,11 +157,11 @@ function CollectPaymentModal({ open, onClose, payment, onCollected }: CollectPay
       ? paymentAmount - amountAlreadyPaid
       : paymentAmount;
 
-  // Payment method details (new)
   const needsUtr = paymentMethod === "online";
   const utrMissing = needsUtr && utr.trim() === "";
+  const paymentTimeMissing = !paymentTime;
   const canSubmit = !loading && !isPartialOverDue && paymentMethod !== "" && !utrMissing &&
-    (collectType === "full" || (!isNaN(partialNumeric) && partialNumeric > 0));
+    (collectType === "full" || (!isNaN(partialNumeric) && partialNumeric > 0)) && !paymentTimeMissing;
 
   useEffect(() => {
     if (open) {
@@ -170,6 +171,11 @@ function CollectPaymentModal({ open, onClose, payment, onCollected }: CollectPay
       setApplyDiscount(true);
       setPaymentMethod("");
       setUtr("");
+      // Set default paymentTime to now in local time ISO format (for input[type="datetime-local"])
+      const now = new Date();
+      const tzOffset = now.getTimezoneOffset() * 60000;
+      const localISOTime = new Date(now.getTime() - tzOffset).toISOString().slice(0, 16);
+      setPaymentTime(localISOTime);
     }
   }, [open, payment]);
 
@@ -186,6 +192,7 @@ function CollectPaymentModal({ open, onClose, payment, onCollected }: CollectPay
         paymentMethod,
         ...(needsUtr && utr.trim() ? { utr: utr.trim() } : {}),
         ...(collectType === "partial" ? { partialAmount: partialNumeric } : {}),
+        paymentTime: paymentTime ? new Date(paymentTime).toISOString() : undefined,
       };
       if (typeof discountPercent === "number" && discountPercent > 0 && applyDiscount) {
         body.discountApplied = true;
@@ -367,6 +374,29 @@ function CollectPaymentModal({ open, onClose, payment, onCollected }: CollectPay
                   )}
                 </div>
               )}
+              {/* Payment Time input (date + time) */}
+              <div className="mb-3">
+                <label className="block font-medium text-slate-700 mb-1">
+                  Payment Time <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="datetime-local"
+                  value={paymentTime}
+                  onChange={e => setPaymentTime(e.target.value)}
+                  className="w-full px-2 py-1 rounded border border-slate-300 text-slate-800 focus:ring focus:ring-blue-200 text-sm"
+                  disabled={loading}
+                  required
+                  max={(() => {
+                    // max = now in local time, in "yyyy-MM-ddTHH:mm"
+                    const now = new Date();
+                    const tzOffset = now.getTimezoneOffset() * 60000;
+                    return new Date(now.getTime() - tzOffset).toISOString().slice(0, 16);
+                  })()}
+                />
+                {paymentTimeMissing && (
+                  <div className="text-xs text-red-500 mt-1">Payment time is required.</div>
+                )}
+              </div>
               {/* ── Payment Method Select (Cash, Online) ── */}
               <div className="mb-3">
                 <label className="block font-medium text-slate-700 mb-1">
