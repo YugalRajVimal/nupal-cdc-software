@@ -16,6 +16,8 @@ interface FinanceLog {
   Utr?: string[];
   CreatedAt?: string;
   UpdatedAt?: string;
+  ChildrenName?: string;
+  ChildrenId?: string;
 }
 
 interface FinanceDetailsResponse {
@@ -44,6 +46,8 @@ function downloadExcel(filename: string, rows: FinanceLog[]) {
     CreditDebitStatus: row.CreditDebitStatus ?? "",
     PaymentMethod: row.PaymentMethod ?? "",
     Utr: row.Utr && row.Utr.length > 0 ? row.Utr.join(", ") : "",
+    ChildrenName: row.ChildrenName ?? "",
+    ChildrenId: row.ChildrenId ?? "",
     CreatedAt: row.CreatedAt ? new Date(row.CreatedAt).toLocaleString("en-GB") : "",
     UpdatedAt: row.UpdatedAt ? new Date(row.UpdatedAt).toLocaleString("en-GB") : "",
   }));
@@ -58,6 +62,8 @@ function downloadExcel(filename: string, rows: FinanceLog[]) {
       "CreditDebitStatus",
       "PaymentMethod",
       "Utr",
+      "ChildrenName",
+      "ChildrenId",
       "CreatedAt",
       "UpdatedAt",
     ],
@@ -138,7 +144,7 @@ export default function FinancesPage() {
             <input
               type="text"
               className="py-2 px-3 outline-none bg-transparent placeholder:text-slate-400 text-sm"
-              placeholder="Search by description, amount, type, date, payment method, UTR, etc..."
+              placeholder="Search by description, amount, type, date, payment method, UTR, children name/id, etc..."
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               autoCorrect="off"
@@ -189,10 +195,12 @@ export default function FinancesPage() {
                 <tr>
                   <th className="px-4 py-3 text-left">Date</th>
                   <th className="px-4 py-3 text-left">Description</th>
-
+                  <th className="px-4 py-3 text-left">Children Name</th>
+                  <th className="px-4 py-3 text-left">Children ID</th>
                   <th className="px-4 py-3 text-left">Credit/Debit</th>
                   <th className="px-4 py-3 text-left">Payment Method</th>
                   <th className="px-4 py-3 text-left">UTR</th>
+                  
                   <th className="px-4 py-3 text-left">Created At</th>
                   <th className="px-4 py-3 text-left">Updated At</th>
                   <th className="px-4 py-3 text-right">Amount</th>
@@ -208,7 +216,8 @@ export default function FinancesPage() {
                           : "-"}
                       </td>
                       <td className="px-4 py-3">{log.Description}</td>
-
+                      <td className="px-4 py-3">{log.ChildrenName ?? "-"}</td>
+                      <td className="px-4 py-3">{log.ChildrenId ?? "-"}</td>
                       <td className="px-4 py-3">{log.CreditDebitStatus ?? "-"}</td>
                       <td className="px-4 py-3">{log.PaymentMethod ?? "-"}</td>
                       <td className="px-4 py-3 ">
@@ -220,8 +229,7 @@ export default function FinancesPage() {
                           "-"
                         )}
                       </td>
-                 
-                 
+                      
                       <td className="px-4 py-3">
                         {log.CreatedAt
                           ? new Date(log.CreatedAt).toLocaleString("en-GB")
@@ -247,7 +255,7 @@ export default function FinancesPage() {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={10} className="px-4 py-6 text-center text-slate-400">
+                    <td colSpan={11} className="px-4 py-6 text-center text-slate-400">
                       No finance logs found.
                     </td>
                   </tr>
