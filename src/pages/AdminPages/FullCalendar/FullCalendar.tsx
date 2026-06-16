@@ -29,6 +29,13 @@ const SESSION_TIME_OPTIONS = [
   { id: "1930-2015", label: "19:30 to 20:15", limited: true },
 ];
 
+// Show all statuses from @booking.schema.js (22-26)
+const SESSION_STATUS_OPTIONS = [
+  { value: "CheckedIn", label: "Checked In" },
+  { value: "NotCheckedIn", label: "Not Checked In" },
+  { value: "Missed", label: "Missed" },
+];
+
 type TherapistUser = {
   _id: string;
   name: string;
@@ -52,11 +59,12 @@ type BackendCalendarRecord = {
   session: {
     date: string;
     slotId: string;
-    sessionId?: string; // Add sessionId explicitly for clarity
+    sessionId?: string;
     therapist?: Therapist;
     therapyTypeId?: TherapyType;
     isCheckedIn?: boolean;
     _id?: string;
+    status?: string; // <-- Add status
   };
   therapist?: {
     therapistId: string;
@@ -67,12 +75,13 @@ type Session = {
   _id?: string;
   date: string;
   slotId: string;
-  sessionId?: string; // Add sessionId here
+  sessionId?: string;
   isCheckedIn?: boolean;
   appointmentId?: string;
   patient?: { patientId: string; name: string };
   therapist?: Therapist;
   therapyTypeId?: TherapyType;
+  status?: string; // <-- Add status here
 };
 const API_BASE_URL = import.meta.env.VITE_API_URL as string;
 
@@ -95,7 +104,7 @@ function getPatientDisplayName(patient: any) {
   return resultName;
 }
 function processBackendSessionList(data: BackendCalendarRecord[]): Session[] {
-  // Only include: appointmentId, patient (id, name), session date, slotId, therapist, therapyTypeId, isCheckedIn, _id, sessionId
+  // Only include: appointmentId, patient (id, name), session date, slotId, therapist, therapyTypeId, isCheckedIn, _id, sessionId, status
   return data.map((rec) => {
     const { appointmentId, patient, session } = rec;
     return {
@@ -107,10 +116,11 @@ function processBackendSessionList(data: BackendCalendarRecord[]): Session[] {
       },
       date: session.date,
       slotId: session.slotId,
-      sessionId: session.sessionId , // show sessionId (or fallback _id)
+      sessionId: session.sessionId,
       therapist: session.therapist,
       therapyTypeId: session.therapyTypeId,
       isCheckedIn: session.isCheckedIn,
+      status: session.status, // <- ADD status
     };
   });
 }
@@ -288,8 +298,37 @@ function CalendarSessionItem({
   const appointmentId = session.appointmentId;
   const therapist = session.therapist;
   const therapyType = session.therapyTypeId;
-  const isCheckedIn = !!session.isCheckedIn;
-  const sessionId = session.sessionId ;
+  // const isCheckedIn = !!session.isCheckedIn;
+  const sessionId = session.sessionId;
+  const status = session.status;
+
+  // status badge
+  function renderStatus() {
+    if (!status) return null;
+    let color, bgColor, text;
+    if (status === "CheckedIn") {
+      color = "text-green-900";
+      bgColor = "bg-green-200";
+      text = "Checked In";
+    } else if (status === "Missed") {
+      color = "text-red-900";
+      bgColor = "bg-red-200";
+      text = "Missed";
+    } else if (status === "NotCheckedIn") {
+      color = "text-slate-700";
+      bgColor = "bg-slate-200";
+      text = "Not Checked In";
+    } else {
+      color = "text-slate-700";
+      bgColor = "bg-slate-100";
+      text = status;
+    }
+    return (
+      <span className={`${bgColor} px-2 py-0.5 rounded ${color} text-xs font-semibold ml-2`}>
+        {text}
+      </span>
+    );
+  }
 
   if (!showAllDetails) {
     return (
@@ -326,6 +365,7 @@ function CalendarSessionItem({
             Session ID: <span className="font-mono">{sessionId}</span>
           </span>
         )}
+        {/* {renderStatus()} */}
       </div>
     );
   } else {
@@ -344,11 +384,13 @@ function CalendarSessionItem({
           >
             {slot ? slot.label : session.slotId}
           </span>
-          {isCheckedIn && (
+          {/* {isCheckedIn && (
             <span className="bg-green-200 px-2 py-0.5 rounded text-green-900 text-xs font-semibold">
               Checked In
             </span>
-          )}
+          )} */}
+          {/* Show status badge */}
+          {renderStatus()}
         </div>
         {patient && <PatientDetailsBox patient={patient} />}
         {therapyType && <TherapyTypeBox therapyType={therapyType} />}
@@ -366,6 +408,7 @@ type FilterQuery = {
   onlyLimited: boolean;
   checkedIn: string; // 'yes', 'no', '' (all)
   slotId: string; // --- ADD: slotId filter
+  status?: string; // --- Add status filter, optional for backward compatibility
 };
 function CalendarSearchFilter({
   filters,
@@ -427,7 +470,7 @@ function CalendarSearchFilter({
         />
         Limited slots
       </label>
-      <select
+      {/* <select
         className="py-1 px-2 border rounded bg-white text-sm"
         value={filters.checkedIn}
         onChange={e => setFilters({ ...filters, checkedIn: e.target.value })}
@@ -435,6 +478,18 @@ function CalendarSearchFilter({
         <option value="">All Check-ins</option>
         <option value="yes">Checked In</option>
         <option value="no">Not Checked In</option>
+      </select> */}
+      {/* --- Status filter dropdown --- */}
+      <select
+        className="py-1 px-2 border rounded bg-white text-sm"
+        value={filters.status || ""}
+        onChange={e => setFilters({ ...filters, status: e.target.value })}
+        style={{ minWidth: 130 }}
+      >
+        <option value="">All Statuses</option>
+        {SESSION_STATUS_OPTIONS.map(opt => (
+          <option key={opt.value} value={opt.value}>{opt.label}</option>
+        ))}
       </select>
     </div>
   );
@@ -596,7 +651,8 @@ export default function FullCalendar() {
     therapyType: "",
     onlyLimited: false,
     checkedIn: "",
-    slotId: "", // <--- ADD: slotId filter to state
+    slotId: "",
+    status: "", // <-- ADD STATUS to local filter
   });
 
   const [therapyTypeList, setTherapyTypeList] = useState<TherapyType[]>([]);
@@ -703,6 +759,9 @@ export default function FullCalendar() {
       result = result.filter(s => s.isCheckedIn);
     } else if (filters.checkedIn === "no") {
       result = result.filter(s => !s.isCheckedIn);
+    }
+    if (filters.status && filters.status !== "") {
+      result = result.filter(s => s.status === filters.status);
     }
     return result;
   }, [sessions, filters]);
