@@ -74,6 +74,7 @@ type TherapistProfile = {
     toDate: string;
     remark?: string;
     paidOn?: string;
+    paymentMethod?: "cash" | "online";
   }>;
   isDisabled?: boolean;
   panelAccess?: boolean;
@@ -86,6 +87,7 @@ type PayFormState = {
   toDate: string;
   remark: string;
   paidOn?: string;
+  paymentMethod: "cash" | "online";
 };
 
 const DATE_FIELDS = [
@@ -324,6 +326,7 @@ export default function SuperAdminTherapistsPage() {
     toDate: "",
     remark: "",
     paidOn: "",
+    paymentMethod: "cash",
   });
   const [payLoading, setPayLoading] = useState(false);
   const [payError, setPayError] = useState<string | null>(null);
@@ -531,6 +534,7 @@ export default function SuperAdminTherapistsPage() {
       toDate: "",
       remark: "",
       paidOn: "",
+      paymentMethod: "cash",
     });
   }
 
@@ -545,6 +549,7 @@ export default function SuperAdminTherapistsPage() {
       toDate: "",
       remark: "",
       paidOn: "",
+      paymentMethod: "cash",
     });
   }
 
@@ -561,9 +566,10 @@ export default function SuperAdminTherapistsPage() {
       Number(payForm.amount) <= 0 ||
       !payForm.type ||
       !payForm.fromDate ||
-      !payForm.toDate
+      !payForm.toDate ||
+      !payForm.paymentMethod
     ) {
-      setPayError("Please enter all required fields: amount, type, fromDate, toDate.");
+      setPayError("Please enter all required fields: amount, type, fromDate, toDate, payment method.");
       setPayLoading(false);
       return;
     }
@@ -578,6 +584,7 @@ export default function SuperAdminTherapistsPage() {
         toDate: payForm.toDate,
         remark: payForm.remark,
         paidOn: payForm.paidOn,
+        paymentMethod: payForm.paymentMethod,
       };
 
       await axios.post(
@@ -782,6 +789,7 @@ export default function SuperAdminTherapistsPage() {
                       <tr className="bg-slate-100">
                         <th className="border px-2 py-1">Amount</th>
                         <th className="border px-2 py-1">Type</th>
+                        <th className="border px-2 py-1">Payment Method</th>
                         <th className="border px-2 py-1">From</th>
                         <th className="border px-2 py-1">To</th>
                         <th className="border px-2 py-1">Paid On</th>
@@ -793,6 +801,7 @@ export default function SuperAdminTherapistsPage() {
                         <tr key={i}>
                           <td className="border px-2 py-1 font-bold text-slate-700">₹{e.amount}</td>
                           <td className="border px-2 py-1">{e.type}</td>
+                          <td className="border px-2 py-1">{e.paymentMethod ? e.paymentMethod.charAt(0).toUpperCase() + e.paymentMethod.slice(1) : "-"}</td>
                           <td className="border px-2 py-1">{e.fromDate ? new Date(e.fromDate).toLocaleDateString() : "-"}</td>
                           <td className="border px-2 py-1">{e.toDate ? new Date(e.toDate).toLocaleDateString() : "-"}</td>
                           <td className="border px-2 py-1">{e.paidOn ? new Date(e.paidOn).toLocaleDateString() : "-"}</td>
@@ -929,6 +938,23 @@ export default function SuperAdminTherapistsPage() {
                   >
                     <option value="salary">Salary</option>
                     <option value="contract">Contract</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium mb-0.5">Payment Method</label>
+                  <select
+                    className="w-full border px-2 py-1 rounded"
+                    value={payForm.paymentMethod}
+                    onChange={e =>
+                      setPayForm(f => ({
+                        ...f,
+                        paymentMethod: e.target.value as "cash" | "online"
+                      }))
+                    }
+                    required
+                  >
+                    <option value="cash">Cash</option>
+                    <option value="online">Online</option>
                   </select>
                 </div>
                 <div className="flex gap-2">
