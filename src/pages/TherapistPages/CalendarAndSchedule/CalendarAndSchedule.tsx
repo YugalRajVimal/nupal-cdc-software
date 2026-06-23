@@ -32,7 +32,7 @@ type Session = {
   date: string;
   slotId: string;
   _id?: string;
-  sessionId:string,
+  sessionId: string;
   patient?: {
     id?: string;
     _id?: string;
@@ -54,6 +54,7 @@ type Session = {
     _id?: string;
     name?: string;
   };
+  status?: "CheckedIn" | "NotCheckedIn" | "Missed" | string; // <- add status
 };
 
 function getDaysInMonth(year: number, month: number) {
@@ -65,68 +66,90 @@ function getStartDay(year: number, month: number) {
 
 const API_BASE_URL = import.meta.env.VITE_API_URL as string;
 
-// Modified display name to always show [patientId] after name if exists
-// function getPatientDisplayName(patient: any) {
-//   if (!patient) return "";
-//   if (typeof patient === "string") return patient;
-
-//   const name =
-//     (patient.userId && typeof patient.userId === "object" && patient.userId.name) ||
-//     patient.name ||
-//     "";
-//   const patientId =
-//     patient.patientId || patient.id || patient._id || ""; // best-effort fallback for patientId
-
-//   const phone = patient.phoneNo || patient.mobile1 || "";
-
-//   // show: name [patientId] (phone) <= id is always in [brackets] after name if exists
-//   let resultName = name;
-//   if (patientId) {
-//     resultName += ` [${patientId}]`;
-//   }
-//   if (phone) {
-//     resultName += ` (${phone})`;
-//   }
-//   return resultName;
-// }
+/**
+ * Utility to get status style (color/badge)
+ */
+function getStatusBadgeProps(status: string | undefined) {
+  switch (status) {
+    case "CheckedIn":
+      return {
+        text: "Checked In",
+        bg: "bg-green-100",
+        color: "text-green-700",
+        border: "border-green-400",
+      };
+    case "Missed":
+      return {
+        text: "Missed",
+        bg: "bg-red-100",
+        color: "text-red-700",
+        border: "border-red-400",
+      };
+    case "NotCheckedIn":
+      return {
+        text: "Not Checked In",
+        bg: "bg-gray-100",
+        color: "text-gray-700",
+        border: "border-gray-400",
+      };
+    default:
+      return {
+        text: status || "Unknown",
+        bg: "bg-gray-100",
+        color: "text-gray-700",
+        border: "border-gray-400",
+      };
+  }
+}
 
 function CalendarSessionItem({ session }: { session: Session }) {
   const slot = SESSION_TIME_OPTIONS.find((opt) => opt.id === session.slotId);
-
-  // For "isCheckedIn", we color patient info and show appointmentId
-  const isCheckedIn = !!session.isCheckedIn;
-
-  // Fetch safe id for patientId display below
   const patient = session.patient;
-  // const patientId =
-  //   (patient && (patient.patientId || patient.id || patient._id)) || "";
+  const statusData = getStatusBadgeProps(session.status);
+  const isCheckedIn = session.status === "CheckedIn" || !!session.isCheckedIn;
 
-  // Display
   return (
     <div
-      className={`rounded border flex flex-col justify-end border-sky-300 px-1 py-0.5 bg-sky-50 text-xs mb-1
-        ${slot && slot.limited ? "border-orange-400 bg-orange-50" : ""}`}
+      className={`rounded border flex flex-col gap-1 justify-end px-1 py-0.5 text-xs mb-1 transition-all
+      ${slot && slot.limited ? "border-orange-400 bg-orange-50" : "border-sky-300 bg-sky-50"}
+      `}
+      style={{ minHeight: 0, minWidth: 0, wordBreak: "break-word" }}
     >
-      {/* children name and id */}
+      <div className="flex items-center gap-1 flex-wrap">
+        {/* Status Badge */}
+        {session.status && (
+          <span
+            className={`
+              ${statusData.bg} ${statusData.color} ${statusData.border}
+              border px-1 py-[1px] rounded text-[0.72em] font-semibold mr-1 mb-0.5
+              whitespace-nowrap
+            `}
+            style={{ minWidth: 0 }}
+          >
+            {statusData.text}
+          </span>
+        )}
+        {/* Appointment ID if checked in */}
+        {isCheckedIn && session.appointmentId && (
+          <span className="ml-0.5 px-1 rounded text-xs font-semibold bg-green-200 text-green-800">
+            {session.appointmentId}
+          </span>
+        )}
+      </div>
+      {/* Patient Info */}
       <span
-        className={`font-bold ${
-          isCheckedIn ? "text-green-700" : "text-indigo-900"
-        }`}
+        className={`font-bold ${isCheckedIn ? "text-green-700" : "text-indigo-900"}`}
+        style={{ wordBreak: "break-word" }}
       >
-        {/* Render name, patientId, phone, with color, and add appointmentId if checked in */}
         {(() => {
           if (!patient) return "";
-          // name
           const name =
             (patient.userId && typeof patient.userId === "object" && patient.userId.name) ||
             patient.name ||
             "";
-          // patientId in brackets if exists
           const pid =
             patient.patientId || patient.id || patient._id || "";
-          // phone (not required in main display)
           const phone = patient.phoneNo || patient.mobile1 || "";
-
           return (
             <>
               {name}
@@ -136,36 +159,31 @@ function CalendarSessionItem({ session }: { session: Session }) {
                   [{pid}]
                 </span>
               )}
-              {/* Show phone if you wish */}
               {phone && (
                 <span className="text-slate-500"> ({phone})</span>
-              )}
-              {/* Show appointmentId if checked in */}
-              {isCheckedIn && session.appointmentId && (
-                <span className="ml-1 px-1 rounded text-xs font-semibold bg-green-200 text-green-800">
-                  {session.appointmentId}
-                </span>
               )}
             </>
           );
         })()}
       </span>
-      <span>
-        <span className="text-sky-700">
+      {/* Time and Type */}
+      <div className="flex items-center flex-wrap min-w-0">
+        <span className="text-sky-700 truncate">
           {slot ? slot.label : session.slotId}
         </span>
         {slot && slot.limited && (
-          <span className="ml-1 text-amber-600 font-semibold"> (Limited)</span>
+          <span className="ml-1 text-amber-600 font-semibold whitespace-nowrap"> (Limited)</span>
         )}
-      </span>
-      {/* Show sessionId (session._id) always */}
+      </div>
+      {/* Session ID */}
       {session._id && (
-        <span className="text-xs text-gray-400 break-all">
+        <span className="text-xs text-gray-400 break-all truncate">
           Session ID: {session.sessionId}
         </span>
       )}
+      {/* Therapy Name */}
       {session.therapyType && session.therapyType.name && (
-        <span className="text-xs text-gray-500">{session.therapyType.name}</span>
+        <span className="text-xs text-gray-500 truncate">{session.therapyType.name}</span>
       )}
     </div>
   );
@@ -197,7 +215,7 @@ function Modal({
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: 50, opacity: 0 }}
           transition={{ type: "spring", stiffness: 250, damping: 30 }}
-          className="bg-white rounded-lg shadow-xl p-6 relative min-w-[320px] max-w-md w-full"
+          className="bg-white rounded-lg shadow-xl p-6 relative min-w-[94vw] sm:min-w-[320px] max-w-md w-full"
           onClick={(e) => e.stopPropagation()}
         >
           <button
@@ -209,7 +227,7 @@ function Modal({
           {title && (
             <h2 className="mb-4 text-lg font-bold text-gray-800 border-b pb-2">{title}</h2>
           )}
-          <div className="overflow-y-auto max-h-[60vh] pr-1">{children}</div>
+          <div className="overflow-y-auto max-h-[70vh] pr-1">{children}</div>
         </motion.div>
       </motion.div>
     </AnimatePresence>
@@ -245,7 +263,7 @@ export default function CalendarAndSchedule() {
       const json = await res.json();
       if (json && json.success && Array.isArray(json.data)) {
         setSessions(json.data);
-        console.log("All sessions:", json.data);
+        // console.log("All sessions:", json.data);
       } else {
         setSessions([]);
         // console.log("All sessions: []");
@@ -373,7 +391,6 @@ export default function CalendarAndSchedule() {
               minHeight: "0",
               maxHeight: "100%",
               gridTemplateRows: `repeat(${getCalendarWeeks()}, minmax(0, 1fr))`,
-              // shrink font size for cells on the whole calendar
               fontSize: "0.91rem",
             }}
           >
@@ -431,7 +448,7 @@ export default function CalendarAndSchedule() {
                     {day}
                   </div>
                   {sessionsForDay.length > 0 && (
-                    <div className="flex flex-col w-full flex-1">
+                    <div className="flex flex-col w-full flex-1 gap-0.5">
                       {sessionsToDisplay.map((session, idx) => (
                         <CalendarSessionItem session={session} key={session._id || `${session.date}-${session.slotId}-${idx}`} />
                       ))}

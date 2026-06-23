@@ -53,6 +53,7 @@ const renderObject = (obj: any, level = 0) =>
           ))}]
         </div>
       );
+ 
     } else {
       return (
         <div key={key} className={`ml-${(level + 1) * 3}`}>
@@ -73,43 +74,12 @@ const renderDetailsModalBody = (details: any) => {
   );
 };
 
-// const formatUser = (user: string | { _id: string, name?: string, email?: string }) => {
-//   if (!user) return '-';
-//   if (typeof user === 'string') {
-//     return <span title={user}>{user.slice(0, 8) + (user.length > 8 ? '...' : '')}</span>;
-//   }
-//   return (
-//     <span title={user._id}>
-//       {(user.name || user.email) && (
-//         <span className="font-medium">
-//           {user.name ? user.name : (user.email ? user.email : user._id)}
-//         </span>
-//       )}
-//       {(user.name || user.email) ? (
-//         <span className="text-gray-400 text-xs ml-1">
-//           ({user._id.slice(0, 6)}...)
-//         </span>
-//       ) : user._id}
-//     </span>
-//   );
-// };
-
-// const formatUserAgent = (ua: string | null | undefined) =>
-//   ua
-//     ? <span title={ua}>{ua.length > 32 ? ua.slice(0, 28) + '…' : ua}</span>
-//     : '-';
-
 const formatResourceId = (id: string | undefined) =>
   id ?
     <span className="text-indigo-700 font-mono break-all text-xs" title={id}>
       {id.slice(0, 9) + (id.length > 9 ? '...' : '')}
     </span>
     : '-';
-
-// const formatIP = (ip: string | null | undefined) =>
-//   ip ?
-//     <span className="text-emerald-800 font-mono bg-emerald-100 rounded px-2 py-[2px] text-xs">{ip}</span>
-//     : '-';
 
 const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
@@ -147,16 +117,23 @@ const DetailsModal: React.FC<{
   );
 };
 
+// PAGINATION IMPLEMENTATION
+const DEFAULT_LIMIT = 20;
+
 const AllLogs = () => {
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(DEFAULT_LIMIT);
+  const [total, setTotal] = useState<number | undefined>(undefined);
 
   const [modal, setModal] = useState<{ show: boolean, log: AuditLog | null }>({
     show: false,
     log: null,
   });
 
+  // Keyboard ESC for modal
   React.useEffect(() => {
     if (!modal.show) return;
     const onKeyDown = (e: KeyboardEvent) => {
@@ -166,14 +143,22 @@ const AllLogs = () => {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [modal.show]);
 
+  // Fetch logs (paged)
   useEffect(() => {
     const fetchLogs = async () => {
       setLoading(true);
       setError(null);
       try {
-        const response = await axios.get(`${API_URL}/api/super-admin/logs`);
+        const response = await axios.get(`${API_URL}/api/super-admin/logs`, {
+          params: {
+            page,
+            limit,
+          },
+        });
+        // Server is expected to return { logs, total, success }
         if (response.data && response.data.success) {
           setLogs(response.data.logs);
+          setTotal(response.data.total ?? undefined);
         } else {
           setError('Failed to fetch logs.');
         }
@@ -183,12 +168,75 @@ const AllLogs = () => {
         setLoading(false);
       }
     };
-
     fetchLogs();
-  }, []);
+  }, [page, limit, API_URL]);
+
+  // Compute total pages (if API returns total)
+  const totalPages = total !== undefined && limit > 0
+    ? Math.ceil(total / limit)
+    : undefined;
+
+  // Handle change limit
+  function handleLimitChange(e: React.ChangeEvent<HTMLSelectElement>) {
+    const newLimit = +e.target.value;
+    setLimit(newLimit);
+    setPage(1); // Reset page to 1 when limit changes
+  }
+
+  // Render pagination controls
+  const Pagination = () => {
+    // If no total, just use prev/next disables only by logs.length/!loading
+    return (
+      <div className="flex items-center justify-between gap-3 py-4 px-1">
+        <div className="flex items-center gap-2">
+          <button
+            className={`px-4 py-1 rounded bg-blue-200 text-blue-900 font-semibold disabled:opacity-50 transition`}
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={page === 1 || loading}
+          >
+            Prev
+          </button>
+          <span className="mx-2 text-gray-600 text-sm">
+            Page{' '}
+            <span className="font-bold text-blue-900">{page}</span>
+            {totalPages ? (
+              <>
+                {' '}of <span className="font-bold text-blue-900">{totalPages}</span>
+              </>
+            ) : null}
+          </span>
+          <button
+            className={`px-4 py-1 rounded bg-blue-200 text-blue-900 font-semibold disabled:opacity-50 transition`}
+            onClick={() => setPage((p) => totalPages ? Math.min(totalPages, p + 1) : p + 1)}
+            disabled={
+              loading ||
+              (totalPages ? page >= totalPages : logs.length < limit)
+            }
+          >
+            Next
+          </button>
+        </div>
+        <div className="flex items-center gap-2 text-sm">
+          <span>Rows per page:</span>
+          <select
+            value={limit}
+            onChange={handleLimitChange}
+            className="border border-slate-300 rounded px-2 py-1 bg-white"
+            disabled={loading}
+          >
+            {[10, 20, 30, 50, 100].map((v) => (
+              <option key={v} value={v}>
+                {v}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+    );
+  };
 
   return (
-    <div className="bg-white rounded-xl p-8 shadow-lg  mx-auto mt-9 mb-9">
+    <div className="bg-white rounded-xl p-8 shadow-lg mx-auto mt-9 mb-9">
       <h2 className="font-extrabold text-3xl mb-3 text-blue-900 tracking-tight">
         <span role="img" aria-label="logs" className="text-2xl mr-3">🗒️</span>
         Audit Logs
@@ -201,6 +249,9 @@ const AllLogs = () => {
         onClose={() => setModal({ show: false, log: null })}
         log={modal.log}
       />
+
+      {/* Pagination Top */}
+      <Pagination />
 
       {loading ? (
         <div className="flex items-center gap-3 py-4 text-blue-700 font-medium text-lg">
@@ -237,7 +288,7 @@ const AllLogs = () => {
                   <td className="py-3 px-3 text-center border-b border-slate-200 font-semibold text-blue-700 text-[15px]">
                     {capitalize(log.action.replace(/_/g, ' '))}
                   </td>
-                  <td className="py-3 px-3 text-center border-b border-slate-200  ">
+                  <td className="py-3 px-3 text-center border-b border-slate-200">
                     {(() => {
                       const userVal = log.user;
                       if (typeof userVal === "string") {
@@ -321,6 +372,9 @@ const AllLogs = () => {
           </table>
         </div>
       )}
+
+      {/* Pagination Bottom */}
+      <Pagination />
     </div>
   );
 };

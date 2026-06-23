@@ -3,6 +3,8 @@ import axios from "axios";
 import {
   FiHash,
   FiCheckCircle,
+  FiXCircle,
+  FiAlertCircle,
   FiCalendar,
   FiSearch,
   FiChevronLeft,
@@ -43,6 +45,44 @@ function useDebouncedValue<T>(value: T, delay = 400): T {
     return () => clearTimeout(id);
   }, [value, delay]);
   return debounced;
+}
+
+// Helper for session status rendering
+const statusMap = {
+  CheckedIn: {
+    icon: <FiCheckCircle className="inline" />,
+    label: "Checked In",
+    className: "text-green-600",
+  },
+  NotCheckedIn: {
+    icon: <FiXCircle className="inline" />,
+    label: "Not Checked In",
+    className: "text-slate-400",
+  },
+  Missed: {
+    icon: <FiAlertCircle className="inline" />,
+    label: "Missed",
+    className: "text-orange-500",
+  },
+};
+
+function renderSessionStatus(status: string | undefined | null) {
+  if (!status) {
+    return (
+      <span className="text-slate-400">-</span>
+    );
+  }
+  const entry = statusMap[status as keyof typeof statusMap];
+  if (!entry) {
+    return <span className="text-slate-400">{status}</span>;
+  }
+  return (
+    <span
+      className={`flex items-center gap-1 justify-center font-medium ${entry.className}`}
+    >
+      {entry.icon} {entry.label}
+    </span>
+  );
 }
 
 const TherapistMyAppointments: React.FC = () => {
@@ -204,7 +244,8 @@ const TherapistMyAppointments: React.FC = () => {
         <div className="space-y-10">
           {Object.entries(grouped).map(([appointmentId, records]) => {
             const first = records[0];
-            const patient = first?.patient || {};
+            // Accept both .patient and .Children
+            const patient = first?.patient || first?.Children || {};
             return (
               <div key={appointmentId} className="border rounded-lg shadow bg-white p-4">
                 <div className="flex items-center gap-2 mb-3">
@@ -240,7 +281,7 @@ const TherapistMyAppointments: React.FC = () => {
                           Therapy Type
                         </th>
                         <th className="px-4 py-3 border border-slate-200 bg-slate-100 font-semibold text-center">
-                          Checked In
+                          Status
                         </th>
                       </tr>
                     </thead>
@@ -272,13 +313,7 @@ const TherapistMyAppointments: React.FC = () => {
                             {rec.therapyType?.name || "-"}
                           </td>
                           <td className="px-4 py-3 border border-slate-200 text-center">
-                            {rec.session?.isCheckedIn ? (
-                              <span className="flex items-center gap-1 text-green-600 justify-center font-medium">
-                                <FiCheckCircle className="inline" /> Yes
-                              </span>
-                            ) : (
-                              <span className="text-slate-400">No</span>
-                            )}
+                            {renderSessionStatus(rec.session?.status)}
                           </td>
                         </tr>
                       ))}

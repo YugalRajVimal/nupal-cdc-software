@@ -5,7 +5,9 @@ import axios from "axios";
 // @ts-ignore
 import * as XLSX from "xlsx";
 
-// Finance log full interface with all details
+/**
+ * Finance log interface including children's details.
+ */
 interface FinanceLog {
   _id: string;
   Date: string;
@@ -17,9 +19,15 @@ interface FinanceLog {
   Utr?: string[];
   CreatedAt?: string;
   UpdatedAt?: string;
+
+  // NEW: Match backend (@finance.controller.js, line 125-126)
+  ChildrenName?: string;
+  ChildrenId?: string;
 }
 
-// The server returns an object matching finance.controller.js
+/**
+ * Server response interface, as in finance.controller.js
+ */
 interface FinanceDetailsResponse {
   success: boolean;
   totalIncome: number;
@@ -34,9 +42,8 @@ interface FinanceDetailsResponse {
   error?: string;
 }
 
-// Updated Excel function to capture all details
+// Updated Excel export to include children fields, auto-handle missing values.
 function downloadExcel(filename: string, rows: FinanceLog[]) {
-  // Prepare data for Excel with all details and proper UTR handling (concatenated if array)
   const worksheetRows = rows.map((row) => ({
     _id: row._id || "",
     Date: row.Date ? new Date(row.Date).toLocaleString("en-GB", { timeZone: "Asia/Kolkata" }) : "",
@@ -47,13 +54,16 @@ function downloadExcel(filename: string, rows: FinanceLog[]) {
     PaymentMethod: row.PaymentMethod || "",
     Utr: Array.isArray(row.Utr) ? row.Utr.join(", ") : (row.Utr ? String(row.Utr) : ""),
     CreatedAt: row.CreatedAt ? new Date(row.CreatedAt).toLocaleString("en-GB", { timeZone: "Asia/Kolkata" }) : "",
-    UpdatedAt: row.UpdatedAt ? new Date(row.UpdatedAt).toLocaleString("en-GB", { timeZone: "Asia/Kolkata" }) : ""
+    UpdatedAt: row.UpdatedAt ? new Date(row.UpdatedAt).toLocaleString("en-GB", { timeZone: "Asia/Kolkata" }) : "",
+    ChildrenName: row.ChildrenName || "",
+    ChildrenId: row.ChildrenId || "",
   }));
 
   const worksheet = XLSX.utils.json_to_sheet(worksheetRows, {
     header: [
       "_id", "Date", "Description", "Type", "Amount",
-      "CreditDebitStatus", "PaymentMethod", "Utr", "CreatedAt", "UpdatedAt"
+      "CreditDebitStatus", "PaymentMethod", "Utr", "CreatedAt", "UpdatedAt",
+      "ChildrenName", "ChildrenId"
     ],
   });
   const workbook = XLSX.utils.book_new();
@@ -70,7 +80,6 @@ export default function FinancesSuperAdminPage() {
   const [page, setPage] = useState(1);
   const [pageSize] = useState(20);
 
-  // For Excel full export
   const [excelLoading, setExcelLoading] = useState(false);
 
   const fetchFinanceData = (pageNum: number, searchQuery: string) => {
@@ -83,7 +92,7 @@ export default function FinancesSuperAdminPage() {
           pageSize,
           search: searchQuery,
           sortField: "date",
-          sortOrder: "desc"
+          sortOrder: "desc",
         }
       })
       .then((response) => {
@@ -105,7 +114,7 @@ export default function FinancesSuperAdminPage() {
   useEffect(() => {
     fetchFinanceData(page, search);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, pageSize /* not using pageSize yet, but for reactivity */, search]);
+  }, [page, pageSize, search]);
 
   const handleSearch = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -125,21 +134,20 @@ export default function FinancesSuperAdminPage() {
     if (financeData && financeData.page < financeData.totalPages) setPage(page + 1);
   };
 
-  // For full Excel export (all data, not just paginated), all details
+  // Excel export: all details
   const handleExportExcel = async () => {
     if (!financeData) return;
     setExcelLoading(true);
     try {
       const baseUrl = import.meta.env.VITE_API_URL || "";
-      // To fetch all records, set pageSize to a large number (or implement backend 'no pagination' param)
       const resp = await axios.get(`${baseUrl}/api/super-admin/finance/details`, {
         params: {
           page: 1,
-          pageSize: 10000, // assuming never more than this, for safe Excel export
+          pageSize: 10000,
           search,
           sortField: "date",
-          sortOrder: "desc"
-        }
+          sortOrder: "desc",
+        },
       });
       if (resp.data?.logs?.length > 0) {
         downloadExcel("finances.xlsx", resp.data.logs);
@@ -155,15 +163,18 @@ export default function FinancesSuperAdminPage() {
     }
   };
 
-  // Table headers for all details
+  // Table headers: add ChildrenName, ChildrenId
   const financeHeaders = [
     { label: "Date", key: "Date" },
     { label: "Description", key: "Description" },
+    { label: "Children Name", key: "ChildrenName" },
+    { label: "Children ID", key: "ChildrenId" },
     { label: "Type", key: "Type" },
     { label: "Amount", key: "Amount" },
     { label: "Credit/Debit", key: "CreditDebitStatus" },
     { label: "Payment Method", key: "PaymentMethod" },
     { label: "UTR", key: "Utr" },
+   
   ];
 
   return (
@@ -176,7 +187,7 @@ export default function FinancesSuperAdminPage() {
               value={search}
               onChange={handleChangeSearch}
               type="text"
-              placeholder="Search (desc, type, status, amount, date, method, UTR)..."
+              placeholder="Search (desc, type, status, amount, date, method, UTR, child)..."
               className="px-3 py-2 border rounded-l outline-none text-sm"
               autoCorrect="off"
               autoComplete="off"
@@ -239,7 +250,7 @@ export default function FinancesSuperAdminPage() {
           </div>
 
           <div className="bg-white border rounded-lg overflow-x-auto">
-            <table className="w-full text-sm min-w-[1100px]">
+            <table className="w-full text-sm min-w-[1300px]">
               <thead className="bg-slate-100">
                 <tr>
                   {financeHeaders.map((header) => (
@@ -259,6 +270,8 @@ export default function FinancesSuperAdminPage() {
                           : "-"}
                       </td>
                       <td className="px-4 py-3">{log.Description || "-"}</td>
+                      <td className="px-4 py-3">{log.ChildrenName || "-"}</td>
+                      <td className="px-4 py-3">{log.ChildrenId || "-"}</td>
                       <td className="px-4 py-3">{log.Type || "-"}</td>
                       <td className={`px-4 py-3 text-right ${
                           log.Type === "Income"
@@ -278,8 +291,7 @@ export default function FinancesSuperAdminPage() {
                           ? String(log.Utr)
                           : "-"}
                       </td>
-                 
-                     
+                   
                     </tr>
                   ))
                 ) : (

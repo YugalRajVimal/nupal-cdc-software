@@ -10,8 +10,16 @@ const SuperAdminBanner: React.FC<{
   superAdminName: string | null;
   superAdminEmail: string | null;
 }> = ({ superAdminName, superAdminEmail }) => {
+  // Function to handle "Back to Super Admin" action.
+  const handleBackToSuperAdmin = () => {
+    // Assuming a redirect or navigation back to Super Admin context,
+    // you can replace below with your logical implementation.
+    // For example, navigate to /super-admin or clear therapist-admin state.
+    window.location.href = "/super-admin"; // Or use navigate("/super-admin") if using react-router
+  };
+
   return (
-    <div className="bg-yellow-100 text-yellow-900 text-xs px-3 py-2 rounded-b shadow  flex items-center gap-2 border-b border-yellow-200">
+    <div className="bg-yellow-100 text-yellow-900 text-xs px-3 py-2 rounded-b shadow flex items-center gap-2 border-b border-yellow-200">
       <span className="font-semibold mr-2">
         You are logged in as Therapist (Super Admin Mode)
       </span>
@@ -24,6 +32,14 @@ const SuperAdminBanner: React.FC<{
           )
         </span>
       )}
+      {/* Button to go back to Super Admin */}
+      <button
+        className="ml-4 px-2 py-1 bg-yellow-300 text-yellow-900 rounded font-semibold text-xs border border-yellow-400 hover:bg-yellow-200 transition"
+        onClick={handleBackToSuperAdmin}
+        type="button"
+      >
+        Back to Super Admin
+      </button>
     </div>
   );
 };

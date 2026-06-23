@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react";
 import PageMeta from "../../../components/common/PageMeta";
 import {
   FiCalendar,
@@ -8,15 +7,15 @@ import {
   FiUser,
 } from "react-icons/fi";
 
-// Dashboard data types
+// Dashboard data types (updated for childrenName/childrenId instead of patientName/patientId)
 type UpcomingSessionDetail = {
   date: string;
   slotTime: string;
-  patientName: string;
-  patientId: string;
+  childrenName: string;
+  childrenId: string;
   therapyTypeName: string;
   appointmentId: string;
-  sessionId?: string; // <- ADDED for sessionId
+  sessionId?: string;
 };
 
 type DashboardData = {
@@ -28,67 +27,32 @@ type DashboardData = {
   upcomingSessionDetails: UpcomingSessionDetail[];
 };
 
+const hardcodedDashboardData: DashboardData = {
+  totalAppointments: 1,
+  totalSessions: 1,
+  upcomingSessions: 1,
+  checkedInSessions: 0,
+  totalEarnings: 0,
+  upcomingSessionDetails: [
+    {
+      date: "2026-06-30",
+      slotTime: "13:00 to 13:45",
+      childrenName: " PRAVIT SHARMA",
+      childrenId: "P0614",
+      therapyTypeName: "EIP Therapy",
+      appointmentId: "B00006",
+      sessionId: "S000133",
+    },
+  ],
+};
+
 export default function TherapistDashboardHome() {
-  const [dashboardData, setDashboardData] = useState<DashboardData>({
-    totalAppointments: 0,
-    totalSessions: 0,
-    upcomingSessions: 0,
-    checkedInSessions: 0,
-    totalEarnings: 0,
-    upcomingSessionDetails: [],
-  });
-
-  useEffect(() => {
-    const fetchDashboardData = async () => {
-      try {
-        const token = localStorage.getItem("therapist-token");
-        const apiUrl = import.meta.env.VITE_API_URL || "";
-
-        const response = await fetch(`${apiUrl}/api/therapist/dashboard`, {
-          method: "GET",
-          credentials: "include",
-          headers: {
-            "Content-Type": "application/json",
-            ...(token ? { Authorization: `${token}` } : {}),
-          },
-        });
-
-        if (!response.ok) {
-          throw new Error("Failed to fetch dashboard data");
-        }
-        const resp = await response.json();
-        // Accepts { success: true, data: {...} }
-        const data = resp?.data || {};
-
-        setDashboardData({
-          totalAppointments: data.totalAppointments || 0,
-          totalSessions: data.totalSessions || 0,
-          upcomingSessions: data.upcomingSessions || 0,
-          checkedInSessions: data.checkedInSessions || 0,
-          totalEarnings: data.totalEarnings || 0,
-          upcomingSessionDetails: Array.isArray(data.upcomingSessionDetails)
-            ? data.upcomingSessionDetails
-            : [],
-        });
-      } catch (err) {
-        setDashboardData({
-          totalAppointments: 0,
-          totalSessions: 0,
-          upcomingSessions: 0,
-          checkedInSessions: 0,
-          totalEarnings: 0,
-          upcomingSessionDetails: [],
-        });
-      }
-    };
-
-    fetchDashboardData();
-  }, []);
+  // Use the hardcoded data per the instruction
+  const dashboardData = hardcodedDashboardData;
 
   // Today's date as YYYY-MM-DD
   const todayDateStr = (() => {
     const today = new Date();
-    // ISO string is YYYY-MM-DDTHH:mm:ss.sssZ
     return today.toISOString().split("T")[0];
   })();
 
@@ -103,6 +67,7 @@ export default function TherapistDashboardHome() {
     });
   })();
 
+  // Only sessions that match today's date. For our data, only match if date matches today.
   const todaysSessions = dashboardData.upcomingSessionDetails.filter(
     (s) => s.date === todayDateStr
   );
@@ -122,7 +87,6 @@ export default function TherapistDashboardHome() {
               Welcome back, Therapist User
             </p>
           </div>
-
           <span className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-green-100 text-green-700 text-sm font-medium">
             ● Status: Active
           </span>
@@ -233,7 +197,7 @@ export default function TherapistDashboardHome() {
                   <thead>
                     <tr>
                       <th className="py-2 px-3 text-left text-gray-600 font-semibold">Time</th>
-                      <th className="py-2 px-3 text-left text-gray-600 font-semibold">Patient</th>
+                      <th className="py-2 px-3 text-left text-gray-600 font-semibold">Child</th>
                       <th className="py-2 px-3 text-left text-gray-600 font-semibold">Therapy</th>
                       <th className="py-2 px-3 text-left text-gray-600 font-semibold">Booking ID</th>
                       <th className="py-2 px-3 text-left text-gray-600 font-semibold">Session ID</th>
@@ -244,11 +208,14 @@ export default function TherapistDashboardHome() {
                       <tr key={session.appointmentId + session.slotTime + idx} className="border-t">
                         <td className="py-2 px-3">{session.slotTime}</td>
                         <td className="py-2 px-3">
-                          {session.patientName} <span className="text-xs text-gray-400">({session.patientId})</span>
+                          {session.childrenName}{" "}
+                          <span className="text-xs text-gray-400">({session.childrenId})</span>
                         </td>
                         <td className="py-2 px-3">{session.therapyTypeName}</td>
                         <td className="py-2 px-3">{session.appointmentId}</td>
-                        <td className="py-2 px-3 text-xs text-gray-500 break-all">{session.sessionId || <span className="text-gray-300 italic">—</span>}</td>
+                        <td className="py-2 px-3 text-xs text-gray-500 break-all">
+                          {session.sessionId || <span className="text-gray-300 italic">—</span>}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -271,11 +238,10 @@ export default function TherapistDashboardHome() {
                 <table className="w-full border rounded-xl bg-white">
                   <thead>
                     <tr>
-                    <th className="py-2 px-3 text-left text-gray-600 font-semibold">Session ID</th>
-
+                      <th className="py-2 px-3 text-left text-gray-600 font-semibold">Session ID</th>
                       <th className="py-2 px-3 text-left text-gray-600 font-semibold">Date</th>
                       <th className="py-2 px-3 text-left text-gray-600 font-semibold">Time</th>
-                      <th className="py-2 px-3 text-left text-gray-600 font-semibold">Patient</th>
+                      <th className="py-2 px-3 text-left text-gray-600 font-semibold">Child</th>
                       <th className="py-2 px-3 text-left text-gray-600 font-semibold">Therapy</th>
                       <th className="py-2 px-3 text-left text-gray-600 font-semibold">Booking ID</th>
                     </tr>
@@ -283,12 +249,14 @@ export default function TherapistDashboardHome() {
                   <tbody>
                     {dashboardData.upcomingSessionDetails.map((session, idx) => (
                       <tr key={session.appointmentId + session.date + session.slotTime + idx} className="border-t">
-                        <td className="py-2 px-3 text-xs text-gray-500 break-all">{session.sessionId || <span className="text-gray-300 italic">—</span>}</td>
-
+                        <td className="py-2 px-3 text-xs text-gray-500 break-all">
+                          {session.sessionId || <span className="text-gray-300 italic">—</span>}
+                        </td>
                         <td className="py-2 px-3">{session.date}</td>
                         <td className="py-2 px-3">{session.slotTime}</td>
                         <td className="py-2 px-3">
-                          {session.patientName} <span className="text-xs text-gray-400">({session.patientId})</span>
+                          {session.childrenName}{" "}
+                          <span className="text-xs text-gray-400">({session.childrenId})</span>
                         </td>
                         <td className="py-2 px-3">{session.therapyTypeName}</td>
                         <td className="py-2 px-3">{session.appointmentId}</td>

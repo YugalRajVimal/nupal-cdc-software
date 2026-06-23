@@ -100,8 +100,16 @@ const LayoutContent: React.FC<{
                   )
                 </span>
               )}
+              <a
+                href="/super-admin"
+                className="ml-4 bg-yellow-200 hover:bg-yellow-300 text-yellow-900 font-semibold px-2 py-1 rounded border border-yellow-300 transition"
+                title="Return to Super Admin panel"
+              >
+                Back to Super Admin
+              </a>
             </div>
           )}
+     
           <AdminHeader />
           <div className="p-4 mx-auto w-full md:p-6">
             <Outlet />
