@@ -75,6 +75,7 @@ type TherapistProfile = {
     remark?: string;
     paidOn?: string;
     paymentMethod?: "cash" | "online";
+    utr?: string;
   }>;
   isDisabled?: boolean;
   panelAccess?: boolean;
@@ -88,6 +89,7 @@ type PayFormState = {
   remark: string;
   paidOn?: string;
   paymentMethod: "cash" | "online";
+  utr?: string;
 };
 
 const DATE_FIELDS = [
@@ -327,6 +329,7 @@ export default function SuperAdminTherapistsPage() {
     remark: "",
     paidOn: "",
     paymentMethod: "cash",
+    utr: "",
   });
   const [payLoading, setPayLoading] = useState(false);
   const [payError, setPayError] = useState<string | null>(null);
@@ -535,6 +538,7 @@ export default function SuperAdminTherapistsPage() {
       remark: "",
       paidOn: "",
       paymentMethod: "cash",
+      utr: "",
     });
   }
 
@@ -550,6 +554,7 @@ export default function SuperAdminTherapistsPage() {
       remark: "",
       paidOn: "",
       paymentMethod: "cash",
+      utr: "",
     });
   }
 
@@ -574,10 +579,19 @@ export default function SuperAdminTherapistsPage() {
       return;
     }
 
+    if (
+      payForm.paymentMethod === "online" &&
+      (!payForm.utr || !payForm.utr.trim())
+    ) {
+      setPayError("Please enter UTR when payment is made online.");
+      setPayLoading(false);
+      return;
+    }
+
     try {
       // POST to /api/admin/therapist/:id/pay
       const token = localStorage.getItem("super-admin-token");
-      const payload = {
+      const payload: any = {
         amount: Number(payForm.amount),
         type: payForm.type,
         fromDate: payForm.fromDate,
@@ -586,6 +600,10 @@ export default function SuperAdminTherapistsPage() {
         paidOn: payForm.paidOn,
         paymentMethod: payForm.paymentMethod,
       };
+
+      if (payForm.paymentMethod === "online") {
+        payload.utr = payForm.utr;
+      }
 
       await axios.post(
         `${API_BASE_URL.replace(/\/$/, "")}/api/super-admin/users/therapists/${therapistId}/pay`,
@@ -794,6 +812,7 @@ export default function SuperAdminTherapistsPage() {
                         <th className="border px-2 py-1">To</th>
                         <th className="border px-2 py-1">Paid On</th>
                         <th className="border px-2 py-1">Remark</th>
+                        <th className="border px-2 py-1">UTR</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -806,6 +825,7 @@ export default function SuperAdminTherapistsPage() {
                           <td className="border px-2 py-1">{e.toDate ? new Date(e.toDate).toLocaleDateString() : "-"}</td>
                           <td className="border px-2 py-1">{e.paidOn ? new Date(e.paidOn).toLocaleDateString() : "-"}</td>
                           <td className="border px-2 py-1">{e.remark ? e.remark : "-"}</td>
+                          <td className="border px-2 py-1">{e.paymentMethod === "online" ? (e.utr || "-") : "-"}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -948,7 +968,8 @@ export default function SuperAdminTherapistsPage() {
                     onChange={e =>
                       setPayForm(f => ({
                         ...f,
-                        paymentMethod: e.target.value as "cash" | "online"
+                        paymentMethod: e.target.value as "cash" | "online",
+                        utr: e.target.value === "online" ? f.utr : "",
                       }))
                     }
                     required
@@ -957,6 +978,24 @@ export default function SuperAdminTherapistsPage() {
                     <option value="online">Online</option>
                   </select>
                 </div>
+                {payForm.paymentMethod === "online" && (
+                  <div>
+                    <label className="block text-xs font-medium mb-0.5">UTR <span className="text-xs text-slate-400">(required for online)</span></label>
+                    <input
+                      className="w-full border px-2 py-1 rounded"
+                      type="text"
+                      value={payForm.utr || ""}
+                      onChange={e =>
+                        setPayForm(f => ({
+                          ...f,
+                          utr: e.target.value,
+                        }))
+                      }
+                      required={payForm.paymentMethod === "online"}
+                      placeholder="UTR/Transaction ID"
+                    />
+                  </div>
+                )}
                 <div className="flex gap-2">
                   <div className="flex-1">
                     <label className="block text-xs font-medium mb-0.5">From Date</label>

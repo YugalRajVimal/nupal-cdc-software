@@ -1,336 +1,3 @@
-// import  { useEffect, useState } from "react";
-
-// type Therapist = {
-//   _id: string;
-//   therapistId: string;
-//   userId: string;
-//   name?: string;
-//   experienceYears: number | null;
-// };
-
-// type Patient = {
-//   _id: string;
-//   name: string;
-//   patientId: string;
-// };
-
-// type Package = {
-//   _id: string;
-//   name: string;
-//   costPerSession: number;
-//   totalCost: number;
-//   sessionCount: number;
-// };
-
-// type Session = {
-//   date: string;
-//   sessionId?: string;
-//   slotId: string;
-//   isCheckedIn: boolean;
-//   price: number;
-//   bookingId: string;
-//   package?: Package;
-//   patient?: Patient;
-// };
-
-// type Earning = {
-//   amount: number;
-//   type: string;
-//   fromDate: string;
-//   toDate: string;
-//   remark: string;
-//   paidOn: string;
-//   _id: string;
-// };
-
-// type EarningEntry = {
-//   earning: Earning;
-//   sessions: Session[];
-//   sessionDeliveredSumCost: number;
-//   earningAmount: number;
-//   difference: number;
-// };
-
-// type TherapistComparison = {
-//   therapist: Therapist;
-//   earnings: EarningEntry[];
-//   totalSessionDeliveredSumCost: number;
-//   totalEarningAmount: number;
-//   totalDifference: number;
-//   sessionsWithoutEarning?: Session[];
-// };
-
-// const TABLE_ROW_BG_DEFAULT = "#fff";
-// const TABLE_ROW_BG_ALERT = "#fde8e8";
-// const MONEY = (amt: number) => amt.toLocaleString("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 });
-
-// const TherapistIncomeComparison = () => {
-//   const [data, setData] = useState<TherapistComparison[]>([]);
-//   const [loading, setLoading] = useState(false);
-//   const [error, setError] = useState<string | null>(null);
-
-//   useEffect(() => {
-//     const fetchData = async () => {
-//       setLoading(true);
-//       setError(null);
-//       try {
-//         const token = localStorage.getItem("super-admin-token");
-//         if (!token) {
-//           throw new Error("No superadmin token found in localStorage.");
-//         }
-//         const res = await fetch(
-//           `${import.meta.env.VITE_API_URL}/api/super-admin/finance/therapist/salary-session-comparison`,
-//           {
-//             method: "GET",
-//             headers: {
-//               "Content-Type": "application/json",
-//               Authorization: token,
-//             },
-//           }
-//         );
-//         if (!res.ok) {
-//           const errorData = await res.json().catch(() => null);
-//           throw new Error(
-//             `API error: ${res.status}${
-//               errorData && errorData.message ? " - " + errorData.message : ""
-//             }`
-//           );
-//         }
-//         const resp = await res.json();
-//         console.log(resp);
-//         setData(resp);
-//       } catch (err: any) {
-//         setError(err?.message ?? String(err));
-//       }
-//       setLoading(false);
-//     };
-//     fetchData();
-//   }, []);
-
-//   // Helper to render session details as a collapsible table
-//   const SessionTable: React.FC<{ sessions: Session[] }> = ({ sessions }) => {
-//     if (!sessions || sessions.length === 0) {
-//       return <span style={{ color: "#666" }}>No Sessions</span>;
-//     }
-//     return (
-//       <details>
-//         <summary style={{ cursor: "pointer" }}>{sessions.length} session(s)</summary>
-//         <div style={{
-//           maxHeight: 200,
-//           overflowY: "auto",
-//           borderTop: "1px solid #eee",
-//           marginTop: 2,
-//           fontSize: 13
-//         }}>
-//           <table style={{ width: "100%" }}>
-//             <thead>
-//               <tr style={{ background: "#fafafc" }}>
-//                 <th>Date</th>
-//                 <th>Slot</th>
-//                 <th>Patient</th>
-//                 <th>Package</th>
-//                 <th>₹/Session</th>
-//               </tr>
-//             </thead>
-//             <tbody>
-//               {sessions.map((ses, sid) => (
-//                 <tr key={ses.sessionId ?? sid}>
-//                   <td>{ses.date}</td>
-//                   <td>{ses.slotId}</td>
-//                   <td>
-//                     {ses.patient ? (
-//                       <>
-//                         {ses.patient.name} <small>({ses.patient.patientId})</small>
-//                       </>
-//                     ) : (
-//                       "-"
-//                     )}
-//                   </td>
-//                   <td>
-//                     {ses.package ? (
-//                       <>
-//                         {ses.package.name}
-//                       </>
-//                     ) : (
-//                       "-"
-//                     )}
-//                   </td>
-//                   <td>{MONEY(ses.price)}</td>
-//                 </tr>
-//               ))}
-//             </tbody>
-//           </table>
-//         </div>
-//       </details>
-//     );
-//   };
-
-//   return (
-//     <div style={{ padding: "1rem" }}>
-//       <h2>Therapist Income Comparison</h2>
-//       {loading && <div>Loading...</div>}
-//       {error && <div style={{ color: "red", marginBottom: "1rem" }}>{error}</div>}
-//       {!loading && !error && (
-//         <div>
-//           {data.length === 0 && <div>No data found.</div>}
-//           {data.map((therapistObj) => {
-//             const {
-//               therapist,
-//               earnings,
-//               totalSessionDeliveredSumCost,
-//               totalEarningAmount,
-//               sessionsWithoutEarning,
-//             } = therapistObj;
-//             const seventyPct = totalSessionDeliveredSumCost * 0.7;
-//             const isViolation = totalEarningAmount > seventyPct;
-
-//             return (
-//               <div
-//                 key={therapist._id}
-//                 style={{
-//                   border: "1px solid #ccc",
-//                   borderRadius: 8,
-//                   marginBottom: 32,
-//                   boxShadow: isViolation ? "0 0 10px #bd1c1c55" : "0 0 5px #9992",
-//                   background: isViolation ? TABLE_ROW_BG_ALERT : TABLE_ROW_BG_DEFAULT,
-//                   padding: 16,
-//                 }}
-//               >
-//                 <h3>
-//                   Therapist: {therapist.name ?? therapist.therapistId} <br />
-//                   <small>
-//                     (ID: {therapist.therapistId}) &nbsp;|&nbsp; Experience: {therapist.experienceYears ?? "-"} years
-//                   </small>
-//                 </h3>
-//                 <div style={{ fontWeight: "bold", marginBottom: 8 }}>
-//                   Total Earnings: {MONEY(totalEarningAmount)} &nbsp;|&nbsp; 70% of Session Sum: {MONEY(seventyPct)}
-//                   <span style={{
-//                     color: isViolation ? "#c00" : "green",
-//                     fontWeight: "bold",
-//                     marginLeft: 8
-//                   }}>
-//                     {isViolation
-//                       ? "❌ Salary exceeds 70% of session sum"
-//                       : "✅ Salary within 70% of session sum"}
-//                   </span>
-//                 </div>
-//                 <div>
-//                   <table style={{ borderCollapse: "collapse", width: "100%", marginTop: 12, marginBottom: 10 }}>
-//                     <thead>
-//                       <tr style={{ background: "#f8f8fa" }}>
-//                         <th style={{ border: "1px solid #ccc", padding: 5 }}>Type</th>
-//                         <th style={{ border: "1px solid #ccc", padding: 5 }}>Period</th>
-//                         <th style={{ border: "1px solid #ccc", padding: 5 }}>Remark</th>
-//                         <th style={{ border: "1px solid #ccc", padding: 5 }}>Paid On</th>
-//                         <th style={{ border: "1px solid #ccc", padding: 5 }}>Earning ₹</th>
-//                         <th style={{ border: "1px solid #ccc", padding: 5 }}>Session Sum ₹</th>
-//                         <th style={{ border: "1px solid #ccc", padding: 5 }}>Difference ₹</th>
-//                         <th style={{ border: "1px solid #ccc", padding: 5, width: 100 }}>Sessions</th>
-//                       </tr>
-//                     </thead>
-//                     <tbody>
-//                       {earnings.length === 0 ? (
-//                         <tr>
-//                           <td colSpan={8} style={{ color: "#666", textAlign: "center", padding: 8 }}>
-//                             No salary/earning periods found for this therapist.
-//                           </td>
-//                         </tr>
-//                       ) : (
-//                         earnings.map((e) => {
-//                           const {
-//                             earning,
-//                             sessionDeliveredSumCost,
-//                             earningAmount,
-//                             difference,
-//                             sessions,
-//                           } = e;
-//                           const isEntryViolation =
-//                             earning.type === "salary" &&
-//                             earningAmount > sessionDeliveredSumCost * 0.7;
-//                           const earningBg = isEntryViolation ? "#ffe0e0" : undefined;
-
-//                           return (
-//                             <tr
-//                               key={earning._id}
-//                               style={{ background: earningBg }}
-//                             >
-//                               <td style={{ border: "1px solid #ccc", padding: 4, textTransform: "capitalize" }}>
-//                                 {earning.type}
-//                                 {isEntryViolation && (
-//                                   <span style={{ color: "#bd1c1c", fontWeight: 800 }}> &#9888;</span>
-//                                 )}
-//                               </td>
-//                               <td style={{ border: "1px solid #ccc", padding: 4 }}>
-//                                 {new Date(earning.fromDate).toLocaleDateString()} &ndash;{" "}
-//                                 {new Date(earning.toDate).toLocaleDateString()}
-//                               </td>
-//                               <td style={{ border: "1px solid #ccc", padding: 4 }}>{earning.remark}</td>
-//                               <td style={{ border: "1px solid #ccc", padding: 4 }}>
-//                                 {earning.paidOn ? new Date(earning.paidOn).toLocaleDateString() : "-"}
-//                               </td>
-//                               <td style={{ border: "1px solid #ccc", padding: 4 }}>{MONEY(earningAmount)}</td>
-//                               <td style={{ border: "1px solid #ccc", padding: 4 }}>{MONEY(sessionDeliveredSumCost)}</td>
-//                               <td style={{ border: "1px solid #ccc", padding: 4 }}>
-//                                 <span style={{
-//                                   color: difference >= 0 ? "#333" : "#c00",
-//                                   fontWeight: difference >= 0 ? "bold" : undefined,
-//                                 }}>
-//                                   {MONEY(difference)}
-//                                 </span>
-//                               </td>
-//                               <td style={{ border: "1px solid #ccc", padding: 4 }}>
-//                                 <SessionTable sessions={sessions} />
-//                               </td>
-//                             </tr>
-//                           );
-//                         })
-//                       )}
-//                     </tbody>
-//                   </table>
-//                 </div>
-
-//                 {/* SESSIONS WITHOUT EARNING */}
-//                 {Array.isArray(sessionsWithoutEarning) && sessionsWithoutEarning.length > 0 && (
-//                   <div style={{
-//                     border: "1px dashed #efb53c",
-//                     background: "#fff8e1",
-//                     color: "#6a6112",
-//                     borderRadius: 6,
-//                     marginTop: 16,
-//                     marginBottom: 0,
-//                     padding: "12px 12px 12px 18px"
-//                   }}>
-//                     <b>Attention:</b> There are checked-in sessions for this therapist <i>without any mapped salary/earning</i>.<br />
-//                     <span style={{ fontSize: 13, fontWeight: 400, color: "#8c8804" }}>
-//                       These sessions were delivered but not covered by any salary/earning period. Please review:
-//                     </span>
-//                     <div style={{ marginTop: 8, marginBottom: 2 }}>
-//                       <SessionTable sessions={sessionsWithoutEarning} />
-//                     </div>
-//                   </div>
-//                 )}
-
-//                 {isViolation && (
-//                   <div style={{
-//                     color: "#c00",
-//                     background: "#ffeaea",
-//                     padding: "6px 12px",
-//                     borderRadius: 5,
-//                     fontWeight: 500,
-//                     marginBottom: 8,
-//                   }}>
-//                     <b>Notice:</b> This therapist's total earnings <span style={{ textDecoration: "underline" }}>{MONEY(totalEarningAmount)}</span> <br />
-//                     exceed 70% of the session delivered sum ({MONEY(seventyPct)}).
-//                   </div>
-//                 )}
-//               </div>
-//             );
-//           })}
-//         </div>
-//       )}
-//     </div>
-//   );
-// };
 
 // export default TherapistIncomeComparison;
 import { useEffect, useState, useMemo } from "react";
@@ -342,6 +9,7 @@ type TherapistUser = {
   name?: string;
   email?: string;
   status?: string;
+  isDisabled?: boolean;
 };
 type Therapist = {
   _id: string;
@@ -567,6 +235,7 @@ function getFilterOptions(
   earningTypes: string[];
   remarkKeywords: string[];
   experienceYears: number[];
+  statusOptions: Array<{ value: "all" | "active" | "disabled"; label: string }>;
 } {
   const therapistNames = [
     ...new Set(
@@ -602,7 +271,26 @@ function getFilterOptions(
     ...new Set(data.map((obj) => obj.therapist.experienceYears).filter((x) => x != null)),
   ].sort((a, b) => (a as number) - (b as number));
 
-  return { therapistNames, earningTypes, remarkKeywords, experienceYears };
+  // For therapist active/disabled status filter
+  const hasDisabled = data.some(
+    (obj) =>
+      obj.therapist.userId &&
+      typeof obj.therapist.userId === "object" &&
+      typeof obj.therapist.userId.isDisabled === "boolean"
+  );
+
+  // Only show status filter if any therapist has userId with isDisabled field
+  const statusOptions: Array<{ value: "all" | "active" | "disabled"; label: string }> = [
+    { value: "all" as const, label: "All" },
+    ...(hasDisabled
+      ? [
+          { value: "active" as const, label: "Active" },
+          { value: "disabled" as const, label: "Disabled" },
+        ]
+      : []),
+  ];
+
+  return { therapistNames, earningTypes, remarkKeywords, experienceYears, statusOptions };
 }
 
 const TherapistIncomeComparison = () => {
@@ -617,6 +305,7 @@ const TherapistIncomeComparison = () => {
   const [experienceFilter, setExperienceFilter] = useState<number | "">("");
   const [remarkSearch, setRemarkSearch] = useState<string>("");
   const [sortBy, setSortBy] = useState<"" | "earning" | "sessions">(""); // Extra: sorting
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "disabled">("active"); // New: therapist status filter
 
   useEffect(() => {
     const fetchData = async () => {
@@ -641,7 +330,9 @@ const TherapistIncomeComparison = () => {
           );
         }
         // remove debug console.log and assign response only once
-        setData(await res.json());
+        const responseData = await res.json();
+        console.log("TherapistIncomeComparison fetch response:", responseData);
+        setData(responseData);
       } catch (err: any) {
         setError(err?.message ?? String(err));
       }
@@ -672,6 +363,23 @@ const TherapistIncomeComparison = () => {
         const matchEmail = email?.toLowerCase().includes(q);
         const matchId = therapist.therapistId.toLowerCase().includes(q);
         return matchName || matchId || matchEmail;
+      });
+    }
+
+    // Status filter: active/disabled
+    if (statusFilter !== "all") {
+      result = result.filter((obj) => {
+        if (obj.therapist.userId && typeof obj.therapist.userId === "object") {
+          const isDisabled = obj.therapist.userId.isDisabled;
+          if (statusFilter === "active") {
+            return isDisabled === false || typeof isDisabled === "undefined";
+          }
+          if (statusFilter === "disabled") {
+            return isDisabled === true;
+          }
+        }
+        // If userId is string or missing isDisabled, treat as active unless filter is "disabled"
+        return statusFilter === "active";
       });
     }
 
@@ -719,7 +427,7 @@ const TherapistIncomeComparison = () => {
     }
 
     return result;
-  }, [data, search, remarkSearch, typeFilter, violationFilter, experienceFilter, sortBy]);
+  }, [data, search, remarkSearch, typeFilter, violationFilter, experienceFilter, sortBy, statusFilter]);
 
   return (
     <div className="min-h-screen bg-gray-50 px-6 py-8">
@@ -813,6 +521,27 @@ const TherapistIncomeComparison = () => {
             onChange={(e) => setRemarkSearch(e.target.value)}
           />
         </div>
+        {/* New: Therapist Status filter */}
+        {filterOpts.statusOptions.length > 1 && (
+          <div>
+            <label className="text-xs font-semibold text-gray-500 block mb-1">
+              Status
+            </label>
+            <select
+              className="rounded-md border border-gray-300 py-1.5 px-2 text-sm w-[110px] bg-white"
+              value={statusFilter}
+              onChange={e =>
+                setStatusFilter(e.target.value as "all" | "active" | "disabled")
+              }
+            >
+              {filterOpts.statusOptions.map(o => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         <div>
           <label className="text-xs font-semibold text-gray-500 block mb-1">
             Sort By
@@ -881,6 +610,13 @@ const TherapistIncomeComparison = () => {
           // Get therapist display info (name, email)
           const { name: displayName, email } = getTherapistDisplayInfo(therapist);
 
+          // Get status for this therapist (active/disabled)
+          let isDisabled: boolean | undefined = undefined;
+          if (therapist.userId && typeof therapist.userId === "object") {
+            isDisabled = therapist.userId.isDisabled;
+          }
+          // const statusLabel = isDisabled === true ? "Disabled" : "Active";
+
           return (
             <div
               key={therapist._id}
@@ -925,22 +661,39 @@ const TherapistIncomeComparison = () => {
                   </div>
                 </div>
 
-                {/* Status Pill */}
-                <div
-                  className={`inline-flex items-center gap-2 text-[13px] font-medium px-4 py-1.5 rounded-full whitespace-nowrap ${
-                    isViolation
-                      ? "bg-red-100 text-red-700"
-                      : "bg-emerald-50 text-emerald-700"
-                  }`}
-                >
-                  <span
-                    className={`w-2 h-2 rounded-full ${
-                      isViolation ? "bg-red-500" : "bg-emerald-500"
+                {/* Status & isDisabled Pill */}
+                <div className="flex flex-col items-end gap-1">
+                  <div
+                    className={`inline-flex items-center gap-2 text-[13px] font-medium px-4 py-1.5 rounded-full whitespace-nowrap ${
+                      isDisabled
+                        ? "bg-gray-200 text-gray-500"
+                        : isViolation
+                        ? "bg-red-100 text-red-700"
+                        : "bg-emerald-50 text-emerald-700"
                     }`}
-                  />
-                  {isViolation
-                    ? "Exceeds 70% threshold"
-                    : "Within 70% threshold"}
+                  >
+                    <span
+                      className={`w-2 h-2 rounded-full ${
+                        isDisabled
+                          ? "bg-gray-400"
+                          : isViolation
+                          ? "bg-red-500"
+                          : "bg-emerald-500"
+                      }`}
+                    />
+                    {isDisabled ? "Disabled" : (isViolation
+                      ? "Exceeds 70% threshold"
+                      : "Within 70% threshold")}
+                  </div>
+                  {/* Smaller status label, if showing both thresholds and active/disabled */}
+                  {!isDisabled && (
+                    <span
+                      className={"text-xs text-gray-400 font-semibold px-2 py-0"}
+                      style={{ fontSize: "10px" }}
+                    >
+                      Active
+                    </span>
+                  )}
                 </div>
               </div>
 
