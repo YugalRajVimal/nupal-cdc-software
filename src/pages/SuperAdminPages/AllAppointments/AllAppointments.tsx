@@ -482,7 +482,7 @@ const AppointmentCard = ({
                     </th>
                     
                      <th className="px-2 py-1 border border-slate-200 bg-slate-100 font-semibold text-left">
-                      Checked In
+                      Status
                     </th>
                   </tr>
                 </thead>
@@ -553,14 +553,21 @@ const AppointmentCard = ({
                         </td>
 
                         <td className="px-2 py-1 border border-slate-200 text-center">
-                          {s.isCheckedIn ? (
+                          {s.status === "CheckedIn" ? (
                             <span className="flex items-center gap-1 text-green-600">
-                              <FiCheckCircle className="inline" /> Yes
+                              <FiCheckCircle className="inline" /> CheckedIn
+                            </span>
+                          ) : s.status === "Missed" ? (
+                            <span className="flex items-center gap-1 text-red-500">
+                              <FiCheckCircle className="inline" /> Missed
                             </span>
                           ) : (
-                            <span className="text-slate-400">No</span>
+                            <span className="flex items-center gap-1 text-slate-400">
+                              <FiCheckCircle className="inline" /> NotCheckedIn
+                            </span>
                           )}
                         </td>
+                   
                       </tr>
                     );
                   })}
@@ -707,9 +714,11 @@ const AllAppointments: React.FC = () => {
           `${API_BASE}/api/super-admin/all-appointments`,
           { params }
         );
+        console.log(response.data.bookings);
         if (response.data && Array.isArray(response.data.bookings)) {
           setAppointments(response.data.bookings);
           setTotal(response.data.total ?? response.data.bookings.length);
+         
         } else {
           setAppointments([]);
           setTotal(0);

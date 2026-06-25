@@ -266,9 +266,23 @@ export default function FinancesSuperAdminPage() {
                     <tr key={idx} className="border-t">
                       <td className="px-4 py-3">
                         {log.Date
-                          ? new Date(log.Date).toLocaleString("en-GB", { timeZone: "Asia/Kolkata" })
+                          ? (() => {
+                              const d = new Date(log.Date);
+                              if (isNaN(d.getTime())) return "-";
+                              const date = d.toLocaleDateString("en-GB");
+                              const time = d
+                                .toLocaleTimeString("en-GB", {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                  hour12: false,
+                                  timeZone: "Asia/Kolkata"
+                                })
+                                .slice(0, 5);
+                              return `${date}, ${time}`;
+                            })()
                           : "-"}
                       </td>
+                 
                       <td className="px-4 py-3">{log.Description || "-"}</td>
                       <td className="px-4 py-3">{log.ChildrenName || "-"}</td>
                       <td className="px-4 py-3">{log.ChildrenId || "-"}</td>

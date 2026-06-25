@@ -1,3 +1,4 @@
+import React, { useEffect, useState } from "react";
 import PageMeta from "../../../components/common/PageMeta";
 import {
   FiCalendar,
@@ -7,7 +8,7 @@ import {
   FiUser,
 } from "react-icons/fi";
 
-// Dashboard data types (updated for childrenName/childrenId instead of patientName/patientId)
+// Dashboard data types based on correct API structure
 type UpcomingSessionDetail = {
   date: string;
   slotTime: string;
@@ -15,7 +16,7 @@ type UpcomingSessionDetail = {
   childrenId: string;
   therapyTypeName: string;
   appointmentId: string;
-  sessionId?: string;
+  sessionId: string;
 };
 
 type DashboardData = {
@@ -27,36 +28,23 @@ type DashboardData = {
   upcomingSessionDetails: UpcomingSessionDetail[];
 };
 
-const hardcodedDashboardData: DashboardData = {
-  totalAppointments: 1,
-  totalSessions: 1,
-  upcomingSessions: 1,
-  checkedInSessions: 0,
-  totalEarnings: 0,
-  upcomingSessionDetails: [
-    {
-      date: "2026-06-30",
-      slotTime: "13:00 to 13:45",
-      childrenName: " PRAVIT SHARMA",
-      childrenId: "P0614",
-      therapyTypeName: "EIP Therapy",
-      appointmentId: "B00006",
-      sessionId: "S000133",
-    },
-  ],
-};
+function getAuthToken() {
+  const token = localStorage.getItem("therapist-token");
+  return token;
+}
 
 export default function TherapistDashboardHome() {
-  // Use the hardcoded data per the instruction
-  const dashboardData = hardcodedDashboardData;
+  const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Today's date as YYYY-MM-DD
+  // Today's date in YYYY-MM-DD
   const todayDateStr = (() => {
     const today = new Date();
     return today.toISOString().split("T")[0];
   })();
 
-  // Pretty today date string
+  // Human readable today's date
   const todayPretty = (() => {
     const today = new Date();
     return today.toLocaleDateString("en-US", {
@@ -67,7 +55,95 @@ export default function TherapistDashboardHome() {
     });
   })();
 
-  // Only sessions that match today's date. For our data, only match if date matches today.
+  // Use VITE_API_URL environment variable for API root
+  const apiBaseUrl = import.meta.env.VITE_API_URL || "";
+
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const token = getAuthToken();
+        const resp = await fetch(
+          `${apiBaseUrl}/api/therapist/dashboard`,
+          {
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: token ? `${token}` : "",
+            },
+            method: "GET",
+          }
+        );
+        if (!resp.ok) {
+          throw new Error(
+            `Failed to fetch dashboard data: ${resp.status} ${resp.statusText}`
+          );
+        }
+        const data = await resp.json();
+        console.log("Dashboard API data:", data);
+
+        // The dashboard data comes as { success: true, data: <dashboardData> }
+        if (
+          !data ||
+          typeof data !== "object" ||
+          data.success !== true ||
+          typeof data.data !== "object" ||
+          typeof data.data.totalAppointments !== "number" ||
+          typeof data.data.totalSessions !== "number" ||
+          typeof data.data.upcomingSessions !== "number" ||
+          typeof data.data.checkedInSessions !== "number" ||
+          typeof data.data.totalEarnings !== "number" ||
+          !Array.isArray(data.data.upcomingSessionDetails)
+        ) {
+          throw new Error(
+            data?.message ||
+              "Dashboard API returned error or malformed response."
+          );
+        }
+        setDashboardData(data.data);
+      } catch (err: any) {
+        setError(
+          err?.message ||
+            "An error occurred while loading the dashboard data."
+        );
+        setDashboardData(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDashboardData();
+    // intentionally omitting apiBaseUrl from deps so that it only runs on mount
+    // eslint-disable-next-line
+  }, []);
+
+  if (loading) {
+    return (
+      <>
+        <PageMeta title="Nupal CDC" description="Therapist Dashboard" />
+        <div className="max-w-7xl mx-auto px-4 py-14 flex flex-col items-center">
+          <span className="text-indigo-600 text-lg font-semibold mb-4">Loading dashboard...</span>
+          <div className="loader-border animate-spin w-8 h-8 border-4 border-indigo-300 border-t-indigo-600 rounded-full" />
+        </div>
+      </>
+    );
+  }
+  if (error) {
+    return (
+      <>
+        <PageMeta title="Nupal CDC" description="Therapist Dashboard" />
+        <div className="max-w-7xl mx-auto px-4 py-14 flex flex-col items-center">
+          <span className="text-red-500 font-semibold mb-3">Error loading dashboard:</span>
+          <pre className="text-sm bg-gray-100 px-4 py-2 rounded border border-red-100 text-gray-700">{error}</pre>
+        </div>
+      </>
+    );
+  }
+  if (!dashboardData) {
+    return null;
+  }
+
+  // Only sessions that match today's date
   const todaysSessions = dashboardData.upcomingSessionDetails.filter(
     (s) => s.date === todayDateStr
   );
@@ -214,7 +290,9 @@ export default function TherapistDashboardHome() {
                         <td className="py-2 px-3">{session.therapyTypeName}</td>
                         <td className="py-2 px-3">{session.appointmentId}</td>
                         <td className="py-2 px-3 text-xs text-gray-500 break-all">
-                          {session.sessionId || <span className="text-gray-300 italic">—</span>}
+                          {session.sessionId
+                            ? session.sessionId
+                            : <span className="text-gray-300 italic">—</span>}
                         </td>
                       </tr>
                     ))}
@@ -250,7 +328,9 @@ export default function TherapistDashboardHome() {
                     {dashboardData.upcomingSessionDetails.map((session, idx) => (
                       <tr key={session.appointmentId + session.date + session.slotTime + idx} className="border-t">
                         <td className="py-2 px-3 text-xs text-gray-500 break-all">
-                          {session.sessionId || <span className="text-gray-300 italic">—</span>}
+                          {session.sessionId
+                            ? session.sessionId
+                            : <span className="text-gray-300 italic">—</span>}
                         </td>
                         <td className="py-2 px-3">{session.date}</td>
                         <td className="py-2 px-3">{session.slotTime}</td>
