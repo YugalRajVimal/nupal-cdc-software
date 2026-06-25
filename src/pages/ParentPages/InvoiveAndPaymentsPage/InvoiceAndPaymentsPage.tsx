@@ -768,7 +768,7 @@ function formatDateTime(dateStr?: string): string {
       hour: "2-digit",
       minute: "2-digit",
     })
-    .replace(/(\d+):(\d+):(\d+)/, (m, h, mi, s) => {
+    .replace(/(\d+):(\d+):(\d+)/, (_unused, h, mi, s) => {
       return `${h.padStart(2, "0")}:${mi.padStart(2, "0")}:${s.padStart(2, "0")}`;
     });
   return `${datePart}, ${timePart}`;
@@ -805,9 +805,10 @@ function downloadExcel(filename: string, rows: PaymentDetail[]) {
           : "-";
       // extracting payment method
       const paymentMethod =
-        row.paymentDetail?.paymentMethod?.length > 0
+        typeof row.paymentDetail?.paymentMethod === "string" && row.paymentDetail.paymentMethod.length > 0
           ? row.paymentDetail.paymentMethod
           : "-";
+  
       // Combine childrenName and childrenId
       const childrenNameId = row.childrenId
         ? `${row.childrenName} (${row.childrenId})`
