@@ -97,6 +97,11 @@ const navItems: NavItem[] = [
     name: "Manage Holidays",
     path: "/admin/manage-holidays",
   },
+  // {
+  //   icon: <UserCircleIcon />,
+  //   name: "Therapist Reassignment",
+  //   path: "/admin/therapist-reassignment",
+  // },
   {
     icon: <UserIcon />,
     name: "Admin Profile",
