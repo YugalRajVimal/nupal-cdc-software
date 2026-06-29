@@ -97,7 +97,7 @@ import OnboardAdmin from "./pages/SuperAdminPages/OnboardAdmin/OnboardAdmin";
 import PaymentConfirmation from "./pages/ParentPages/InvoiveAndPaymentsPage/PaymentConfirmation";
 import { ContactUs, RefundsAndCancellations, TermsAndConditions } from "./pages/Policies";
 import AppointmentBookingSystemMain from "./pages/AdminPages/AppointmentBookingSystem/Main/AppointmentBookingSystemMain";
-import TherapistReassignmentPanel from "./pages/AdminPages/AppointmentBookingSystem/TherapistReassignmentPanel.tsx/TherapistReassignmentPanel";
+// import TherapistReassignmentPanel from "./pages/AdminPages/AppointmentBookingSystem/TherapistReassignmentPanel.tsx/TherapistReassignmentPanel";
 
 
 export default function App() {
@@ -210,10 +210,10 @@ export default function App() {
 
 
             <Route path="/admin/consultation-bookings" element={<ConsultationBookingsAdmin />} />
-            <Route
+            {/* <Route
               path="/admin/therapist-reassignment"
               element={<TherapistReassignmentPanel />}
-            />
+            /> */}
       
 
 

@@ -20,12 +20,23 @@ const FollowUpPendingToastContent = ({
 }) => (
   <div
     className="flex gap-3 items-center"
-    style={{ minWidth: 200 }}
+    style={{
+      minWidth: 200,
+      // background: "rgba(255,255,255,0.15)", // More transparent
+      // boxShadow: "0 4px 24px 4px rgba(183, 141, 17, 0.18), 0 0.5px 2.5px 0 rgba(120,90,25,0.18)", // Enhanced shadow
+      // border: "2px solid #f4d057", // Stronger border for better contrast
+      // borderRadius: 16,
+      // padding: "0.7rem 1.2rem 0.7rem 1.05rem",
+      // backdropFilter: "blur(3px)", // Make the toast stand out above the background
+      // WebkitBackdropFilter: "blur(3px)",
+      transition: "box-shadow 0.3s",
+      margin:"auto"
+    }}
     role="alert"
     aria-live="polite"
   >
     <FiCalendar className="text-amber-500" size={22} />
-    <span className="font-medium" style={{ color: "#925400" }}>
+    <span className="font-medium text-white" >
       {count} Follow Up Pending
     </span>
     <button
@@ -67,6 +78,9 @@ const LayoutContent: React.FC<{
         hideProgressBar
         newestOnTop
         limit={2}
+        // Use className for ToastContainer, not Toasts
+        className="pointer-events-auto"
+        style={{ background: "none" }}
       />
       <div
         className="min-h-screen max-w-screen xl:flex overflow-hidden"
@@ -109,7 +123,7 @@ const LayoutContent: React.FC<{
               </a>
             </div>
           )}
-     
+
           <AdminHeader />
           <div className="p-4 mx-auto w-full md:p-6">
             <Outlet />
@@ -149,6 +163,24 @@ const SubAdminAppLayout: React.FC = () => {
         }, 15 * 60 * 1000);
       };
 
+      const toastOptions = {
+        toastId: FOLLOW_UP_TOAST_ID,
+        autoClose: 5000,
+        closeButton: false,
+        isLoading: false,
+        // These affect the outer toast box itself
+        className: "pointer-events-auto",
+        style: {
+          background: "rgba(255,255,255,0.15)", // More transparent
+          boxShadow: "0 4px 24px 4px rgba(183, 141, 17, 0.18), 0 0.5px 2.5px 0 rgba(120,90,25,0.18)", // Enhanced shadow
+          border: "2px solid #f4d057",
+          borderRadius: 16,
+          padding: 0,
+          backdropFilter: "blur(3px)",
+          WebkitBackdropFilter: "blur(3px)",
+        },
+      };
+
       if (toast.isActive(FOLLOW_UP_TOAST_ID)) {
         toast.update(FOLLOW_UP_TOAST_ID, {
           render: (
@@ -157,9 +189,7 @@ const SubAdminAppLayout: React.FC = () => {
               onClose={handleClose}
             />
           ),
-          autoClose: 5000,
-          closeButton: false,
-          isLoading: false,
+          ...toastOptions,
         });
       } else {
         toast(
@@ -167,12 +197,7 @@ const SubAdminAppLayout: React.FC = () => {
             count={count}
             onClose={handleClose}
           />,
-          {
-            toastId: FOLLOW_UP_TOAST_ID,
-            autoClose: 5000,
-            closeButton: false,
-            isLoading: false,
-          }
+          toastOptions
         );
       }
 

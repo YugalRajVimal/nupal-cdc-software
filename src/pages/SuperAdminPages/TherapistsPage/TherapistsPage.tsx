@@ -8,8 +8,6 @@ import {
 } from "react-icons/fi";
 import { motion } from "framer-motion";
 import axios from "axios";
-
-// -- For zipping files client-side --
 import JSZip from "jszip";
 
 // ---- Added for search params ----
@@ -79,6 +77,7 @@ type TherapistProfile = {
   }>;
   isDisabled?: boolean;
   panelAccess?: boolean;
+  isConsultant?: boolean;
 };
 
 type PayFormState = {
@@ -103,7 +102,7 @@ const DATE_FIELDS = [
 const FIELD_LIST: {
   key: string;
   label: string;
-  type?: "text" | "email" | "number" | "file" | "date";
+  type?: "text" | "email" | "number" | "file" | "date" | "boolean";
   readOnly?: boolean;
   render?: (value: any, row?: TherapistProfile) => React.ReactNode;
 }[] = [
@@ -112,6 +111,7 @@ const FIELD_LIST: {
   { key: "email", label: "Email", type: "email", render: (_, row) => row?.userId?.email || row?.email || "-" },
   { key: "role", label: "Role", render: (_, row) => row?.userId?.role || row?.role || "-" },
   { key: "manualSignUp", label: "Manual Sign Up", render: (_, row) => (row?.userId?.manualSignUp === true ? "Yes" : row?.userId?.manualSignUp === false ? "No" : "-") },
+  { key: "isConsultant", label: "Is Consultant", type: "boolean", render: (v) => typeof v === "boolean" ? (v ? "Yes" : "No") : "-" },
   { key: "fathersName", label: "Father's Name" },
   { key: "mobile1", label: "Mobile 1" },
   { key: "mobile2", label: "Mobile 2" },
@@ -505,11 +505,21 @@ export default function SuperAdminTherapistsPage() {
           payload.specializations = "";
         }
       }
+      if (editField.hasOwnProperty('isConsultant')) {
+        payload.isConsultant = !!editField.isConsultant;
+      }
+      const superAdminToken = localStorage.getItem("super-admin-token");
       await axios.put(
         `${API_BASE_URL.replace(/\/$/, "")}/api/admin/therapist/${editTherapist._id}`,
         payload,
-        { headers: { "Content-Type": "application/json" } }
+        { 
+          headers: { 
+            "Content-Type": "application/json",
+            ...(superAdminToken ? { Authorization: superAdminToken } : {})
+          }
+        }
       );
+ 
       await fetchTherapists(search, page, limit);
       setEditTherapist(null);
       setEditField({});
@@ -558,13 +568,11 @@ export default function SuperAdminTherapistsPage() {
     });
   }
 
-  // INTEGRATED Pay Therapist API
   async function handlePaySubmit(therapistId: string) {
     setPayLoading(true);
     setPayError(null);
     setPaySuccess(null);
 
-    // Validation
     if (
       !payForm.amount ||
       isNaN(Number(payForm.amount)) ||
@@ -589,7 +597,6 @@ export default function SuperAdminTherapistsPage() {
     }
 
     try {
-      // POST to /api/admin/therapist/:id/pay
       const token = localStorage.getItem("super-admin-token");
       const payload: any = {
         amount: Number(payForm.amount),
@@ -674,7 +681,6 @@ export default function SuperAdminTherapistsPage() {
     return (
       <div className="fixed inset-0 z-30 bg-white/70 flex items-center justify-center">
         <div className="bg-white rounded-xl shadow-lg max-w-2xl w-full p-6 relative">
-          {/* ...the modal contents are unchanged... */}
           <button
             className="absolute right-4 top-3 text-xl"
             onClick={() => {
@@ -691,7 +697,6 @@ export default function SuperAdminTherapistsPage() {
           </button>
           <h2 className="text-xl font-bold mb-2">Therapist Details</h2>
           <div className="overflow-y-auto max-h-[70vh]">
-            {/* [modal body unchanged, not repeated for clarity] */}
             <div className="mb-2">
               <span className="text-xs text-slate-500 font-semibold">Therapist ID: </span>
               <span className="text-sm text-slate-700">{selected.therapistId}</span>
@@ -774,6 +779,8 @@ export default function SuperAdminTherapistsPage() {
                   } else {
                     displayValue = "-";
                   }
+                } else if (f.type === "boolean") {
+                  displayValue = typeof rawValue === "boolean" ? (rawValue ? "Yes" : "No") : "-";
                 } else if (f.render) {
                   displayValue = f.render(rawValue, selected);
                 } else {
@@ -792,7 +799,6 @@ export default function SuperAdminTherapistsPage() {
                 );
               })}
             </div>
-            {/* --- Earnings/Payments History Section --- */}
             <div className="mt-7 mb-2">
               <div className="flex items-center gap-2 mb-1">
                 <h3 className="font-bold text-md text-slate-700">Payment History</h3>
@@ -881,8 +887,40 @@ export default function SuperAdminTherapistsPage() {
             <button
               className="px-4 py-1 bg-blue-100 text-blue-700 rounded "
               onClick={() => {
+                // Populate all editable fields for the edit modal.
+                // If name/email/role is only set in userId, copy it into the therapist-level fields.
+                // This ensures all fields in the edit modal are pre-filled.
+                let fieldsToFill: { [k: string]: any } = {};
+                FIELD_LIST.forEach(f => {
+                  if (f.key === "therapistId") return;
+                  // Do not include manualSignUp in edit modal fields
+                  if (f.key === "manualSignUp") return;
+
+                  // Helper to safely get possibly present fields by key, with correct typing
+                  const getField = <T extends object, K extends keyof T>(obj: T, key: K | string): any => {
+                    return key in obj ? (obj as any)[key] : undefined;
+                  };
+             
+
+                  // Prefer therapist[field] if present, else check userId for name/email/role
+                  if (["name", "email", "role"].includes(f.key)) {
+                    if (!getField(selected, f.key) && selected.userId && getField(selected.userId, f.key)) {
+                      fieldsToFill[f.key] = getField(selected.userId, f.key);
+                    } else if (getField(selected, f.key) !== undefined) {
+                      fieldsToFill[f.key] = getField(selected, f.key);
+                    } else {
+                      fieldsToFill[f.key] = "";
+                    }
+                  } else if (getField(selected, f.key) !== undefined) {
+                    fieldsToFill[f.key] = getField(selected, f.key);
+                  } else {
+                    fieldsToFill[f.key] = "";
+                  }
+                });
+  
+
                 setEditTherapist(selected);
-                setEditField({});
+                setEditField(fieldsToFill);
                 setSelectedId(null);
                 setSelectedProfile(null);
                 if (typeof window !== "undefined" && window.history && window.location) {
@@ -910,7 +948,6 @@ export default function SuperAdminTherapistsPage() {
             </button>
           </div>
         </div>
-        {/* --- Pay Therapist Modal --- */}
         {showPayModal && selectedProfile && (
           <div className="fixed inset-0 z-40 bg-black/30 flex items-center justify-center">
             <div className="bg-white rounded-xl p-7 w-[98vw] max-w-md shadow-2xl relative max-h-[85vh] flex flex-col">
@@ -1110,6 +1147,7 @@ export default function SuperAdminTherapistsPage() {
       (editTherapist.userId && typeof editTherapist.isPanelAccessible === "boolean")
         ? editTherapist.isPanelAccessible
         : (typeof editTherapist.panelAccess === "boolean" ? editTherapist.panelAccess : false);
+
     return (
       <div className="fixed inset-0 z-40 bg-white/70 flex items-center justify-center">
         <div className="relative w-full max-w-2xl mx-auto h-full flex items-center justify-center">
@@ -1129,7 +1167,6 @@ export default function SuperAdminTherapistsPage() {
                 readOnly
               />
             </div>
-            {/* New: Disable/Enable and Panel Access toggles */}
             <div className="mb-3 flex gap-6">
               <div className="flex items-center gap-2">
                 <span className="font-medium text-xs text-slate-500">Status: </span>
@@ -1177,11 +1214,51 @@ export default function SuperAdminTherapistsPage() {
             >
               {FIELD_LIST.map(f => {
                 if (f.key === "therapistId") return null;
+                // Don't render manualSignUp in the edit modal
+                if (f.key === "manualSignUp") return null;
                 const isDateField = DATE_FIELDS.includes(f.key) || f.type === "date";
-                const initialValue =
+                // INITIAL VALUE LOGIC: From editField (which is always now prefilled), fallback to editTherapist, fallback to ""
+                let initialValue =
                   editField[f.key] !== undefined
                     ? editField[f.key]
                     : editTherapist[f.key as keyof typeof editTherapist] ?? "";
+
+                if (["name", "email", "role"].includes(f.key)) {
+                  // If not set, pull from userId fallback for these special keys
+                  if (
+                    (initialValue === undefined || initialValue === "" || initialValue == null) &&
+                    editTherapist.userId &&
+                    (editTherapist.userId as any)[f.key]
+                  ) {
+                    initialValue = (editTherapist.userId as any)[f.key];
+                  }
+                }
+
+                if (f.type === "boolean") {
+                  return (
+                    <div key={f.key} className="flex items-center gap-2 pt-6">
+                      <input
+                        type="checkbox"
+                        id={`edit-${f.key}`}
+                        name={`edit-${f.key}`}
+                        checked={editField[f.key] !== undefined
+                          ? !!editField[f.key]
+                          : !!initialValue
+                        }
+                        onChange={e =>
+                          setEditField(prev => ({
+                            ...prev,
+                            [f.key]: e.target.checked,
+                          }))
+                        }
+                        className="h-4 w-4 accent-blue-600"
+                      />
+                      <label htmlFor={`edit-${f.key}`} className="text-sm">
+                        {f.label}
+                      </label>
+                    </div>
+                  );
+                }
 
                 return (
                   <div key={f.key}>
@@ -1267,6 +1344,7 @@ export default function SuperAdminTherapistsPage() {
     { label: "Email", key: "email" },
     { label: "Mobile1", key: "mobile1" },
     { label: "Manual Sign Up", key: "manualSignUp" },
+    { label: "Is Consultant", key: "isConsultant" },
     { label: "Specializations", key: "specializations" },
     { label: "Experience", key: "experienceYears" },
     { label: "Enabled", key: "isDisabled" },
@@ -1285,7 +1363,6 @@ export default function SuperAdminTherapistsPage() {
       className="min-h-screen  p-8"
     >
       <h1 className="text-2xl font-bold text-slate-800 mb-6">Therapists</h1>
-      {/* Search and per-page selector UI */}
       <div className="flex flex-wrap gap-4 items-end mb-4">
         <div>
           <label className="block text-xs font-medium mb-1">Search</label>
@@ -1369,6 +1446,9 @@ export default function SuperAdminTherapistsPage() {
                         ? (t.userId.manualSignUp ? "Yes" : "No")
                         : "-"}
                     </td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      {typeof t.isConsultant === "boolean" ? (t.isConsultant ? "Yes" : "No") : "-"}
+                    </td>
                     <td className="px-4 py-3 whitespace-nowrap">{t.specializations?.trim() ? t.specializations : "-"}</td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       {typeof t.experienceYears === "number" && !isNaN(t.experienceYears)
@@ -1413,7 +1493,6 @@ export default function SuperAdminTherapistsPage() {
             )}
           </tbody>
         </table>
-        {/* Pagination controls */}
         <div className="px-4 py-2 border-t flex justify-between items-center bg-slate-50 text-xs">
           <div>
             Showing {therapists.length === 0 ? 0 : (limit * (page - 1) + 1)}

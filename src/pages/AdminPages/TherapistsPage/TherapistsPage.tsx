@@ -75,6 +75,7 @@ type TherapistProfile = {
   }>;
   isDisabled?: boolean;
   panelAccess?: boolean;
+  isConsultant?: boolean; // <------ Added field
 };
 
 const DATE_FIELDS = [
@@ -96,6 +97,7 @@ const FIELD_LIST: {
   { key: "name", label: "Name", render: (_, row) => row?.userId?.name || row?.name || "-" },
   { key: "email", label: "Email", type: "email", render: (_, row) => row?.userId?.email || row?.email || "-" },
   { key: "role", label: "Role", render: (_, row) => row?.userId?.role || row?.role || "-" },
+  { key: "isConsultant", label: "Consultant", render: (v, row) => typeof (v ?? row?.isConsultant) === "boolean" ? ((v ?? row?.isConsultant) ? "Yes" : "No") : "-" }, // added
   { key: "fathersName", label: "Father's Name" },
   { key: "mobile1", label: "Mobile 1" },
   { key: "mobile2", label: "Mobile 2" },
@@ -249,23 +251,42 @@ function getTherapistFileInfos(therapist: TherapistProfile): {
   });
 }
 
-// Helper to get complete value for each field, for correct Edit modal prefill and update
-// function getFieldValueForEdit(f: { key: string; type?: string }, therapist: TherapistProfile) {
-//   // Prefer userId subfields for some keys if not set at root, else fallback
-//   if (f.key === "name") {
-//     return therapist.userId?.name ?? therapist.name ?? "";
-//   }
-//   if (f.key === "email") {
-//     return therapist.userId?.email ?? therapist.email ?? "";
-//   }
-//   if (f.key === "role") {
-//     return therapist.userId?.role ?? therapist.role ?? "";
-//   }
-//   if (f.key === "manualSignUp") {
-//     return therapist.userId?.manualSignUp ?? "";
-//   }
-//   return therapist[f.key as keyof TherapistProfile] ?? "";
-// }
+// Helper to combine base data and userId fields for edit prefill
+function generateEditFieldsFromProfile(profile: TherapistProfile): { [k: string]: any } {
+  const editFields: { [k: string]: any } = {};
+  FIELD_LIST.forEach(f => {
+    // User subfields
+    if (f.key === "name") {
+      editFields["name"] = profile.userId?.name ?? profile.name ?? "";
+    } else if (f.key === "email") {
+      editFields["email"] = profile.userId?.email ?? profile.email ?? "";
+    } else if (f.key === "role") {
+      editFields["role"] = profile.userId?.role ?? profile.role ?? "";
+    } else if (f.key === "manualSignUp") {
+      editFields["manualSignUp"] = profile.userId?.manualSignUp ?? "";
+    } else if (f.key === "isConsultant") {
+      editFields["isConsultant"] = typeof profile.isConsultant === "boolean" ? profile.isConsultant : false;
+    } else {
+      let val = profile[f.key as keyof TherapistProfile];
+      if (typeof val === "undefined" || val === null) val = "";
+      // Prefer string for dates
+      if ((DATE_FIELDS.includes(f.key) || f.type === "date") && val) {
+        if (typeof val === "string") {
+          editFields[f.key] = val;
+        } else if (val instanceof Date) {
+          editFields[f.key] = val.toISOString().slice(0, 10);
+        } else {
+          editFields[f.key] = "";
+        }
+      } else if (f.key === "experienceYears") {
+        editFields[f.key] = typeof val === "number" ? String(val) : val ?? "";
+      } else {
+        editFields[f.key] = val;
+      }
+    }
+  });
+  return editFields;
+}
 
 export default function TherapistsPage() {
   const [therapists, setTherapists] = useState<TherapistProfile[]>([]);
@@ -488,6 +509,14 @@ export default function TherapistsPage() {
           typeof payload.specializations !== "string"
         ) {
           payload.specializations = "";
+        }
+        // isConsultant: checkbox can set either true/false or "", treat "" as null
+        if (
+          field.key === "isConsultant"
+        ) {
+          if (payload[field.key] === "") {
+            payload[field.key] = null;
+          }
         }
       }
       await axios.put(
@@ -720,7 +749,14 @@ export default function TherapistsPage() {
                 let rawValue = selected[f.key as keyof typeof selected];
                 let value;
 
-                if (f.type === "file") {
+                if (f.key === "isConsultant") {
+                  value =
+                    typeof rawValue === "boolean"
+                      ? rawValue
+                        ? "Yes"
+                        : "No"
+                      : "-";
+                } else if (f.type === "file") {
                   const uploadsUrl = import.meta.env.VITE_UPLOADS_URL || "";
                   if (typeof rawValue === "string" && rawValue) {
                     const isFullUrl = /^(http|https):\/\//i.test(rawValue);
@@ -804,7 +840,8 @@ export default function TherapistsPage() {
               className="px-4 py-1 bg-blue-100 text-blue-700 rounded "
               onClick={() => {
                 setEditTherapist(selected);
-                setEditField({});
+                // Prefill all edit fields when opening edit modal
+                setEditField(generateEditFieldsFromProfile(selected));
                 setSelectedId(null);
                 setSelectedProfile(null);
               }}
@@ -866,6 +903,7 @@ export default function TherapistsPage() {
       if (f.key === "email") return editTherapist?.userId?.email ?? editTherapist?.email ?? "";
       if (f.key === "role") return editTherapist?.userId?.role ?? editTherapist?.role ?? "";
       if (f.key === "manualSignUp") return editTherapist?.userId?.manualSignUp ?? "";
+      if (f.key === "isConsultant") return editTherapist?.isConsultant ?? false; // For edit mode
 
       // Otherwise normal fields
       let val = editTherapist ? editTherapist[f.key as keyof TherapistProfile] : undefined;
@@ -1022,6 +1060,28 @@ export default function TherapistsPage() {
                   );
                 }
 
+                // isConsultant is editable boolean, checkbox
+                if (f.key === "isConsultant") {
+                  return (
+                    <div key={f.key} className="flex items-center gap-2 pt-7">
+                      <input
+                        id="edit-isConsultant"
+                        type="checkbox"
+                        checked={!!value}
+                        onChange={e =>
+                          setEditField(prev => ({
+                            ...prev,
+                            [f.key]: e.target.checked,
+                          }))
+                        }
+                      />
+                      <label htmlFor="edit-isConsultant" className="text-sm">
+                        Consultant
+                      </label>
+                    </div>
+                  );
+                }
+
                 if (f.type === "file") {
                   // Show file input but also show existing image/thumb if relevant, even as editField may become File.
                   const oldUrl = getFileDisplayUrl(f, editTherapist[f.key as keyof TherapistProfile]);
@@ -1152,6 +1212,7 @@ export default function TherapistsPage() {
     { label: "Name", key: "name" },
     { label: "Email | Mobile1", key: "email" },
     { label: "Manual", key: "manualSignUp" },
+    { label: "Consultant", key: "isConsultant" }, // <--- Add to table
     { label: "Specializations", key: "specializations" },
     { label: "Experience", key: "experienceYears" },
     { label: "Enabled", key: "isDisabled" },
@@ -1219,6 +1280,7 @@ export default function TherapistsPage() {
                       "experienceYears",
                       "isDisabled",
                       "panelAccess",
+                      "isConsultant",
                     ].includes(th.key as string)
                       ? "cursor-pointer select-none"
                       : ""
@@ -1234,6 +1296,7 @@ export default function TherapistsPage() {
                       "experienceYears",
                       "isDisabled",
                       "panelAccess",
+                      "isConsultant",
                     ].includes(th.key)
                       ? () => handleTableSort(th.key)
                       : undefined
@@ -1306,6 +1369,14 @@ export default function TherapistsPage() {
                         : manualSignUp
                         ? "Yes"
                         : "No"}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      {/* Consultant */}
+                      {typeof t.isConsultant === "boolean"
+                        ? t.isConsultant
+                          ? "Yes"
+                          : "No"
+                        : "-"}
                     </td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       {t.specializations?.trim()
