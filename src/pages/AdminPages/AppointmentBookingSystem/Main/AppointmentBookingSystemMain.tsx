@@ -9,8 +9,7 @@
 // import {
 //   Patient, Therapy, Package, Therapist, BookingSession, Booking,
 //   MonthlySlotsSummary, DaySlotSummary, QuickFillSettings,
-//   SESSION_TIME_OPTIONS, pad2, getDateKey, getDaysInMonth, getStartDay,
-//   getTotalSessionsForPackage,
+//   SESSION_TIME_OPTIONS, pad2, getDateKey, getDaysInMonth, getStartDay, getMissedSessionsCount, getEffectiveMaxSessions,
 // } from "./types";
 // import { HeaderGuide, CalendarPanel } from "./CalendarAndHeader";
 // import { BookingFormPanel } from "./BookingFormPanel";
@@ -76,7 +75,11 @@
 //   const selectedPatient = patients.find((p) => p.id === patientId) || null;
 //   const selectedTherapy = therapies.find((t) => t._id === therapyId) || null;
 //   const selectedTherapist = therapists.find((t) => t._id === therapistId) || null;
-//   const maxSelectableDates = getTotalSessionsForPackage(selectedPackage);
+//   const maxSelectableDates = getEffectiveMaxSessions(selectedPackage, sessions);
+//   // How many of the currently-loaded sessions are 'Missed' — these consumed a
+//   // package slot but Admin is allowed to add a same number of replacement
+//   // sessions on top of the package's normal total (surfaced in the UI hint).
+//   const missedSessionsCount = getMissedSessionsCount(sessions);
 
 //   // ── Fetch home-details on mount ────────────────────────────────────────────
 //   useEffect(() => {
@@ -564,6 +567,10 @@
 //         date: s.date, slotId: s.slotId ?? "",
 //         therapistId: s.therapistId || (s.therapist && typeof s.therapist === "object" ? s.therapist._id : "") || (typeof s.therapist === "string" ? s.therapist : "") || mainTherapistId,
 //         therapyTypeId: therapyTypeObj,
+//         // Preserve attendance state so the session cap can correctly account
+//         // for missed sessions (see getEffectiveMaxSessions in types.ts).
+//         isCheckedIn: typeof s.isCheckedIn === "boolean" ? s.isCheckedIn : false,
+//         status: s.status || "NotCheckedIn",
 //       };
 //     });
 //     setSessions(mappedSessions.sort((a, b) => a.date.localeCompare(b.date)));
@@ -649,6 +656,7 @@
 //           handleCouponApply={handleCouponApply} handleCouponClear={handleCouponClear}
 //           remark={remark} setRemark={setRemark}
 //           sessions={sessions} selectedPackage={selectedPackage} earliestSession={earliestSession}
+//           missedSessionsCount={missedSessionsCount}
 //           updateSlotId={updateSlotId} updateSessionTherapist={updateSessionTherapist}
 //           updateSessionTherapyType={updateSessionTherapyType} removeSession={removeSession}
 //           bookedSlotsPerRow={bookedSlotsPerRow} getAvailableSlotsForDate={getAvailableSlotsForDate}
@@ -687,7 +695,7 @@ import { motion } from "framer-motion";
 import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { useLocation } from "react-router";
-
+ 
 import {
   Patient, Therapy, Package, Therapist, BookingSession, Booking,
   MonthlySlotsSummary, DaySlotSummary, QuickFillSettings,
@@ -696,16 +704,16 @@ import {
 import { HeaderGuide, CalendarPanel } from "./CalendarAndHeader";
 import { BookingFormPanel } from "./BookingFormPanel";
 import { BookingSummary } from "./BookingSummary";
-
+ 
 export default function AppointmentBookingSystemMain() {
   const location = useLocation();
-
+ 
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
   const daysInMonth = getDaysInMonth(year, month);
   const startDay = getStartDay(year, month);
-
+ 
   // ── Remote data ────────────────────────────────────────────────────────────
   const [patients, setPatients] = useState<Patient[]>([]);
   const [therapists, setTherapists] = useState<Therapist[]>([]);
@@ -717,7 +725,7 @@ export default function AppointmentBookingSystemMain() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [bookingsLoading, setBookingsLoading] = useState(false);
   const [bookingsError, setBookingsError] = useState<string | null>(null);
-
+ 
   // ── Form state ─────────────────────────────────────────────────────────────
   const [patientId, setPatientId] = useState("");
   const [therapyId, setTherapyId] = useState("");
@@ -726,32 +734,37 @@ export default function AppointmentBookingSystemMain() {
   const [sessions, setSessions] = useState<BookingSession[]>([]);
   const [remark, setRemark] = useState("");
   const [editBookingId, setEditBookingId] = useState<string | null>(null);
+  // Snapshot of the booking's own (date|slotId|therapistId) combos, taken at the
+  // moment we load it for editing. Used to strip its own already-saved slots out
+  // of `bookedSlotsPerRow` below, so the UI doesn't flag a session as "conflicting"
+  // with itself — mirrors the backend's `excludeBookingId` logic in updateBooking.
+  const [originalEditSlotKeys, setOriginalEditSlotKeys] = useState<Set<string>>(new Set());
   const [bookingLoading, setBookingLoading] = useState(false);
   const [bookingError, setBookingError] = useState<string | null>(null);
   const [bookingSuccess, setBookingSuccess] = useState<string | null>(null);
   const [paymentLoadingBookingId, setPaymentLoadingBookingId] = useState<string | null>(null);
-
+ 
   // ── Coupon ─────────────────────────────────────────────────────────────────
   const [couponInput, setCouponInput] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState<any>(null);
   const [couponStatus, setCouponStatus] = useState<null | "valid" | "invalid">(null);
-
+ 
   // ── Booking-request flags ──────────────────────────────────────────────────
   const [isBookingRequest, setIsBookingRequest] = useState(false);
   const [bookingRequestId, setBookingRequestId] = useState("");
   const [isSessionEditRequest, setIsSessionEditRequest] = useState(false);
   const [sessionEditRequestId, setSessionEditRequestId] = useState("");
-
+ 
   // ── Calendar / slots ───────────────────────────────────────────────────────
   const [monthlySlotSummary, setMonthlySlotSummary] = useState<MonthlySlotsSummary>({});
   const [bookedSlotsPerRow, setBookedSlotsPerRow] = useState<{ [rowKey: string]: string[] }>({});
   const [guideOpen, setGuideOpen] = useState(false);
-
+ 
   // ── Quick Fill ─────────────────────────────────────────────────────────────
   // When set, clicking a calendar date auto-fills the new session with these
   // preset values instead of leaving them blank.
   const [quickFillSettings, setQuickFillSettings] = useState<QuickFillSettings | null>(null);
-
+ 
   // ── Derived selections ─────────────────────────────────────────────────────
   const selectedPackage = packages.find((p) => p._id === packageId) || null;
   const selectedPatient = patients.find((p) => p.id === patientId) || null;
@@ -762,7 +775,7 @@ export default function AppointmentBookingSystemMain() {
   // package slot but Admin is allowed to add a same number of replacement
   // sessions on top of the package's normal total (surfaced in the UI hint).
   const missedSessionsCount = getMissedSessionsCount(sessions);
-
+ 
   // ── Fetch home-details on mount ────────────────────────────────────────────
   useEffect(() => {
     setApiLoading(true);
@@ -787,7 +800,7 @@ export default function AppointmentBookingSystemMain() {
       })
       .catch(() => { setApiError("Could not load booking data."); setApiLoading(false); });
   }, []);
-
+ 
   // ── Populate form from location.state (booking request) ───────────────────
   useEffect(() => {
     if (location.state && (location.state as any).bookingRequest) {
@@ -813,7 +826,7 @@ export default function AppointmentBookingSystemMain() {
       }
     }
   }, [location.state, therapies]); // eslint-disable-line
-
+ 
   useEffect(() => {
     if (location.state && (location.state as any).sessionEditRequest) {
       const req = (location.state as any).sessionEditRequest;
@@ -822,7 +835,7 @@ export default function AppointmentBookingSystemMain() {
       handleEditBooking(req.appointmentId._id);
     }
   }, [location.state]); // eslint-disable-line
-
+ 
   // ── Monthly slot summary ───────────────────────────────────────────────────
   useEffect(() => {
     if (therapists.length === 0) return;
@@ -832,13 +845,13 @@ export default function AppointmentBookingSystemMain() {
       const dateKeyApi = `${jsDate.getFullYear()}-${pad2(jsDate.getMonth() + 1)}-${pad2(jsDate.getDate())}`;
       let totalNormalSlots = 0, totalLimitedSlots = 0, totalNormalBooked = 0, totalLimitedBooked = 0;
       const therapistsBookedSlots: { [id: string]: string[] } = {};
-
+ 
       for (const t of therapists) {
         const fullDayHoliday = (t.holidays || []).find(
           (h) => h.date === dateKeyApi && (h.isFullDay === true || h.isFullDay === undefined)
         );
         if (fullDayHoliday) { therapistsBookedSlots[t._id] = []; continue; }
-
+ 
         const slotsOut: string[] = [];
         for (const h of t.holidays || []) {
           if (h.date === dateKeyApi && h.isFullDay === false && h.slots?.length) {
@@ -854,7 +867,7 @@ export default function AppointmentBookingSystemMain() {
         }
         totalNormalSlots += normalSlots;
         totalLimitedSlots += limitedSlots;
-
+ 
         const bookedArr = t.bookedSlots?.[dateKeyApi] || [];
         therapistsBookedSlots[t._id] = bookedArr;
         for (const slotId of bookedArr) {
@@ -870,7 +883,7 @@ export default function AppointmentBookingSystemMain() {
     }
     setMonthlySlotSummary(summary);
   }, [therapists, year, month, daysInMonth]);
-
+ 
   // ── Booked slots per row ───────────────────────────────────────────────────
   useEffect(() => {
     const mapping: { [key: string]: string[] } = {};
@@ -881,23 +894,30 @@ export default function AppointmentBookingSystemMain() {
       if (parts.length !== 3) continue;
       const apiKey = `${pad2(Number(parts[2]))}-${pad2(Number(parts[1]))}-${parts[0]}`;
       const daySummary = monthlySlotSummary[apiKey];
-      mapping[`${s.date}:${tId}`] = daySummary?.BookedSlots?.[tId] || [];
+      const rawBooked = daySummary?.BookedSlots?.[tId] || [];
+      // Exclude this booking's own already-saved slots when editing, so a
+      // session doesn't get flagged as "conflicting" with itself — mirrors
+      // the backend's excludeBookingId exclusion in updateBooking.
+      const booked = originalEditSlotKeys.size
+        ? rawBooked.filter((slotId) => !originalEditSlotKeys.has(`${s.date}|${slotId}|${tId}`))
+        : rawBooked;
+      mapping[`${s.date}:${tId}`] = booked;
     }
     setBookedSlotsPerRow(mapping);
-  }, [sessions, therapistId, therapists, monthlySlotSummary]);
-
+  }, [sessions, therapistId, therapists, monthlySlotSummary, originalEditSlotKeys]);
+ 
   // ── Cap sessions to package max ────────────────────────────────────────────
   useEffect(() => {
     if (maxSelectableDates === undefined) return;
     if (sessions.length > maxSelectableDates) setSessions((prev) => prev.slice(0, maxSelectableDates));
   }, [packageId, maxSelectableDates, sessions.length]);
-
+ 
   // ── Calendar helpers ───────────────────────────────────────────────────────
   const changeMonth = (dir: "prev" | "next") => {
     if (dir === "prev") { if (month === 0) { setMonth(11); setYear((y) => y - 1); } else setMonth((m) => m - 1); }
     else { if (month === 11) { setMonth(0); setYear((y) => y + 1); } else setMonth((m) => m + 1); }
   };
-
+ 
   function getServerDaySlotSummary(dateKey: string) {
     const parts = dateKey.split("-");
     if (parts.length !== 3) return undefined;
@@ -908,7 +928,7 @@ export default function AppointmentBookingSystemMain() {
     if (!d) return { total: undefined, booked: undefined, limitedTotal: undefined, limitedBooked: undefined };
     return { total: d.totalAvailableSlots, booked: d.bookedSlots, limitedTotal: d.totalLimitedAvailableSlots, limitedBooked: d.limitedBookedSlots };
   }
-
+ 
   /**
    * Returns the available (not booked, not on holiday) slot labels for a given
    * therapist on a given date, or null when no therapist is selected.
@@ -922,17 +942,17 @@ export default function AppointmentBookingSystemMain() {
     if (!tId) return null;
     const therapist = therapists.find((t) => t._id === tId);
     if (!therapist) return null;
-
+ 
     const parts = dateStr.split("-");
     if (parts.length !== 3) return null;
     const apiDate = `${parts[0]}-${pad2(Number(parts[1]))}-${pad2(Number(parts[2]))}`;
-
+ 
     // Full-day holiday?
     const fullDayHoliday = (therapist.holidays || []).find(
       (h) => h.date === apiDate && (h.isFullDay === true || h.isFullDay === undefined)
     );
     if (fullDayHoliday) return { availableSlots: [], isHoliday: true };
-
+ 
     // Partial-holiday slots to exclude
     const slotsOut: string[] = [];
     for (const h of therapist.holidays || []) {
@@ -940,9 +960,9 @@ export default function AppointmentBookingSystemMain() {
         slotsOut.push(...h.slots.map((s) => s.slotId));
       }
     }
-
+ 
     const rawBooked: string[] = therapist.bookedSlots?.[apiDate] || [];
-
+ 
     // ── Same edit-exclusion logic as getAvailableSlotsForDate:
     // When editing a booking, its own slots must not appear as unavailable
     // in the calendar day tooltip either.
@@ -965,11 +985,11 @@ export default function AppointmentBookingSystemMain() {
         }
       }
     }
-
+ 
     const booked = rawBooked.filter((id) => !ownSlotsCalendar.has(id));
     const bookedSet = new Set(booked);
     const slotsOutSet = new Set(slotsOut);
-
+ 
     let normalLeft = 10 - booked.filter((id) => !SESSION_TIME_OPTIONS.find((o) => o.id === id)?.limited).length;
     let limitedLeft = 5 - booked.filter((id) => !!SESSION_TIME_OPTIONS.find((o) => o.id === id)?.limited).length;
     for (const so of slotsOut) {
@@ -978,7 +998,7 @@ export default function AppointmentBookingSystemMain() {
       if (sd.limited) limitedLeft = Math.max(0, limitedLeft - 1);
       else normalLeft = Math.max(0, normalLeft - 1);
     }
-
+ 
     const available = SESSION_TIME_OPTIONS.filter((slot) => {
       if (slotsOutSet.has(slot.id)) return false;
       if (bookedSet.has(slot.id)) return false;
@@ -986,10 +1006,10 @@ export default function AppointmentBookingSystemMain() {
       if (!slot.limited && normalLeft <= 0) return false;
       return true;
     });
-
+ 
     return { availableSlots: available, isHoliday: false };
   }
-
+ 
   // ── Toggle date on calendar ────────────────────────────────────────────────
   // When quickFillSettings is active the new session is pre-filled with the
   // preset therapist, therapy type and time slot.  The slot conflict check
@@ -998,12 +1018,12 @@ export default function AppointmentBookingSystemMain() {
   const toggleDate = (day: number) => {
     const dateKey = getDateKey(year, month + 1, day);
     if (typeof maxSelectableDates === "number" && sessions.length >= maxSelectableDates) return;
-
+ 
     if (quickFillSettings) {
       // ── Quick-Fill path ──────────────────────────────────────────────────
       const { therapistId: qTherapistId, therapyTypeId: qTherapyTypeId, slotId: qSlotId } = quickFillSettings;
       const therapyObj = therapies.find((t) => t._id === qTherapyTypeId);
-
+ 
       setSessions((prev) =>
         [...prev, {
           date: dateKey,
@@ -1029,7 +1049,7 @@ export default function AppointmentBookingSystemMain() {
       );
     }
   };
-
+ 
   /**
    * Removes the most-recently-added session for a given dateKey.
    * Called by the "−" button on a calendar day cell.
@@ -1045,7 +1065,7 @@ export default function AppointmentBookingSystemMain() {
       return prev.filter((_, i) => i !== lastIdx);
     });
   };
-
+ 
   // ── Session mutations ──────────────────────────────────────────────────────
   const updateSlotId = (date: string, slotId: string, idx: number) => {
     setSessions((prev) => prev.map((s, i) => {
@@ -1065,7 +1085,7 @@ export default function AppointmentBookingSystemMain() {
       return { ...s, therapyTypeId: t ? { _id: t._id, name: t.name } : { _id: newId, name: "" } };
     }));
   const removeSession = (removeIdx: number) => setSessions((prev) => prev.filter((_, i) => i !== removeIdx));
-
+ 
   // ── Derived form validity ──────────────────────────────────────────────────
   function getFirstSessionEarliest(ss: { date: string; slotId: string }[]) {
     if (!ss.length) return null;
@@ -1080,7 +1100,7 @@ export default function AppointmentBookingSystemMain() {
       (typeof s.therapyTypeId === "object" && s.therapyTypeId && (s.therapyTypeId as any)._id && (s.therapyTypeId as any).name) ||
       (typeof s.therapyTypeId === "string" && s.therapyTypeId)
     ));
-
+ 
   // ── Coupon ─────────────────────────────────────────────────────────────────
   function handleCouponApply() {
     if (!couponInput.trim()) { setCouponStatus(null); setAppliedCoupon(null); return; }
@@ -1089,7 +1109,7 @@ export default function AppointmentBookingSystemMain() {
     else { setAppliedCoupon(null); setCouponStatus("invalid"); }
   }
   function handleCouponClear() { setCouponInput(""); setAppliedCoupon(null); setCouponStatus(null); }
-
+ 
   // ── Available slots for a date/therapist ──────────────────────────────────
   function getAvailableSlotsForDate(
     date: string, _selectedSessions: any[], _currSlot: string,
@@ -1099,12 +1119,12 @@ export default function AppointmentBookingSystemMain() {
     if (!therapists.length) return disabledAll("No therapist data");
     const therapist = (currRowTherapistId ? therapists.find((t) => t._id === currRowTherapistId) : undefined) || therapists[0];
     if (!therapist) return disabledAll("No therapist selected");
-
+ 
     const jsDate = new Date(date);
     const apiDate = `${jsDate.getFullYear()}-${pad2(jsDate.getMonth() + 1)}-${pad2(jsDate.getDate())}`;
     const holidays = therapist.holidays || [];
     const bookedSlotsObj = therapist.bookedSlots || {};
-
+ 
     if (holidays.find((h) => h.date === apiDate && (h.isFullDay === true || h.isFullDay === undefined))) {
       return disabledAll("Unavailable Slot");
     }
@@ -1115,7 +1135,7 @@ export default function AppointmentBookingSystemMain() {
       }
     }
     const rawBooked: string[] = bookedSlotsObj[apiDate] || [];
-
+ 
     // ── When editing, collect the slots that belong to the booking being
     // edited so they are NOT treated as "Already booked" for this therapist
     // on this date.  The receptionist should be free to keep, change, or
@@ -1140,10 +1160,10 @@ export default function AppointmentBookingSystemMain() {
         }
       }
     }
-
+ 
     // Remove this booking's own slots so they show as selectable, not blocked
     const booked = rawBooked.filter((id) => !ownSlots.has(id));
-
+ 
     let normalLeft = 10 - booked.filter((id) => !SESSION_TIME_OPTIONS.find((o) => o.id === id)?.limited).length;
     let limitedLeft = 5 - booked.filter((id) => !!SESSION_TIME_OPTIONS.find((o) => o.id === id)?.limited).length;
     for (const so of slotsOut) {
@@ -1162,7 +1182,7 @@ export default function AppointmentBookingSystemMain() {
     }
     return slotInfo;
   }
-
+ 
   // ── Book / update ──────────────────────────────────────────────────────────
   const handleBookOrUpdate = async (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
@@ -1212,7 +1232,7 @@ export default function AppointmentBookingSystemMain() {
       setBookingLoading(false);
     }
   };
-
+ 
   // ── Edit ───────────────────────────────────────────────────────────────────
   function handleEditBooking(bookingId: string) {
     if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
@@ -1255,7 +1275,17 @@ export default function AppointmentBookingSystemMain() {
         status: s.status || "NotCheckedIn",
       };
     });
-    setSessions(mappedSessions.sort((a, b) => a.date.localeCompare(b.date)));
+    const sortedMappedSessions = mappedSessions.sort((a, b) => a.date.localeCompare(b.date));
+    setSessions(sortedMappedSessions);
+    // Snapshot this booking's own (date|slotId|therapistId) combos so the
+    // bookedSlotsPerRow effect below can exclude them — otherwise the booking's
+    // own already-saved slots get flagged as "conflicting" with themselves.
+    const ownKeys = new Set<string>();
+    for (const s of sortedMappedSessions) {
+      const tId = s.therapistId || mainTherapistId || "";
+      if (s.date && s.slotId && tId) ownKeys.add(`${s.date}|${s.slotId}|${tId}`);
+    }
+    setOriginalEditSlotKeys(ownKeys);
     const couponObj = booking.discountInfo?.coupon
       ? coupons.find((x) => x.couponCode === booking.discountInfo!.coupon.couponCode || x._id === booking.discountInfo!.coupon._id) ?? null
       : null;
@@ -1264,10 +1294,10 @@ export default function AppointmentBookingSystemMain() {
     setCouponStatus(couponObj ? "valid" : null);
     setRemark(booking.remark || "");
   }
-
+ 
   function resetForm() {
     setPatientId(""); setTherapyId(""); setPackageId(""); setTherapistId("");
-    setSessions([]); setEditBookingId(null);
+    setSessions([]); setEditBookingId(null); setOriginalEditSlotKeys(new Set());
     setBookingError(null); setBookingSuccess(null);
     setBookedSlotsPerRow({});
     setCouponInput(""); setAppliedCoupon(null); setCouponStatus(null);
@@ -1275,7 +1305,7 @@ export default function AppointmentBookingSystemMain() {
     // Note: quickFillSettings is intentionally NOT cleared on reset —
     // the receptionist may want to continue filling with the same preset.
   }
-
+ 
   async function handleCollectPayment(booking: Booking) {
     if (!booking?._id) return;
     if (!window.confirm("Confirm collect payment for this booking?")) return;
@@ -1294,19 +1324,19 @@ export default function AppointmentBookingSystemMain() {
       setPaymentLoadingBookingId(null);
     }
   }
-
+ 
   function getTherapistObject(booking: Booking): Therapist | undefined {
     if (booking.therapist && typeof booking.therapist === "object" && "_id" in booking.therapist)
       return booking.therapist as Therapist;
     if (typeof booking.therapist === "string") return therapists.find((t) => t._id === booking.therapist);
     return undefined;
   }
-
+ 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="min-h-screen p-8">
       <HeaderGuide guideOpen={guideOpen} setGuideOpen={setGuideOpen} editBookingId={editBookingId} />
-
+ 
       <div className="flex flex-col gap-6">
         <CalendarPanel
           year={year} month={month} changeMonth={changeMonth}
@@ -1319,7 +1349,7 @@ export default function AppointmentBookingSystemMain() {
           getTherapistAvailableSlotsForDay={getTherapistAvailableSlotsForDay}
           selectedTherapistName={selectedTherapist?.name}
         />
-
+ 
         <BookingFormPanel
           editBookingId={editBookingId}
           handleReset={resetForm}
@@ -1343,11 +1373,12 @@ export default function AppointmentBookingSystemMain() {
           updateSessionTherapyType={updateSessionTherapyType} removeSession={removeSession}
           bookedSlotsPerRow={bookedSlotsPerRow} getAvailableSlotsForDate={getAvailableSlotsForDate}
           bookings={bookings}
+          originalEditSlotKeys={originalEditSlotKeys}
           quickFillSettings={quickFillSettings}
           setQuickFillSettings={setQuickFillSettings}
         />
       </div>
-
+ 
       <BookingSummary
         bookings={bookings} setBookings={setBookings}
         setBookingsLoading={setBookingsLoading} setBookingsError={setBookingsError}
@@ -1357,7 +1388,7 @@ export default function AppointmentBookingSystemMain() {
         handleCollectPayment={handleCollectPayment}
         paymentLoadingBookingId={paymentLoadingBookingId}
       />
-
+ 
       {(apiLoading || bookingsLoading) && (
         <div className="fixed inset-0 bg-black bg-opacity-15 z-50 flex items-center justify-center pointer-events-none select-none">
           <div className="bg-white rounded shadow p-6 text-lg text-blue-600 font-bold">Loading data…</div>
@@ -1371,3 +1402,15 @@ export default function AppointmentBookingSystemMain() {
     </motion.div>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
