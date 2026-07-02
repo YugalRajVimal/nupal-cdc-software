@@ -1,5 +1,6 @@
 // @App.tsx (266-268): Add Policy Links (Contact Us, Terms, Refunds/Cancellations) to HomePage Footer
 
+import { useEffect } from "react";
 import { Link } from "react-router";
 
 // REACT ICONS REPLACEMENTS:
@@ -9,6 +10,16 @@ import { HiShieldCheck } from "react-icons/hi";
 import { HiOutlineArrowNarrowRight } from "react-icons/hi";
 
 const HomePage = () => {
+  // Remove all tokens from localStorage when this page loads
+  useEffect(() => {
+    localStorage.removeItem("therapist-token");
+    localStorage.removeItem("patient-token");
+    localStorage.removeItem("admin-token");
+    localStorage.removeItem("super-admin-token");
+    localStorage.removeItem("userData");
+      localStorage.removeItem("userRole");
+  }, []);
+
   const portals = [
     {
       title: "Parent Portal",

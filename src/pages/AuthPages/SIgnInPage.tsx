@@ -1898,6 +1898,15 @@ export default function AuthPage() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
+    // Remove all role tokens from localStorage whenever this page is hit
+    try {
+      localStorage.removeItem("therapist-token");
+      localStorage.removeItem("patient-token");
+      localStorage.removeItem("admin-token");
+      localStorage.removeItem("super-admin-token");
+      localStorage.removeItem("userData");
+      localStorage.removeItem("userRole");
+    } catch {}
     const onPopState = () => setRole(getInitialRole());
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
