@@ -93,88 +93,114 @@ const TherapistSignUp: React.FC = () => {
         </h2>
 
         {step === 1 && (
-          <form onSubmit={handleRequestOTP} className="space-y-4">
-            <label className="block text-sm font-medium text-gray-700">
-              Name
-              <input
-                type="text"
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                placeholder="Your Name"
-                value={name}
-                onChange={e => setName(e.target.value)}
-                disabled={loading}
-                required
-              />
-            </label>
-            <label className="block text-sm font-medium text-gray-700">
-              Email Address
-              <input
-                type="email"
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                placeholder="your@email.com"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                disabled={loading}
-                required
-              />
-            </label>
-            {formError && (
-              <div className="text-red-600 text-sm">{formError}</div>
-            )}
-            {info && <div className="text-green-600 text-sm">{info}</div>}
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-2 mt-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition"
-            >
-              {loading ? "Sending OTP..." : "Request OTP"}
-            </button>
-          </form>
-        )}
-
-        {step === 2 && (
-          <form onSubmit={handleVerifyOTP} className="space-y-4">
-            <div>
-              <div className="text-gray-700 mb-2">
-                Please enter the OTP sent to{" "}
-                <span className="font-semibold">{email}</span>
-              </div>
-              <input
-                type="text"
-                className="block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                maxLength={6}
-                autoComplete="one-time-code"
-                pattern="[0-9]*"
-                inputMode="numeric"
-                value={otp}
-                onChange={e => setOtp(e.target.value.replace(/\D/g, ""))}
-                disabled={loading}
-                required
-                placeholder="Enter OTP"
-              />
-            </div>
-            {formError && (
-              <div className="text-red-600 text-sm">{formError}</div>
-            )}
-            {info && <div className="text-green-600 text-sm">{info}</div>}
-            <div className="flex justify-between">
-              <button
-                type="button"
-                className="text-blue-600 underline text-sm"
-                onClick={() => setStep(1)}
-                disabled={loading}
-              >
-                Change Email/Name
-              </button>
+          <>
+            <form onSubmit={handleRequestOTP} className="space-y-4">
+              <label className="block text-sm font-medium text-gray-700">
+                Name
+                <input
+                  type="text"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Your Name"
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                  disabled={loading}
+                  required
+                />
+              </label>
+              <label className="block text-sm font-medium text-gray-700">
+                Email Address
+                <input
+                  type="email"
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="your@email.com"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  disabled={loading}
+                  required
+                />
+              </label>
+              {formError && (
+                <div className="text-red-600 text-sm">{formError}</div>
+              )}
+              {info && <div className="text-green-600 text-sm">{info}</div>}
               <button
                 type="submit"
                 disabled={loading}
-                className="py-2 px-5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition"
+                className="w-full py-2 mt-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition"
               >
-                {loading ? "Verifying..." : "Verify OTP"}
+                {loading ? "Sending OTP..." : "Request OTP"}
               </button>
+            </form>
+            <div className="mt-5 text-center">
+              <span className="text-gray-500 text-sm">
+                Already have an account?{" "}
+                <a
+                  href="/signin?role=therapist"
+                  className="text-blue-600 hover:underline font-medium"
+                >
+                  Sign In
+                </a>
+              </span>
             </div>
-          </form>
+          </>
+        )}
+
+        {step === 2 && (
+          <>
+            <form onSubmit={handleVerifyOTP} className="space-y-4">
+              <div>
+                <div className="text-gray-700 mb-2">
+                  Please enter the OTP sent to{" "}
+                  <span className="font-semibold">{email}</span>
+                </div>
+                <input
+                  type="text"
+                  className="block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  maxLength={6}
+                  autoComplete="one-time-code"
+                  pattern="[0-9]*"
+                  inputMode="numeric"
+                  value={otp}
+                  onChange={e => setOtp(e.target.value.replace(/\D/g, ""))}
+                  disabled={loading}
+                  required
+                  placeholder="Enter OTP"
+                />
+              </div>
+              {formError && (
+                <div className="text-red-600 text-sm">{formError}</div>
+              )}
+              {info && <div className="text-green-600 text-sm">{info}</div>}
+              <div className="flex justify-between">
+                <button
+                  type="button"
+                  className="text-blue-600 underline text-sm"
+                  onClick={() => setStep(1)}
+                  disabled={loading}
+                >
+                  Change Email/Name
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="py-2 px-5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold transition"
+                >
+                  {loading ? "Verifying..." : "Verify OTP"}
+                </button>
+              </div>
+            </form>
+            <div className="mt-5 text-center">
+              <span className="text-gray-500 text-sm">
+                Already have an account?{" "}
+                <a
+                  href="/signin?role=therapist"
+                  className="text-blue-600 hover:underline font-medium"
+                >
+                  Sign In
+                </a>
+              </span>
+            </div>
+          </>
         )}
 
         {step === 3 && (
@@ -192,6 +218,17 @@ const TherapistSignUp: React.FC = () => {
             >
               Go to Therapist Login
             </a>
+            <div className="mt-4">
+              <span className="text-gray-500 text-sm">
+                Or{" "}
+                <a
+                  href="/signin?role=therapist"
+                  className="text-blue-600 hover:underline font-medium"
+                >
+                  Sign In
+                </a>
+              </span>
+            </div>
           </div>
         )}
       </div>

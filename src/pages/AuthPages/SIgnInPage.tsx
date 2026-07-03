@@ -1000,18 +1000,7 @@ function StandardRoleForm({
     setForgotOtp("");
   }, [role]);
 
-  // function handleMethodChange(m: LoginMethod) {
-  //   setMethod(m);
-  //   setOtp("");
-  //   setOtpSent(false);
-  //   setStatus(null);
-  //   setStep("login");
-  //   setForgotOtp("");
-  //   setPassword("");
-  // }
-
   // ── Password login ─────────────────────────────────────────────────────────
-  // Use /login as per instructions (authRouter.post("/login", authController.loginWithPassword))
   async function handlePasswordLogin() {
     setStatus(null);
     setLoading(true);
@@ -1021,7 +1010,7 @@ function StandardRoleForm({
       setLoading(false);
       return;
     }
-    // Per instructions: use /login for parent / therapist / admin
+    // Payload always includes role, and only email or phone filled
     const payload: Record<string, string> = { role, password };
     if (inputType === "email") payload.email = emailOrPhone.trim().toLowerCase();
     else payload.phone = emailOrPhone.replace(/\s+/g, "");
@@ -1050,7 +1039,6 @@ function StandardRoleForm({
   }
 
   // ── Forgot password: send OTP ─────────────────────────────────────────────
-  // Use /signin endpoint (for forgot password OTP as per instructions)
   async function handleForgotSendOtp() {
     setStatus(null);
     setLoading(true);
@@ -1064,7 +1052,6 @@ function StandardRoleForm({
     if (inputType === "email") payload.email = emailOrPhone.trim().toLowerCase();
     else payload.phone = emailOrPhone.replace(/\s+/g, "");
     try {
-      // as per previous instructions for forgot: /signin route, not /forgot-password (OLD)
       const res = await fetch(`${API_BASE}/signin`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1085,7 +1072,6 @@ function StandardRoleForm({
   }
 
   // ── Forgot password: verify OTP ────────────────────────────────────────────
-  // Use /verify-account endpoint and save token if present
   async function handleForgotVerifyOtp() {
     setStatus(null);
     setLoading(true);
@@ -1123,7 +1109,6 @@ function StandardRoleForm({
   }
 
   // For completeness, preserve otp login for any future use, but don't show in UI initially
-  // OTP Login uses /signin + /verify-account as originally
   async function handleSendOtp() {
     setStatus(null);
     setLoading(true);
@@ -1183,7 +1168,6 @@ function StandardRoleForm({
       const data = await res.json();
       localStorage.setItem("isLogInViaSuperAdmin", "false");
       if (res.ok && data.token) {
-        // Save token under role-specific key
         localStorage.setItem(roleTokenMap[role], data.token);
         setStatus("Login successful!");
         setTimeout(() => {
@@ -1205,6 +1189,38 @@ function StandardRoleForm({
   const ghostBtn = dark
     ? "w-full text-xs text-amber-300 hover:underline mt-1 disabled:opacity-50"
     : "w-full text-xs text-blue-600 hover:underline mt-1 disabled:opacity-50";
+
+  // ── Signup button logic ──────────────────────────────────────────────────
+  function showSignupButton() {
+    // Only show for patient/parent and therapist
+    return role === "patient" || role === "therapist";
+  }
+
+  function getSignupButton() {
+    if (role === "patient") {
+      return (
+        <button
+          type="button"
+          className="w-full  rounded-lg bg-transparent border-2 border-blue-400 text-blue-600 hover:bg-blue-50 py-2 mt-1 font-semibold text-sm transition"
+          onClick={() => { window.location.href = "/parent/signup"; }}
+        >
+          Sign up as Parent
+        </button>
+      );
+    }
+    if (role === "therapist") {
+      return (
+        <button
+          type="button"
+          className="w-full  rounded-lg bg-transparent border-2 border-blue-400 text-blue-600 hover:bg-blue-50 py-2 mt-1 font-semibold text-sm transition"
+          onClick={() => { window.location.href = "/therapist/signup"; }}
+        >
+          Sign up as Therapist
+        </button>
+      );
+    }
+    return null;
+  }
 
   return (
     <div className="space-y-3">
@@ -1275,6 +1291,10 @@ function StandardRoleForm({
             >
               Forgot password?
             </button>
+
+            
+            {/* Signup button for Parent and Therapist */}
+            {showSignupButton() && getSignupButton()}
           </motion.div>
         )}
         {/* Forgot password: send reset OTP */}
@@ -1452,16 +1472,6 @@ function SuperAdminForm() {
   const [superStep, setSuperStep] = useState<SuperStep>("login");
   const [forgotOtp, setForgotOtp] = useState("");
 
-  // function resetAll() {
-  //   setEmailOrPhone("");
-  //   setPassword("");
-  //   setOtp("");
-  //   setOtpSent(false);
-  //   setStatus(null);
-  //   setSuperStep("login");
-  //   setForgotOtp("");
-  // }
-
   function handleMethodChange(m: LoginMethod) {
     setMethod(m);
     setOtp("");
@@ -1472,7 +1482,6 @@ function SuperAdminForm() {
     setPassword("");
   }
 
-  // ── Password Login ────────────────────────────────────────────────────────
   async function handlePasswordLogin() {
     setStatus(null);
     setLoading(true);
@@ -1482,6 +1491,7 @@ function SuperAdminForm() {
       setLoading(false);
       return;
     }
+    // No role needed, use super-admin endpoint
     const payload: Record<string, string> = { password };
     if (inputType === "email") payload.email = emailOrPhone.trim().toLowerCase();
     else payload.phone = emailOrPhone.replace(/\s+/g, "");
@@ -1543,7 +1553,6 @@ function SuperAdminForm() {
     }
   }
 
-  // ── OTP: verify ───────────────────────────────────────────────────────────
   async function handleVerifyOtp() {
     setStatus(null);
     setLoading(true);
@@ -1580,7 +1589,6 @@ function SuperAdminForm() {
     }
   }
 
-  // ── Forgot password: send OTP ─────────────────────────────────────────────
   async function handleForgotSendOtp() {
     setStatus(null);
     setLoading(true);
@@ -1614,7 +1622,6 @@ function SuperAdminForm() {
     }
   }
 
-  // ── Forgot password: verify OTP ───────────────────────────────────────────
   async function handleForgotVerifyOtp() {
     setStatus(null);
     setLoading(true);

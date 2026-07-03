@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 
 /**
  * Parent Sign Up (OTP-based)
@@ -121,6 +122,16 @@ const ParentSignUp: React.FC = () => {
         <h2 className="text-2xl font-bold mb-5 text-center text-blue-700">
           Parent Sign Up
         </h2>
+
+        {/* Add sign in link at the top right or above the card */}
+        <div className="mb-4 text-right">
+          <Link
+            to="/signin"
+            className="text-blue-600 hover:underline text-sm font-medium"
+          >
+            Already have an account? Sign in
+          </Link>
+        </div>
 
         {/* Step 1: Request OTP */}
         {step === 1 && (

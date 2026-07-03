@@ -1,7 +1,7 @@
 
 const ApprovalPending = () => {
   return (
-    <div className="min-h-screen flex flex-col justify-center items-center bg-gradient-to-tr from-violet-200 via-indigo-200 to-amber-100 px-4 py-20">
+    <div className="min-h-screen flex flex-col justify-center items-center bg-gradient-to-tr from-violet-200 via-indigo-200 to-amber-100 px-4 py-16">
       <div className="bg-white bg-opacity-70 shadow-xl rounded-3xl px-7 py-10 max-w-xl mx-auto flex flex-col items-center">
         <img
           src="/logo.webp"
@@ -28,13 +28,13 @@ const ApprovalPending = () => {
         </p>
       <button
         onClick={() => (window.location.href = "/")}
-        className="mt-8 px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-md shadow font-semibold text-base transition"
+        className="mt-8 px-6 py-3 bg-indigo-600  hover:bg-indigo-700 text-white rounded-md shadow font-semibold text-base transition"
       >
         Return to Home
       </button>
       <button
         onClick={() => (window.location.href = "/therapist/logout")}
-        className="mt-4 px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-md shadow font-semibold text-base transition"
+        className="mt-8 px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-md shadow font-semibold text-base transition"
       >
         Logout
       </button>
