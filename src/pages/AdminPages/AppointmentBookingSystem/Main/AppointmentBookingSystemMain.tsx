@@ -1117,7 +1117,13 @@ export default function AppointmentBookingSystemMain() {
   ): { [slotId: string]: { disabled: boolean; reason: string } } {
     const disabledAll = (reason: string) => Object.fromEntries(SESSION_TIME_OPTIONS.map((o) => [o.id, { disabled: true, reason }]));
     if (!therapists.length) return disabledAll("No therapist data");
-    const therapist = (currRowTherapistId ? therapists.find((t) => t._id === currRowTherapistId) : undefined) || therapists[0];
+    // const therapist = (currRowTherapistId ? therapists.find((t) => t._id === currRowTherapistId) : undefined) || therapists[0];
+
+    const therapist = currRowTherapistId
+    ? therapists.find((t) => t._id === currRowTherapistId)
+    : therapists[0];
+  if (!therapist) return disabledAll("No therapist selected");
+
     if (!therapist) return disabledAll("No therapist selected");
  
     const jsDate = new Date(date);
@@ -1209,7 +1215,31 @@ export default function AppointmentBookingSystemMain() {
             const t = therapies.find((t) => t._id === therapyId);
             therapyTypeIdValue = t ? { _id: t._id, name: t.name } : { _id: therapyId, name: "" };
           }
-          return { date: sess.date, slotId: sess.slotId, therapistId: sess.therapistId || selectedTherapist?._id, therapyTypeId: therapyTypeIdValue };
+          // return { date: sess.date, slotId: sess.slotId, therapistId: sess.therapistId || selectedTherapist?._id, therapyTypeId: therapyTypeIdValue };
+          // return {
+          //   date: sess.date,
+          //   slotId: sess.slotId,
+          //   // ← This is the key fix: always send therapistId as a plain string
+          //   therapistId: (typeof sess.therapistId === "object" && (sess.therapistId as any)?._id)
+          //     ? (sess.therapistId as any)._id
+          //     : (sess.therapistId || selectedTherapist?._id || ""),
+          //   therapyTypeId: therapyTypeIdValue,
+          //   // Also forward sessionId and status for existing sessions
+          //   ...(sess.sessionId ? { sessionId: sess.sessionId } : {}),
+          //   ...(sess.status ? { status: sess.status } : {}),
+          //   ...(typeof sess.isCheckedIn === "boolean" ? { isCheckedIn: sess.isCheckedIn } : {}),
+          // };
+          // In sessions.map() inside handleBookOrUpdate:
+return {
+  date: sess.date,
+  slotId: sess.slotId,
+  therapist: sess.therapistId || selectedTherapist?._id || "",  // ← add this
+  therapistId: sess.therapistId || selectedTherapist?._id || "",
+  therapyTypeId: therapyTypeIdValue,
+  ...(sess.sessionId ? { sessionId: sess.sessionId } : {}),
+  ...(sess.status ? { status: sess.status } : {}),
+  ...(typeof sess.isCheckedIn === "boolean" ? { isCheckedIn: sess.isCheckedIn } : {}),
+};
         }),
         coupon: appliedCoupon?._id ?? null,
         bookingRequestId, isBookingRequest, isSessionEditRequest, sessionEditRequestId, remark,
