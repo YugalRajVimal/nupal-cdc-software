@@ -952,7 +952,7 @@ import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   FiUser, FiTag, FiPackage, FiClock, FiX, FiHash, FiZap, FiAlertTriangle,
-  FiClipboard, FiCalendar,
+  FiClipboard,
 } from "react-icons/fi";
 import {
   Therapist, Therapy, Package, Patient, Booking, BookingSession, QuickFillSettings,

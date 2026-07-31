@@ -97,7 +97,7 @@ function EditPaymentMethodModal({
 }) {
   const [paymentMethod, setPaymentMethod] = useState("");
   const [utr, setUtr] = useState("");
-  const [dirty, setDirty] = useState(false);
+  // const [dirty, setDirty] = useState(false);
 
   // Intialize on open
   useEffect(() => {
@@ -108,13 +108,13 @@ function EditPaymentMethodModal({
           ? log.Utr[log.Utr.length - 1]
           : ""
       );
-      setDirty(false);
+      // setDirty(false);
     }
   }, [open, log]);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setDirty(true);
+    // setDirty(true);
     if (!paymentMethod) return;
     onSave({ paymentMethod, utr });
   }
