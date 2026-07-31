@@ -1,4 +1,12 @@
 
+
+
+
+
+
+
+
+
 // import { useState } from "react";
 // import { AnimatePresence, motion } from "framer-motion";
 // import {
@@ -261,13 +269,17 @@
 //   removeSession: (idx: number) => void;
 //   /** When set, rows whose auto-filled slot is unavailable show an inline warning */
 //   quickFillSettings: QuickFillSettings | null;
+//   /** (date|slotId|therapistId) combos already saved on the booking being
+//    *  edited — excluded from "Already Booked" checks so a session/therapist
+//    *  doesn't get flagged as conflicting with itself. */
+//   originalEditSlotKeys?: Set<string>;
 // };
  
 // function SessionDatesTimesTable({
 //   sessions, updateSlotId, updateSessionTherapist, updateSessionTherapyType,
 //   editBookingId, therapists, therapistId, therapies, therapyId,
 //   getAvailableSlotsForDate, bookedSlotsPerRow, removeSession,
-//   quickFillSettings,
+//   quickFillSettings, originalEditSlotKeys,
 // }: SessionDatesTimesTableProps) {
 //   // Sorted therapists and therapies for dropdown
 //   const sortedTherapists = sortTherapistsByName(therapists);
@@ -420,7 +432,17 @@
 //                           if (partialOff) { therapistSlotStatus[t._id] = { booked: false, holiday: true }; continue; }
  
 //                           // Already has this slot booked?
-//                           const isBooked = (t.bookedSlots?.[apiDate] || []).includes(rowSlotId);
+//                           // When editing a booking, exclude that booking's own
+//                           // already-saved (date|slotId|therapistId) combo — otherwise
+//                           // its own therapist/slot gets flagged as "Already Booked"
+//                           // against itself. Mirrors the backend's excludeBookingId logic.
+//                           const isOwnSavedSlot =
+//                             !!editBookingId &&
+//                             !!originalEditSlotKeys &&
+//                             originalEditSlotKeys.has(`${rowDate}|${rowSlotId}|${t._id}`);
+//                           const isBooked =
+//                             !isOwnSavedSlot &&
+//                             (t.bookedSlots?.[apiDate] || []).includes(rowSlotId);
 //                           therapistSlotStatus[t._id] = { booked: isBooked, holiday: false };
 //                         }
 //                       }
@@ -627,6 +649,10 @@
 //     isEdit?: boolean
 //   ) => { [slotId: string]: { disabled: boolean; reason: string } };
 //   bookings: any[];
+//   /** (date|slotId|therapistId) combos already saved on the booking being
+//    *  edited — excluded from "Already Booked" checks so a session/therapist
+//    *  doesn't get flagged as conflicting with itself. */
+//   originalEditSlotKeys?: Set<string>;
 //   // Quick Fill
 //   quickFillSettings: QuickFillSettings | null;
 //   setQuickFillSettings: (s: QuickFillSettings | null) => void;
@@ -647,6 +673,7 @@
 //   updateSlotId, updateSessionTherapist, updateSessionTherapyType, removeSession,
 //   bookedSlotsPerRow, getAvailableSlotsForDate,
 //   bookings,
+//   originalEditSlotKeys,
 //   quickFillSettings, setQuickFillSettings,
 // }: BookingFormPanelProps) {
 //   const [qfModalOpen, setQfModalOpen] = useState(false);
@@ -855,6 +882,7 @@
 //           bookedSlotsPerRow={bookedSlotsPerRow}
 //           removeSession={removeSession}
 //           quickFillSettings={quickFillSettings}
+//           originalEditSlotKeys={originalEditSlotKeys}
 //         />
 //       )}
  
@@ -916,25 +944,26 @@
 //     </div>
 //   );
 // }
-
-
-
-
-
-
-
-
-
+ 
+ 
+ 
+ 
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   FiUser, FiTag, FiPackage, FiClock, FiX, FiHash, FiZap, FiAlertTriangle,
+  FiClipboard, FiCalendar,
 } from "react-icons/fi";
 import {
-  Therapist, Therapy, Package, Patient, BookingSession, QuickFillSettings,
+  Therapist, Therapy, Package, Patient, Booking, BookingSession, QuickFillSettings,
   SESSION_TIME_OPTIONS as _SLOTS,
   formatDateDDMMYYYY, getTotalSessionsForPackage, getPatientDisplayName, getPackageDisplay,
 } from "./types";
+
+const MONTH_NAMES = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
  
 // --- Helper: Sorts ---
 // (1) Sort therapists by name
@@ -1121,6 +1150,108 @@ function QuickFillModal({
   );
 }
  
+// ─── PasteMonthModal ───────────────────────────────────────────────────────────
+
+type PasteMonthModalProps = {
+  open: boolean;
+  onClose: () => void;
+  /** Label describing the copied source booking, e.g. "B00123 — Aayush (3 sessions)" */
+  sourceLabel: string;
+  onConfirm: (targetMonth: number, targetYear: number) => void;
+};
+
+function PasteMonthModal({ open, onClose, sourceLabel, onConfirm }: PasteMonthModalProps) {
+  const today = new Date();
+  const [targetMonth, setTargetMonth] = useState(today.getMonth());
+  const [targetYear, setTargetYear] = useState(today.getFullYear());
+
+  if (!open) return null;
+
+  const yearOptions = [today.getFullYear() - 1, today.getFullYear(), today.getFullYear() + 1, today.getFullYear() + 2];
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        key="paste-overlay"
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/30"
+        style={{ backdropFilter: "blur(2px)" }}
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        onClick={onClose}
+      >
+        <motion.div
+          initial={{ scale: 0.95, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 0.95, opacity: 0 }}
+          transition={{ type: "spring", stiffness: 300, damping: 28 }}
+          className="bg-white rounded-xl shadow-xl w-full max-w-sm border border-purple-100 relative"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center justify-between px-6 pt-5 pb-3 border-b border-purple-50">
+            <div className="flex items-center gap-2 text-purple-700 font-semibold text-base">
+              <FiClipboard className="text-purple-500" />
+              Paste Booking
+            </div>
+            <button onClick={onClose} className="text-slate-400 hover:text-slate-600" type="button">
+              <FiX size={20} />
+            </button>
+          </div>
+
+          <div className="px-6 py-5 space-y-4">
+            <p className="text-xs text-slate-500 leading-relaxed">
+              Copied from <span className="font-medium text-slate-700">{sourceLabel}</span>. Choose the month
+              this new booking should be created for — every session date shifts by the same number of
+              months, keeping the same day, time slot, and therapist.
+            </p>
+
+            <div className="flex gap-2">
+              <div className="flex-1">
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Month</label>
+                <select
+                  value={targetMonth}
+                  onChange={(e) => setTargetMonth(Number(e.target.value))}
+                  className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-300 outline-none"
+                >
+                  {MONTH_NAMES.map((name, idx) => (
+                    <option key={name} value={idx}>{name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="w-28">
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Year</label>
+                <select
+                  value={targetYear}
+                  onChange={(e) => setTargetYear(Number(e.target.value))}
+                  className="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-300 outline-none"
+                >
+                  {yearOptions.map((y) => (
+                    <option key={y} value={y}>{y}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+              ⚠️ If a session's day doesn't exist in the target month (e.g. the 31st into a 30-day month),
+              that row is left blank for you to pick a date manually. Any slot that's already booked will
+              still show as unavailable, same as any other new booking.
+            </p>
+          </div>
+
+          <div className="flex gap-2 px-6 pb-5 pt-1">
+            <button
+              type="button"
+              className="flex-1 rounded-lg border border-purple-500 bg-purple-600 text-white py-2 text-sm font-semibold hover:bg-purple-700 transition"
+              onClick={() => { onConfirm(targetMonth, targetYear); onClose(); }}
+            >
+              Paste for {MONTH_NAMES[targetMonth]} {targetYear}
+            </button>
+          </div>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
+  );
+}
+
 // ─── QuickFillBadge ───────────────────────────────────────────────────────────
  
 type QuickFillBadgeProps = {
@@ -1191,6 +1322,11 @@ type SessionDatesTimesTableProps = {
    *  edited — excluded from "Already Booked" checks so a session/therapist
    *  doesn't get flagged as conflicting with itself. */
   originalEditSlotKeys?: Set<string>;
+  /** sessionIds (see BookingFormPanel) of pasted sessions whose date needs to
+   *  be picked manually because the original day didn't exist in the target
+   *  month. Rows matching these get a date picker instead of a static date. */
+  dateFixSessionIds?: Set<string>;
+  updateSessionDate?: (idx: number, newDate: string) => void;
 };
  
 function SessionDatesTimesTable({
@@ -1198,6 +1334,7 @@ function SessionDatesTimesTable({
   editBookingId, therapists, therapistId, therapies, therapyId,
   getAvailableSlotsForDate, bookedSlotsPerRow, removeSession,
   quickFillSettings, originalEditSlotKeys,
+  dateFixSessionIds, updateSessionDate,
 }: SessionDatesTimesTableProps) {
   // Sorted therapists and therapies for dropdown
   const sortedTherapists = sortTherapistsByName(therapists);
@@ -1256,11 +1393,28 @@ function SessionDatesTimesTable({
                 therapyTypeIdVal = therapyId;
               }
  
+              const needsDateFix = !!(s.sessionId && dateFixSessionIds?.has(s.sessionId));
+
               return (
-                <tr key={s.date + ":" + idx} className={`text-sm ${isQuickFillConflict ? "bg-red-50" : ""}`}>
+                <tr key={(s.sessionId || s.date) + ":" + idx} className={`text-sm ${isQuickFillConflict || needsDateFix ? "bg-red-50" : ""}`}>
                   {/* Date */}
                   <td className="px-2 py-1 border border-slate-200 font-mono align-top">
-                    {formatDateDDMMYYYY(s.date)}
+                    {needsDateFix ? (
+                      <>
+                        <input
+                          type="date"
+                          value={s.date || ""}
+                          onChange={(e) => updateSessionDate && updateSessionDate(idx, e.target.value)}
+                          className="border rounded px-2 py-1 border-red-400"
+                        />
+                        <div className="flex items-center gap-1 mt-1 text-xs text-red-600 font-medium whitespace-normal">
+                          <FiAlertTriangle size={11} />
+                          Original day doesn't exist in this month — pick a date.
+                        </div>
+                      </>
+                    ) : (
+                      formatDateDDMMYYYY(s.date)
+                    )}
                   </td>
  
                   {/* Time Slot */}
@@ -1574,6 +1728,14 @@ export type BookingFormPanelProps = {
   // Quick Fill
   quickFillSettings: QuickFillSettings | null;
   setQuickFillSettings: (s: QuickFillSettings | null) => void;
+  // Copy → Paste into another month
+  /** The booking last copied from Booking Summary, or null if none. */
+  copiedBooking: Booking | null;
+  onPasteBooking: (targetMonth: number, targetYear: number) => void;
+  onClearCopiedBooking: () => void;
+  /** sessionIds of pasted sessions still needing a manual date fix. */
+  dateFixSessionIds?: Set<string>;
+  updateSessionDate?: (idx: number, newDate: string) => void;
 };
  
 export function BookingFormPanel({
@@ -1593,8 +1755,15 @@ export function BookingFormPanel({
   bookings,
   originalEditSlotKeys,
   quickFillSettings, setQuickFillSettings,
+  copiedBooking, onPasteBooking, onClearCopiedBooking,
+  dateFixSessionIds, updateSessionDate,
 }: BookingFormPanelProps) {
   const [qfModalOpen, setQfModalOpen] = useState(false);
+  const [pasteModalOpen, setPasteModalOpen] = useState(false);
+  const copiedBookingLabel = copiedBooking
+    ? `${copiedBooking.appointmentId || "Booking"} — ${getPatientDisplayName(copiedBooking.patient as any) || "—"} (${(copiedBooking.sessions || []).length} session${(copiedBooking.sessions || []).length === 1 ? "" : "s"})`
+    : "";
+  const dateFixCount = dateFixSessionIds?.size ?? 0;
   const totalSessions = getTotalSessionsForPackage(selectedPackage);
  
   // Sort therapists, patients, therapies for dropdowns by name
@@ -1614,6 +1783,14 @@ export function BookingFormPanel({
         onSave={setQuickFillSettings}
         onClear={() => setQuickFillSettings(null)}
       />
+
+      {/* Paste (Copy Booking) Modal */}
+      <PasteMonthModal
+        open={pasteModalOpen}
+        onClose={() => setPasteModalOpen(false)}
+        sourceLabel={copiedBookingLabel}
+        onConfirm={onPasteBooking}
+      />
  
       {/* Header row */}
       <div className="flex items-center justify-between mb-4">
@@ -1626,6 +1803,19 @@ export function BookingFormPanel({
           )}
         </h3>
         <div className="flex gap-2">
+          {/* 📋 Paste copied booking */}
+          {copiedBooking && (
+            <button
+              type="button"
+              onClick={() => setPasteModalOpen(true)}
+              disabled={!!editBookingId}
+              className="flex items-center gap-1.5 px-3 py-1 rounded text-xs font-semibold border transition bg-purple-100 border-purple-400 text-purple-800 hover:bg-purple-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              title={editBookingId ? "Cancel edit to paste a copied booking" : "Create a new booking from the copied booking for another month"}
+            >
+              <FiClipboard size={13} className="text-purple-500" />
+              Paste
+            </button>
+          )}
           {/* ⚡ Quick Fill toggle button */}
           <button
             type="button"
@@ -1650,6 +1840,41 @@ export function BookingFormPanel({
         </div>
       </div>
  
+      {/* Copied booking banner */}
+      {copiedBooking && (
+        <div className="flex items-start gap-3 bg-purple-50 border border-purple-300 rounded-lg px-4 py-2.5 mb-4">
+          <FiClipboard className="text-purple-500 mt-0.5 shrink-0" size={16} />
+          <div className="flex-1 min-w-0 text-xs">
+            <span className="font-semibold text-purple-800">Booking copied —</span>{" "}
+            <span className="text-purple-700">{copiedBookingLabel}</span>
+            <br />
+            <span className="text-purple-600">
+              {editBookingId
+                ? "Cancel edit to paste it as a new booking for another month."
+                : "Click \"Paste\" above to create a new booking for another month with the same details."}
+            </span>
+          </div>
+          <div className="flex gap-1 shrink-0">
+            <button
+              type="button"
+              onClick={onClearCopiedBooking}
+              className="text-xs px-2 py-1 rounded border border-red-300 text-red-600 hover:bg-red-50 transition"
+            >Clear</button>
+          </div>
+        </div>
+      )}
+
+      {/* Date-fix warning banner */}
+      {dateFixCount > 0 && (
+        <div className="flex items-start gap-3 bg-red-50 border border-red-300 rounded-lg px-4 py-2.5 mb-4">
+          <FiAlertTriangle className="text-red-500 mt-0.5 shrink-0" size={16} />
+          <div className="flex-1 min-w-0 text-xs text-red-700">
+            <span className="font-semibold">{dateFixCount} session{dateFixCount > 1 ? "s" : ""} need a date —</span>{" "}
+            the original day doesn't exist in this month. Pick a date for the highlighted row{dateFixCount > 1 ? "s" : ""} in the table below.
+          </div>
+        </div>
+      )}
+
       {/* Quick Fill active badge */}
       {quickFillSettings && (
         <QuickFillBadge
@@ -1801,6 +2026,8 @@ export function BookingFormPanel({
           removeSession={removeSession}
           quickFillSettings={quickFillSettings}
           originalEditSlotKeys={originalEditSlotKeys}
+          dateFixSessionIds={dateFixSessionIds}
+          updateSessionDate={updateSessionDate}
         />
       )}
  
@@ -1866,11 +2093,8 @@ export function BookingFormPanel({
  
  
  
- 
- 
- 
- 
- 
+
+
 
 
 

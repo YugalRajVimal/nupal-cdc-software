@@ -50,6 +50,8 @@
 //   bookedSlots?: { [date: string]: string[] };
 //   bookedSlotCount?: { [date: string]: number };
 // };
+// export type SessionStatus = 'CheckedIn' | 'NotCheckedIn' | 'Missed';
+
 // export type BookingSession = {
 //   sessionId: string;
 //   date: string;
@@ -59,6 +61,9 @@
 //   therapyTypeId?: { _id: string; name: string; [key: string]: any } | string;
 //   _id?: string;
 //   therapist?: { _id: string; therapistId: string; name: string; [key: string]: any };
+//   /** Check-in / attendance state of this session, as recorded server-side */
+//   isCheckedIn?: boolean;
+//   status?: SessionStatus;
 //   [key: string]: any;
 // };
 // export type Booking = {
@@ -126,6 +131,32 @@
 //       return m ? Number(m[1]) : undefined;
 //     })()
 //   );
+// }
+
+// /**
+//  * Counts how many of the given sessions are marked as 'Missed'.
+//  * Used to extend the package's session cap: a missed session still
+//  * "used up" a package slot, so Admin is allowed to add this many
+//  * replacement sessions beyond the package's normal total.
+//  */
+// export function getMissedSessionsCount(sessions: BookingSession[] | undefined | null): number {
+//   if (!Array.isArray(sessions)) return 0;
+//   return sessions.filter((s) => s?.status === 'Missed').length;
+// }
+
+// /**
+//  * Effective max number of sessions selectable for a booking: the package's
+//  * normal total, plus one extra slot for every session already marked
+//  * 'Missed' (so Admin can book a replacement for each missed session
+//  * without being blocked by the original package cap).
+//  */
+// export function getEffectiveMaxSessions(
+//   pkg: Package | null,
+//   sessions: BookingSession[] | undefined | null
+// ): number | undefined {
+//   const base = getTotalSessionsForPackage(pkg);
+//   if (typeof base !== 'number') return undefined;
+//   return base + getMissedSessionsCount(sessions);
 // }
 // export function getPackageDisplay(pkg: Package | null): string {
 //   if (!pkg) return "—";
@@ -325,6 +356,51 @@ export function getPackageDisplay(pkg: Package | null): string {
   }
   return parts.join("; ");
 }
+/**
+ * Given an existing booking's sessions, produces a new session array shifted
+ * so the earliest original session lands in `targetMonth`/`targetYear`, with
+ * every other session shifted by that same number of months — same
+ * day-of-month, same time slot, same therapist, same therapy type. Used by
+ * the "Copy booking → Paste into another month" feature so Admin doesn't
+ * have to re-enter an identical booking for a later month.
+ *
+ * If a session's original day-of-month doesn't exist in its shifted target
+ * month (e.g. the 31st shifted into a 30-day month), that session's `date`
+ * is left as an empty string and its index (within the input array) is
+ * returned in `needsFixIndices`, so the UI can flag it for Admin to pick a
+ * date manually instead of silently guessing.
+ */
+export function shiftSessionsToMonth(
+  sessions: BookingSession[],
+  targetMonth: number, // 0-indexed (Jan = 0), matches the calendar's `month` state
+  targetYear: number
+): { shifted: BookingSession[]; needsFixIndices: number[] } {
+  const dated = (sessions || []).filter((s) => !!s?.date);
+  if (!dated.length) return { shifted: sessions ? sessions.map((s) => ({ ...s })) : [], needsFixIndices: [] };
+
+  const earliest = [...dated].sort((a, b) => a.date.localeCompare(b.date))[0];
+  const [baseYear, baseMonth1] = earliest.date.split("-").map(Number);
+  const baseMonth = baseMonth1 - 1; // 0-indexed
+  const monthOffset = (targetYear - baseYear) * 12 + (targetMonth - baseMonth);
+
+  const needsFixIndices: number[] = [];
+  const shifted = (sessions || []).map((s, idx) => {
+    if (!s?.date) return { ...s };
+    const [origYear, origMonth1, origDay] = s.date.split("-").map(Number);
+    const rawMonthIndex = (origMonth1 - 1) + monthOffset;
+    const newYear = origYear + Math.floor(rawMonthIndex / 12);
+    const newMonth0 = ((rawMonthIndex % 12) + 12) % 12;
+    const daysInTargetMonth = getDaysInMonth(newYear, newMonth0);
+    if (origDay > daysInTargetMonth) {
+      needsFixIndices.push(idx);
+      return { ...s, date: "" };
+    }
+    return { ...s, date: getDateKey(newYear, newMonth0 + 1, origDay) };
+  });
+
+  return { shifted, needsFixIndices };
+}
+
 export function getPatientDisplayName(patient: Patient | undefined | null): string {
   if (!patient) return "";
   const pid = patient.patientId ? patient.patientId : "";

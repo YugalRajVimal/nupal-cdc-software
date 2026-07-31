@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { FiArrowUpCircle, FiDownload, FiSearch, FiArrowLeft, FiArrowRight } from "react-icons/fi";
+import {
+  FiArrowUpCircle, FiDownload, FiSearch, FiArrowLeft, FiArrowRight, FiEdit2
+} from "react-icons/fi";
 import axios from "axios";
 // @ts-ignore
 import * as XLSX from "xlsx";
@@ -35,6 +37,10 @@ interface FinanceDetailsResponse {
 }
 
 const DEFAULT_PAGE_SIZE = 10;
+const PAYMENT_METHOD_OPTIONS = [
+  "Cash",
+  "Online",
+];
 
 function downloadExcel(filename: string, rows: FinanceLog[]) {
   const worksheetRows = rows.map((row) => ({
@@ -73,6 +79,110 @@ function downloadExcel(filename: string, rows: FinanceLog[]) {
   XLSX.writeFile(workbook, filename);
 }
 
+// Edit Dialog for Payment Method
+function EditPaymentMethodModal({
+  open,
+  onClose,
+  log,
+  onSave,
+  saving,
+  error,
+}: {
+  open: boolean;
+  onClose: () => void;
+  log: FinanceLog | null;
+  onSave: (data: { paymentMethod: string; utr: string }) => void;
+  saving: boolean;
+  error: string | null;
+}) {
+  const [paymentMethod, setPaymentMethod] = useState("");
+  const [utr, setUtr] = useState("");
+  const [dirty, setDirty] = useState(false);
+
+  // Intialize on open
+  useEffect(() => {
+    if (open && log) {
+      setPaymentMethod(log.PaymentMethod ?? "");
+      setUtr(
+        log.Utr && log.Utr.length > 0
+          ? log.Utr[log.Utr.length - 1]
+          : ""
+      );
+      setDirty(false);
+    }
+  }, [open, log]);
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setDirty(true);
+    if (!paymentMethod) return;
+    onSave({ paymentMethod, utr });
+  }
+
+  if (!open || !log) return null;
+  return (
+    <div className="fixed inset-0 bg-black/20 z-50 flex items-center justify-center">
+      <div className="bg-white p-6 rounded-lg w-[90vw] max-w-lg shadow-xl border">
+        <h2 className="text-lg font-semibold mb-4">Edit Payment Method</h2>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <div>
+            <label className="block text-sm font-medium mb-1">Payment Method</label>
+            <select
+              className="w-full border rounded py-2 px-3"
+              value={paymentMethod}
+              onChange={e => setPaymentMethod(e.target.value)}
+              required
+            >
+              <option value="">Select payment method</option>
+              {PAYMENT_METHOD_OPTIONS.map(meth => (
+                <option key={meth} value={meth}>
+                  {meth}
+                </option>
+              ))}
+            </select>
+          </div>
+          {/* Only show UTR field when Payment Method is Online */}
+          {paymentMethod === "Online" && (
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                UTR (for bank/UPI transfers)
+              </label>
+              <input
+                className="w-full border rounded py-2 px-3"
+                value={utr}
+                onChange={e => setUtr(e.target.value)}
+                maxLength={50}
+                placeholder="Optional: Transaction/UTR"
+                autoComplete="off"
+              />
+            </div>
+          )}
+          {error && (
+            <div className="text-red-500 text-sm">{error}</div>
+          )}
+          <div className="flex gap-2 justify-end pt-4 border-t">
+            <button
+              type="button"
+              className="px-4 py-2 bg-slate-100 rounded text-slate-800"
+              onClick={onClose}
+              disabled={saving}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-60"
+              disabled={saving || !paymentMethod}
+            >
+              {saving ? "Saving..." : "Save"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 export default function FinancesPage() {
   const [financeData, setFinanceData] = useState<FinanceDetailsResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -81,6 +191,12 @@ export default function FinancesPage() {
   const [searchInput, setSearchInput] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize] = useState(DEFAULT_PAGE_SIZE);
+
+  // For editing payment method
+  const [editingLog, setEditingLog] = useState<FinanceLog | null>(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
 
   const fetchData = () => {
     setLoading(true);
@@ -105,6 +221,50 @@ export default function FinancesPage() {
         );
         setLoading(false);
       });
+  };
+
+  // Handle edit modal open
+  const handleOpenEdit = (log: FinanceLog) => {
+    setEditingLog(log);
+    setEditError(null);
+    setShowEditModal(true);
+  };
+
+  const handleCloseEdit = () => {
+    setShowEditModal(false);
+    setEditingLog(null);
+    setEditError(null);
+  };
+
+  const handleSaveEdit = async ({
+    paymentMethod,
+    utr,
+  }: {
+    paymentMethod: string;
+    utr: string;
+  }) => {
+    if (!editingLog?._id) return;
+    setEditSaving(true);
+    setEditError(null);
+    try {
+      const baseUrl = import.meta.env.VITE_API_URL || "";
+      await axios.patch(
+        `${baseUrl}/api/admin/finance/update-payment-method/${editingLog._id}`,
+        { paymentMethod, utr }
+      );
+      setEditSaving(false);
+      setShowEditModal(false);
+      setEditingLog(null);
+      // Immediately refresh finance data after update
+      fetchData();
+    } catch (e: any) {
+      setEditError(
+        e?.response?.data?.message ||
+        e?.message ||
+        "Failed to update payment method"
+      );
+      setEditSaving(false);
+    }
   };
 
   useEffect(() => {
@@ -134,6 +294,14 @@ export default function FinancesPage() {
       animate={{ opacity: 1, y: 0 }}
       className="min-h-screen p-8"
     >
+      <EditPaymentMethodModal
+        open={showEditModal}
+        onClose={handleCloseEdit}
+        log={editingLog}
+        onSave={handleSaveEdit}
+        saving={editSaving}
+        error={editError}
+      />
       <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4">
         <h1 className="text-2xl font-bold text-slate-800">Finances</h1>
         <div className="flex flex-col sm:flex-row gap-4">
@@ -200,10 +368,10 @@ export default function FinancesPage() {
                   <th className="px-4 py-3 text-left">Credit/Debit</th>
                   <th className="px-4 py-3 text-left">Payment Method</th>
                   <th className="px-4 py-3 text-left">UTR</th>
-                  
                   <th className="px-4 py-3 text-left">Created At</th>
                   <th className="px-4 py-3 text-left">Updated At</th>
                   <th className="px-4 py-3 text-right">Amount</th>
+                  <th className="px-4 py-3 text-center">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -227,7 +395,7 @@ export default function FinancesPage() {
                             })()
                           : "-"}
                       </td>
-                 
+
                       <td className="px-4 py-3">{log.Description}</td>
                       <td className="px-4 py-3">{log.ChildrenName ?? "-"}</td>
                       <td className="px-4 py-3">{log.ChildrenId ?? "-"}</td>
@@ -242,7 +410,6 @@ export default function FinancesPage() {
                           "-"
                         )}
                       </td>
-                      
                       <td className="px-4 py-3">
                         {log.CreatedAt
                           ? new Date(log.CreatedAt).toLocaleString("en-GB")
@@ -264,11 +431,21 @@ export default function FinancesPage() {
                       >
                         ₹{Number(log.Amount).toLocaleString("en-IN")}
                       </td>
+                      <td className="px-4 py-3 text-center">
+                        <button
+                          className="inline-flex items-center gap-1 p-1 border rounded hover:bg-slate-50 text-blue-600"
+                          onClick={() => handleOpenEdit(log)}
+                          title="Edit Payment Method"
+                        >
+                          <FiEdit2 />
+                          <span className="sr-only">Edit</span>
+                        </button>
+                      </td>
                     </tr>
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={11} className="px-4 py-6 text-center text-slate-400">
+                    <td colSpan={12} className="px-4 py-6 text-center text-slate-400">
                       No finance logs found.
                     </td>
                   </tr>

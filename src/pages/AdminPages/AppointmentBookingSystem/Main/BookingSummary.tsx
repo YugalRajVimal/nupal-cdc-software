@@ -1,10 +1,12 @@
+
+
 // import { useState, useEffect, useMemo } from "react";
 // import { motion, AnimatePresence } from "framer-motion";
 // import {
 //   FiUser, FiTag, FiPackage, FiChevronDown, FiHash,
 //   FiEdit2, FiX, FiCreditCard, FiCheckCircle, FiSearch,
 // } from "react-icons/fi";
-// import { FiDollarSign, FiSmartphone } from "react-icons/fi";
+// import { FiDollarSign, FiSmartphone, FiPocket } from "react-icons/fi";
 // import {
 //   Booking, Therapist, PAGE_SIZE_OPTIONS, SESSION_TIME_OPTIONS,
 //   formatDateDDMMYYYY, getPatientDisplayName, getPackageDisplay,
@@ -20,11 +22,13 @@
 //     appointmentId: string;
 //     patientName: string;
 //     patientId: string;
-//     paymentAmount?: number | string;
-//     amountPaid?: number | string;
+//     invoiceAmount?: number;
+//     amountPaid?: number;
 //     paymentRecordId?: string;
 //     discountPercent?: number;
-//     allowDiscountOption?: boolean;
+//     checkedInCount?: number;
+//     totalSessions?: number;
+//     walletBalance?: number;
 //   } | null;
 //   onCollected: () => void;
 // };
@@ -38,230 +42,10 @@
 //   return undefined;
 // }
 
-// function calcDiscountedAmount(amount: number, percent?: number) {
-//   if (typeof percent !== "number" || percent <= 0) return amount;
-//   return Math.round(amount - (amount * percent) / 100);
-// }
-
-// // function CollectPaymentModal({ open, onClose, payment, onCollected }: CollectPaymentModalProps) {
-// //   const [collectType, setCollectType] = useState<"full" | "partial">("full");
-// //   const [partialValue, setPartialValue] = useState("");
-// //   const [loading, setLoading] = useState(false);
-
-// //   // Option to apply or not apply the discount
-// //   const [applyDiscount, setApplyDiscount] = useState(true);
-
-// //   const paymentAmountOriginal = payment ? toNumber(payment.paymentAmount) : undefined;
-// //   const discountPercent = (payment && typeof payment.discountPercent === "number") ? payment.discountPercent : 0;
-// //   const discountedAmount = paymentAmountOriginal !== undefined ? calcDiscountedAmount(paymentAmountOriginal, applyDiscount ? discountPercent : 0) : undefined;
-// //   const paymentAmount = discountedAmount;
-
-// //   const amountAlreadyPaid = (payment && toNumber(payment.amountPaid)) ?? 0;
-// //   const partialNumeric = parseFloat(partialValue);
-// //   const isPartialOverDue =
-// //     collectType === "partial" &&
-// //     typeof paymentAmount === "number" &&
-// //     !isNaN(partialNumeric) &&
-// //     partialNumeric + (typeof amountAlreadyPaid === "number" ? amountAlreadyPaid : 0) > paymentAmount;
-// //   const paymentDue =
-// //     typeof paymentAmount === "number" && typeof amountAlreadyPaid === "number"
-// //       ? paymentAmount - amountAlreadyPaid
-// //       : paymentAmount;
-
-// //   useEffect(() => {
-// //     if (open) {
-// //       setCollectType("full");
-// //       setPartialValue("");
-// //       setLoading(false);
-// //       setApplyDiscount(true); // reset to "apply" by default on open
-// //     }
-// //   }, [open, payment]);
-
-// //   const handleSubmit = async (e: React.FormEvent) => {
-// //     e.preventDefault();
-// //     if (!payment || loading || isPartialOverDue) return;
-// //     if (collectType === "partial" && (isNaN(partialNumeric) || partialNumeric <= 0)) {
-// //       alert("Please enter a valid partial amount."); return;
-// //     }
-// //     let endpoint = import.meta.env.VITE_API_URL || (window as any).VITE_API_URL;
-// //     if (endpoint) endpoint = endpoint.replace(/\/$/, "");
-// //     setLoading(true);
-// //     try {
-// //       const body: Record<string, any> = {
-// //         paymentType: collectType,
-// //         applyDiscount,
-// //       };
-// //       // ADD: discountApplied field if discount applied
-// //       if (typeof discountPercent === "number" && discountPercent > 0 && applyDiscount) {
-// //         body.discountApplied = true;
-// //       } else {
-// //         body.discountApplied = false;
-// //       }
-// //       if (collectType === "partial") body.partialAmount = partialNumeric;
-// //       const res = await fetch(`${endpoint}/api/admin/bookings/${payment._id}/collect-payment`, {
-// //         method: "POST",
-// //         headers: {
-// //           "Content-Type": "application/json",
-// //           Authorization: `${localStorage.getItem("admin-token") || ""}`,
-// //         },
-// //         body: JSON.stringify(body),
-// //       });
-// //       const data = await res.json();
-// //       if (!res.ok) throw new Error(data?.error || data?.message || "Failed to collect payment.");
-// //       onCollected();
-// //       onClose();
-// //     } catch (err: any) {
-// //       alert(err.message || "Failed to collect payment.");
-// //     } finally {
-// //       setLoading(false);
-// //     }
-// //   };
-
-// //   if (!open || !payment) return null;
-// //   return (
-// //     <AnimatePresence>
-// //       <motion.div
-// //         key="collect-modal"
-// //         className="fixed inset-0 z-50 flex items-center justify-center bg-black/30"
-// //         initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-// //         style={{ backdropFilter: "blur(2px)" }}
-// //         onClick={onClose}
-// //       >
-// //         <motion.div
-// //           initial={{ scale: 0.96, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
-// //           transition={{ type: "spring", stiffness: 280, damping: 30 }}
-// //           className="bg-white rounded-lg shadow-lg max-w-sm w-full border border-slate-200 relative"
-// //           onClick={(e) => e.stopPropagation()}
-// //         >
-// //           <button className="absolute top-3 right-3 text-slate-400 hover:text-slate-700" onClick={onClose} tabIndex={-1} type="button">
-// //             <FiX size={20} />
-// //           </button>
-// //           <div className="p-6 pb-2">
-// //             <div className="font-semibold text-lg text-slate-800 mb-2">Collect Payment</div>
-// //             <div className="text-sm mb-3">
-// //               <span className="font-medium text-blue-700">Appt#: {payment.appointmentId}</span><br />
-// //               <span className="text-slate-800">{payment.patientName}</span>{" "}
-// //               <span className="text-xs text-blue-300 font-mono">({payment.patientId})</span><br />
-// //               {/* Show original payment amount if a discount is available */}
-// //               {typeof discountPercent === "number" && discountPercent > 0 && (
-// //                 <span className="text-xs text-slate-400 block">
-// //                   Original Invoice Amount:{" "}
-// //                   <span className="font-semibold text-slate-600">
-// //                     ₹
-// //                     {typeof paymentAmountOriginal === "number"
-// //                       ? paymentAmountOriginal
-// //                       : String(payment.paymentAmount ?? "—")}
-// //                   </span>
-// //                 </span>
-// //               )}
-
-// //               {/* Show Discount options if discount is present */}
-// //               {typeof discountPercent === "number" && discountPercent > 0 && (
-// //                 <div>
-// //                   <div className="mb-1 text-xs">
-// //                     <label className="font-semibold text-green-700 flex items-center gap-2 cursor-pointer">
-// //                       <input
-// //                         type="checkbox"
-// //                         className="mr-1 accent-green-600"
-// //                         checked={applyDiscount}
-// //                         onChange={e => setApplyDiscount(!!e.target.checked)}
-// //                         disabled={loading}
-// //                       />
-// //                       Apply Discount ({discountPercent}%)
-// //                     </label>
-// //                   </div>
-// //                 </div>
-// //               )}
-// //               <span className="text-xs text-slate-500 block">
-// //                 Invoice Amount:{" "}
-// //                 <span className="font-semibold text-slate-700">
-// //                   ₹
-// //                   {paymentAmount !== undefined
-// //                     ? paymentAmount
-// //                     : String(payment.paymentAmount ?? "—")}
-// //                 </span>
-// //                 {typeof discountPercent === "number" &&
-// //                   discountPercent > 0 &&
-// //                   applyDiscount && (
-// //                     <span className="ml-1 text-green-800 font-semibold bg-green-100 px-1 rounded">
-// //                       (after discount)
-// //                     </span>
-// //                   )}
-// //               </span>
-// //               {payment.amountPaid && (
-// //                 <span className="text-xs text-slate-400 block">
-// //                   Already paid: ₹{String(payment.amountPaid)}
-// //                 </span>
-// //               )}
-// //               <span className="text-xs text-rose-600 block">
-// //                 Due Amount:{" "}
-// //                 <span className="font-semibold">
-// //                   ₹{typeof paymentDue === "number" ? paymentDue : "—"}
-// //                 </span>
-// //               </span>
-// //               {/* Show discount percent if present and option to apply is unchecked */}
-// //               {typeof discountPercent === "number" && discountPercent > 0 && applyDiscount && (
-// //                 <div className="text-xs mt-1 text-green-700 font-medium">
-// //                   Discount Applied: {discountPercent}%
-// //                 </div>
-// //               )}
-// //             </div>
-// //             <form onSubmit={handleSubmit}>
-// //               <div className="mb-4 mt-1">
-// //                 <label className="block font-medium text-slate-700 mb-1">Collection Type</label>
-// //                 <div className="flex gap-4 items-center">
-// //                   <label className="flex items-center gap-1 cursor-pointer">
-// //                     <input type="radio" name="collectType" value="full" checked={collectType === "full"} onChange={() => setCollectType("full")} disabled={loading} />
-// //                     <span className="text-sm">Full Amount</span>
-// //                   </label>
-// //                   <label className="flex items-center gap-1 cursor-pointer">
-// //                     <input type="radio" name="collectType" value="partial" checked={collectType === "partial"} onChange={() => setCollectType("partial")} disabled={loading} />
-// //                     <span className="text-sm">Partial Amount</span>
-// //                   </label>
-// //                 </div>
-// //               </div>
-// //               {collectType === "partial" && (
-// //                 <div className="mb-2">
-// //                   <label className="block mb-1 text-slate-700 text-xs">Enter Partial Amount <span className="text-red-500">*</span></label>
-// //                   <input
-// //                     type="number" min={1} step={1} value={partialValue}
-// //                     onChange={(e) => setPartialValue(e.target.value)}
-// //                     className="w-full px-2 py-1 rounded border border-slate-300 text-slate-800 focus:ring focus:ring-green-200 text-sm"
-// //                     placeholder="E.g. 800" required disabled={loading} max={paymentDue ?? undefined}
-// //                   />
-// //                   {isPartialOverDue && (
-// //                     <div className="text-xs text-red-500 mt-1">
-// //                       Partial amount plus already paid cannot exceed the invoice total ({paymentAmount}).
-// //                     </div>
-// //                   )}
-// //                 </div>
-// //               )}
-// //               <button
-// //                 type="submit"
-// //                 className={`mt-3 w-full rounded-md border border-green-500 px-4 py-2 text-sm font-semibold text-green-700 ${
-// //                   loading || isPartialOverDue ? "bg-green-50 opacity-80 cursor-not-allowed" : "hover:bg-green-50"
-// //                 }`}
-// //                 disabled={loading || isPartialOverDue}
-// //               >
-// //                 {loading ? "Processing…" : collectType === "full" ? "Collect Full Amount" : "Collect Partial Amount"}
-// //               </button>
-// //               <div className="mt-1 text-xs text-slate-400 text-center">
-// //                 {collectType === "partial"
-// //                   ? "Collects a partial payment; the remaining will appear as pending."
-// //                   : "Marks the invoice as fully paid."}
-// //               </div>
-// //             </form>
-// //           </div>
-// //         </motion.div>
-// //       </motion.div>
-// //     </AnimatePresence>
-// //   );
-// // }
-
-// // ─── CheckInConfirmationModal ─────────────────────────────────────────────────
-
-
-// // ─── CollectPaymentModal ──────────────────────────────────────────────────────
+// // NOTE: Under the running-invoice model, `invoiceAmount` from the backend
+// // already reflects (costPerSession * (1 - discount%)) * checkedInSessions.
+// // We do NOT re-apply a discount % on top of it here — that would double count
+// // the discount. Discount % is shown purely as an informational label.
 
 // type PaymentMethod = "cash" | "online" | "";
 
@@ -269,36 +53,30 @@
 //   const [collectType, setCollectType] = useState<"full" | "partial">("full");
 //   const [partialValue, setPartialValue] = useState("");
 //   const [loading, setLoading] = useState(false);
-//   const [applyDiscount, setApplyDiscount] = useState(true);
 //   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("");
 //   const [utr, setUtr] = useState("");
 
-//   // Payment time state
 //   const [paymentTime, setPaymentTime] = useState(() => {
-//     // Default value: now, formatted as yyyy-MM-ddTHH:mm for input
 //     const now = new Date();
 //     return now.toISOString().slice(0, 16);
 //   });
 
-//   const paymentAmountOriginal = payment ? toNumber(payment.paymentAmount) : undefined;
-//   const discountPercent = (payment && typeof payment.discountPercent === "number") ? payment.discountPercent : 0;
-//   const discountedAmount = paymentAmountOriginal !== undefined
-//     ? calcDiscountedAmount(paymentAmountOriginal, applyDiscount ? discountPercent : 0)
-//     : undefined;
-//   const paymentAmount = discountedAmount;
+//   const invoiceAmount = payment ? toNumber(payment.invoiceAmount) ?? 0 : 0;
 //   const amountAlreadyPaid = (payment && toNumber(payment.amountPaid)) ?? 0;
-//   const partialNumeric = parseFloat(partialValue);
-//   const paymentDue =
-//     typeof paymentAmount === "number" && typeof amountAlreadyPaid === "number"
-//       ? paymentAmount - amountAlreadyPaid
-//       : paymentAmount;
+//   const dueNow = Math.max(0, invoiceAmount - amountAlreadyPaid);
+//   const walletBalance = (payment && toNumber(payment.walletBalance)) ?? 0;
+//   const discountPercent = (payment && typeof payment.discountPercent === "number") ? payment.discountPercent : 0;
+//   const checkedInCount = payment?.checkedInCount ?? 0;
+//   const totalSessions = payment?.totalSessions ?? 0;
 
-//   // Removed: isPartialOverDue and its usage
+//   const partialNumeric = parseFloat(partialValue);
+//   const overflowToWallet =
+//     collectType === "partial" && !isNaN(partialNumeric) && partialNumeric > dueNow
+//       ? partialNumeric - dueNow
+//       : 0;
 
 //   const needsUtr = paymentMethod === "online";
 //   const utrMissing = needsUtr && utr.trim() === "";
-
-//   // Validate paymentTime is present and non-empty
 //   const paymentTimeMissing = !paymentTime || paymentTime.trim() === "";
 
 //   const canSubmit = !loading && paymentMethod !== "" && !utrMissing && !paymentTimeMissing &&
@@ -309,10 +87,8 @@
 //       setCollectType("full");
 //       setPartialValue("");
 //       setLoading(false);
-//       setApplyDiscount(true);
 //       setPaymentMethod("");
 //       setUtr("");
-//       // On modal open, default paymentTime to now
 //       const now = new Date();
 //       setPaymentTime(now.toISOString().slice(0, 16));
 //     }
@@ -328,10 +104,9 @@
 //     try {
 //       const body: Record<string, any> = {
 //         paymentType: collectType,
-//         applyDiscount,
-//         discountApplied: typeof discountPercent === "number" && discountPercent > 0 && applyDiscount,
+//         discountApplied: discountPercent > 0,
 //         paymentMethod,
-//         paymentTime: paymentTime ? new Date(paymentTime).toISOString() : undefined, // Send as ISO string
+//         paymentTime: paymentTime ? new Date(paymentTime).toISOString() : undefined,
 //         ...(needsUtr && utr.trim() ? { utr: utr.trim() } : {}),
 //         ...(collectType === "partial" ? { partialAmount: partialNumeric } : {}),
 //       };
@@ -344,6 +119,7 @@
 //         body: JSON.stringify(body),
 //       });
 //       const data = await res.json();
+//       console.log(data);
 //       if (!res.ok) throw new Error(data?.error || data?.message || "Failed to collect payment.");
 //       onCollected();
 //       onClose();
@@ -376,58 +152,56 @@
 //           <div className="p-6 pb-4">
 //             <div className="font-semibold text-lg text-slate-800 mb-2">Collect Payment</div>
 
-//             {/* Booking info */}
 //             <div className="text-sm mb-3">
 //               <span className="font-medium text-blue-700">Appt#: {payment.appointmentId}</span><br />
 //               <span className="text-slate-800">{payment.patientName}</span>{" "}
-//               <span className="text-xs text-blue-300 font-mono">({payment.patientId})</span><br />
+//               <span className="text-xs text-blue-300 font-mono">({payment.patientId})</span>
+//             </div>
 
-//               {typeof discountPercent === "number" && discountPercent > 0 && (
-//                 <span className="text-xs text-slate-400 block">
-//                   Original Amount:{" "}
-//                   <span className="font-semibold text-slate-600">₹{paymentAmountOriginal ?? "—"}</span>
-//                 </span>
-//               )}
-//               {typeof discountPercent === "number" && discountPercent > 0 && (
-//                 <div className="mb-1 text-xs">
-//                   <label className="font-semibold text-green-700 flex items-center gap-2 cursor-pointer">
-//                     <input type="checkbox" className="mr-1 accent-green-600" checked={applyDiscount}
-//                       onChange={e => setApplyDiscount(!!e.target.checked)} disabled={loading} />
-//                     Apply Discount ({discountPercent}%)
-//                   </label>
+//             <div className="mb-3 rounded border border-sky-200 bg-sky-50 px-3 py-2 text-xs space-y-1">
+//               <div className="flex justify-between">
+//                 <span className="text-slate-600">Sessions checked in</span>
+//                 <span className="font-semibold text-slate-800">{checkedInCount} / {totalSessions || "—"}</span>
+//               </div>
+//               {discountPercent > 0 && (
+//                 <div className="flex justify-between">
+//                   <span className="text-slate-600">Discount</span>
+//                   <span className="font-semibold text-green-700">{discountPercent}% (already included below)</span>
 //                 </div>
 //               )}
-//               <span className="text-xs text-slate-500 block">
-//                 Invoice Amount:{" "}
-//                 <span className="font-semibold text-slate-700">
-//                   ₹{paymentAmount ?? String(payment.paymentAmount ?? "—")}
+//               <div className="flex justify-between">
+//                 <span className="text-slate-600">Current invoice amount</span>
+//                 <span className="font-semibold text-slate-800">₹{invoiceAmount}</span>
+//               </div>
+//               <div className="flex justify-between">
+//                 <span className="text-slate-600">Already paid</span>
+//                 <span className="font-semibold text-slate-800">₹{amountAlreadyPaid}</span>
+//               </div>
+//               <div className="flex justify-between border-t border-sky-200 pt-1 mt-1">
+//                 <span className="text-rose-700 font-medium">Due now</span>
+//                 <span className="font-bold text-rose-700">₹{dueNow}</span>
+//               </div>
+//               <div className="flex justify-between border-t border-sky-200 pt-1 mt-1">
+//                 <span className="text-emerald-700 font-medium flex items-center gap-1">
+//                   <FiPocket size={12} /> Wallet balance
 //                 </span>
-//                 {discountPercent > 0 && applyDiscount && (
-//                   <span className="ml-1 text-green-800 font-semibold bg-green-100 px-1 rounded">(after discount)</span>
-//                 )}
-//               </span>
-//               {payment.amountPaid && (
-//                 <span className="text-xs text-slate-400 block">Already paid: ₹{String(payment.amountPaid)}</span>
-//               )}
-//               <span className="text-xs text-rose-600 block">
-//                 Due: <span className="font-semibold">₹{typeof paymentDue === "number" ? paymentDue : "—"}</span>
-//               </span>
+//                 <span className="font-bold text-emerald-700">₹{walletBalance}</span>
+//               </div>
 //             </div>
 
 //             <form onSubmit={handleSubmit}>
-//               {/* Collection Type */}
 //               <div className="mb-3">
 //                 <label className="block font-medium text-slate-700 mb-1 text-sm">Collection type</label>
 //                 <div className="flex gap-4 items-center">
 //                   <label className="flex items-center gap-1 cursor-pointer text-sm">
 //                     <input type="radio" name="collectType" value="full"
 //                       checked={collectType === "full"} onChange={() => setCollectType("full")} disabled={loading} />
-//                     Full amount
+//                     Full amount (pays off due now)
 //                   </label>
 //                   <label className="flex items-center gap-1 cursor-pointer text-sm">
 //                     <input type="radio" name="collectType" value="partial"
 //                       checked={collectType === "partial"} onChange={() => setCollectType("partial")} disabled={loading} />
-//                     Partial amount
+//                     Partial / custom amount
 //                   </label>
 //                 </div>
 //               </div>
@@ -435,20 +209,34 @@
 //               {collectType === "partial" && (
 //                 <div className="mb-3">
 //                   <label className="block mb-1 text-slate-700 text-xs font-medium">
-//                     Partial amount <span className="text-red-500">*</span>
+//                     Amount to collect <span className="text-red-500">*</span>
 //                   </label>
 //                   <input
 //                     type="number" min={1} step={1} value={partialValue}
 //                     onChange={(e) => setPartialValue(e.target.value)}
 //                     className="w-full px-2 py-1 rounded border border-slate-300 text-slate-800 focus:ring focus:ring-green-200 text-sm"
-//                     placeholder="e.g. 800" required disabled={loading} 
-//                     // max={paymentDue ?? undefined}
+//                     placeholder="e.g. 800" required disabled={loading}
 //                   />
-//                   {/* Cannot exceed due amount check removed */}
+//                   <div className="text-xs text-slate-400 mt-1">
+//                     Due now is ₹{dueNow}. Anything you enter beyond that is automatically
+//                     saved as a wallet advance for this patient.
+//                   </div>
+//                   {overflowToWallet > 0 && (
+//                     <div className="text-xs text-emerald-700 mt-1 font-medium">
+//                       ₹{overflowToWallet} of this will be credited to wallet as advance.
+//                     </div>
+//                   )}
 //                 </div>
 //               )}
 
-//               {/* Payment Time */}
+//               {collectType === "full" && (
+//                 <div className="mb-3 text-xs text-slate-500">
+//                   This collects exactly the ₹{dueNow} currently due. It does not touch
+//                   the rest of the package — future sessions will be billed as they're
+//                   checked in.
+//                 </div>
+//               )}
+
 //               <div className="mb-3">
 //                 <label className="block font-medium text-slate-700 mb-1 text-sm">
 //                   Payment date & time <span className="text-red-500">*</span>
@@ -469,7 +257,6 @@
 //                 )}
 //               </div>
 
-//               {/* ── Payment Method ── */}
 //               <div className="mb-3">
 //                 <label className="block font-medium text-slate-700 mb-1 text-sm">
 //                   Payment method <span className="text-red-500">*</span>
@@ -495,7 +282,6 @@
 //                 </div>
 //               </div>
 
-//               {/* ── UTR (shown only for online) ── */}
 //               {needsUtr && (
 //                 <div className="mb-3 bg-slate-50 border border-slate-200 rounded px-3 py-2">
 //                   <label className="block text-xs font-medium text-slate-700 mb-1">
@@ -527,15 +313,15 @@
 //                 {loading
 //                   ? "Processing…"
 //                   : collectType === "full"
-//                     ? "Collect full amount"
-//                     : "Collect partial amount"}
+//                     ? `Collect ₹${dueNow} (due now)`
+//                     : "Collect amount"}
 //               </button>
 //               <div className="mt-1 text-xs text-slate-400 text-center">
 //                 {!paymentMethod
 //                   ? "Select a payment method to continue."
 //                   : collectType === "partial"
-//                     ? "Remaining balance will stay pending."
-//                     : "Marks the invoice as fully paid."}
+//                     ? "Amount beyond what's due goes to wallet."
+//                     : "Marks the current invoice as fully paid."}
 //               </div>
 //             </form>
 //           </div>
@@ -570,8 +356,6 @@
 //   );
 // }
 
-// // ─── MarkMissedConfirmationModal ─────────────────────────────────────────────────
-
 // function MarkMissedConfirmationModal({ open, onClose, onConfirm, session, booking }: any) {
 //   if (!open) return null;
 //   return (
@@ -597,8 +381,6 @@
 //   );
 // }
 
-// // ─── BookingSummary ───────────────────────────────────────────────────────────
-
 // type BookingSummaryProps = {
 //   bookings: Booking[];
 //   setBookings: (b: Booking[]) => void;
@@ -611,48 +393,13 @@
 //   paymentLoadingBookingId: string | null;
 // };
 
-// // --- Utility for session time: "YYYY-MM-DD" + slotId to Date ---
-// // function getSessionDateTime(session: any) {
-// //   if (!session || !session.date) return null;
-// //   let slotObj = undefined;
-// //   if (session.slotId) {
-// //     slotObj = SESSION_TIME_OPTIONS.find(opt => opt.id === session.slotId);
-// //   }
-// //   let time = "09:00";
-// //   if (slotObj && slotObj.label) {
-// //     if (slotObj.label) {
-// //       const match = slotObj.label.match(/(\d{1,2}:\d{2})\s*-/);
-// //       if (match) {
-// //         time = match[1];
-// //       } else {
-// //         const h = slotObj.label.match(/(\d{1,2})\s*-/)?.[1];
-// //         if (h) time = `${h.padStart(2, "0")}:00`;
-// //       }
-// //     }
-// //   } else if (typeof session.slotId === "string" && /\d{1,2}-\d{1,2}/.test(session.slotId)) {
-// //     const hours = session.slotId.split("-")[0]?.padStart(2, "0");
-// //     time = hours ? `${hours}:00` : "09:00";
-// //   }
-// //   let dtString = `${session.date}T${time}`;
-// //   let dt = new Date(dtString);
-// //   if (isNaN(dt.getTime())) {
-// //     dt = new Date(session.date);
-// //   }
-// //   return dt;
-// // }
-
-// // SESSION STATUS MAPPING: 
-// // Status enum: ['CheckedIn', 'NotCheckedIn', 'Missed']
-// // Map "CheckedIn" => Checked In (green), "Missed" => Missed (gray), "NotCheckedIn" (or undefined) => Not Checked In (red)
 // function sessionStatusLabel(session: any) {
-//   // Check for explicit session.status
 //   if (session.status === "CheckedIn") {
 //     return { label: "Checked In", color: "green-700" };
 //   }
 //   if (session.status === "Missed") {
 //     return { label: "Missed", color: "gray-500" };
 //   }
-//   // Fallback/default: Not Checked In
 //   return { label: "Not Checked In", color: "red-600" };
 // }
 
@@ -671,7 +418,6 @@
 //   const [filterStatus, setFilterStatus] = useState("");
 //   const [therapistList, setTherapistList] = useState<Therapist[]>([]);
 
-//   // ----------- SESSION THERAPISTS FOR DROPDOWN -----------
 //   const sessionTherapistOptions = useMemo(() => {
 //     const therapistMap: Map<string, Therapist> = new Map();
 //     bookings.forEach((booking: any) => {
@@ -693,20 +439,16 @@
 //       return 0;
 //     });
 //   }, [bookings]);
-//   // -------------------------------------------------------
 
-//   // Collect Payment Modal
 //   const [collectModalOpen, setCollectModalOpen] = useState(false);
 //   const [collectModalPayment, setCollectModalPayment] = useState<any>(null);
 
-//   // Check-In Modal
 //   const [checkInModalOpen, setCheckInModalOpen] = useState(false);
 //   const [checkInSession, setCheckInSession] = useState<any>(null);
 //   const [checkInBooking, setCheckInBooking] = useState<any>(null);
 //   const [checkInLoading, setCheckInLoading] = useState(false);
 //   const [checkInError, setCheckInError] = useState<string | null>(null);
 
-//   // Missed Modal
 //   const [missedModalOpen, setMissedModalOpen] = useState(false);
 //   const [missedSession, setMissedSession] = useState<any>(null);
 //   const [missedBooking, setMissedBooking] = useState<any>(null);
@@ -806,7 +548,6 @@
 //       .then(async (res) => {
 //         if (!res.ok) throw new Error("Could not fetch bookings.");
 //         const data = await res.json();
-//         console.log(data?.bookings);
 //         setBookings(data?.bookings || []);
 //         setLocalBookingsLoading(false);
 //         setBookingsLoading(false);
@@ -825,17 +566,24 @@
 //     if (booking.discountInfo && booking.discountInfo.coupon && booking.discountInfo.coupon.discountEnabled) {
 //       discountPercent = Number(booking.discountInfo.coupon.discount) || 0;
 //     }
+//     const checkedInCount = Array.isArray(booking.sessions)
+//       ? booking.sessions.filter((s: any) => s.status === "CheckedIn").length
+//       : 0;
+//     const totalSessions = Array.isArray(booking.sessions) ? booking.sessions.length : 0;
+
 //     setCollectModalOpen(true);
 //     setCollectModalPayment({
 //       _id: booking._id,
 //       appointmentId: booking.appointmentId,
 //       patientName: booking.patient?.name || "",
 //       patientId: booking.patient?._id || "",
-//       paymentAmount: booking.payment?.amount || booking.paymentAmount,
-//       amountPaid: booking.payment?.amountPaid || booking.amountPaid,
+//       invoiceAmount: booking.invoiceAmount ?? 0,
+//       amountPaid: booking.payment?.amountPaid ?? 0,
 //       paymentRecordId: booking.payment?._id,
 //       discountPercent,
-//       allowDiscountOption: discountPercent > 0,
+//       checkedInCount,
+//       totalSessions,
+//       walletBalance: booking.wallet?.balance ?? 0,
 //     });
 //   };
 
@@ -876,7 +624,6 @@
 //     }
 //   };
 
-//   // Missed modal logic
 //   const openMissedModal = (booking: any, session: any) => {
 //     setMissedBooking(booking);
 //     setMissedSession(session);
@@ -894,7 +641,6 @@
 //     let endpoint = import.meta.env.VITE_API_URL || (window as any).VITE_API_URL;
 //     if (endpoint) endpoint = endpoint.replace(/\/$/, "");
 //     try {
-//       // API: POST /api/admin/bookings/mark-missed
 //       const res = await fetch(`${endpoint}/api/admin/bookings/mark-session-missed`, {
 //         method: "POST",
 //         headers: {
@@ -927,7 +673,6 @@
 //     setPage(1);
 //   };
 
-//   // Helper: Get session status label for UI
 //   function getSessionStatusUI(session: any) {
 //     const status = sessionStatusLabel(session);
 //     return <span className={`text-${status.color} font-semibold`}>{status.label}</span>;
@@ -964,7 +709,6 @@
 //           </div>
 //         </div>
 
-//         {/* Search/Filter Bar */}
 //         <form onSubmit={onSearchFormSubmit} className="flex flex-wrap items-center gap-3 mb-4">
 //           <div className="relative w-1/2">
 //             <input
@@ -1027,7 +771,6 @@
 //           </button>
 //         </form>
 
-//         {/* Pagination */}
 //         <div className="flex flex-wrap items-center justify-between py-2">
 //           <span className="text-xs text-slate-500">Total: <b>{filteredTotal}</b></span>
 //           <div className="flex items-center gap-2">
@@ -1045,7 +788,6 @@
 //           </div>
 //         </div>
 
-//         {/* Booking list */}
 //         {bookingsLoading ? (
 //           <div className="text-center py-12 text-slate-400 text-base">Loading bookings…</div>
 //         ) : bookingsError ? (
@@ -1059,10 +801,16 @@
 //               const paymentStatus = booking.payment?.status;
 //               const isPaid = paymentStatus === "paid";
 //               const isPartiallyPaid = paymentStatus === "partiallypaid";
-//               // const paymentAmount = booking.payment?.amount;
-//               const paymentAmount = booking.invoiceAmount;
 
-//               const paidAmount = booking.payment?.amountPaid;
+//               const invoiceAmount = booking.invoiceAmount ?? 0;
+//               const paidAmount = booking.payment?.amountPaid ?? 0;
+//               const dueNow = Math.max(0, invoiceAmount - paidAmount);
+//               const walletBalance = booking.wallet?.balance ?? 0;
+
+//               const checkedInCount = Array.isArray(booking.sessions)
+//                 ? booking.sessions.filter((s: any) => s.status === "CheckedIn").length
+//                 : 0;
+//               const totalSessions = Array.isArray(booking.sessions) ? booking.sessions.length : 0;
 
 //               let discountPercent = 0;
 //               if (booking.discountInfo && booking.discountInfo.coupon && booking.discountInfo.coupon.discountEnabled) {
@@ -1075,8 +823,13 @@
 //                   className={`border p-3 rounded bg-sky-50 relative ${editBookingId === booking._id ? "ring ring-blue-400 ring-offset-2" : ""}`}
 //                 >
 //                   {booking.appointmentId && (
-//                     <div className="mb-1 flex items-center gap-2 text-xs font-mono text-gray-700">
-//                       <FiHash className="text-blue-500" /> Booking ID: {booking.appointmentId}
+//                     <div className="mb-1 flex items-center justify-between gap-2">
+//                       <div className="flex items-center gap-2 text-xs font-mono text-gray-700">
+//                         <FiHash className="text-blue-500" /> Booking ID: {booking.appointmentId}
+//                       </div>
+//                       <div className="flex items-center gap-1 text-xs bg-emerald-100 border border-emerald-300 text-emerald-800 font-semibold px-2 py-0.5 rounded-full">
+//                         <FiPocket size={12} /> Wallet: ₹{walletBalance}
+//                       </div>
 //                     </div>
 //                   )}
 //                   {therapistObj && (
@@ -1113,90 +866,67 @@
 //                     </div>
 //                   )}
 
-//                   <div className="mb-2 px-2 py-2 rounded bg-sky-100 border border-sky-200">
-//                     <div className="mb-1 flex items-center gap-2 text-xs font-semibold text-blue-900">
-//                       <span>Original Invoice Amount: <span className="font-mono">₹{paymentAmount ?? 0}</span></span>
+//                   <div className="mb-2 px-2 py-2 rounded bg-sky-100 border border-sky-200 text-xs space-y-1">
+//                     <div className="flex items-center justify-between font-semibold text-blue-900">
+//                       <span>Sessions checked in</span>
+//                       <span className="font-mono">{checkedInCount} / {totalSessions}</span>
 //                     </div>
-//                     {/* Discount section */}
 //                     {discountPercent > 0 && (
-//                       <div className="mb-1 flex flex-col gap-1 text-xs font-semibold text-green-700">
-//                         <div className="flex items-center gap-2">
-//                           <span>Discount Applied ({discountPercent}%)</span>
+//                       <div className="flex items-center justify-between text-green-700 font-semibold">
+//                         <span>
+//                           Discount ({discountPercent}%)
 //                           {booking.discountInfo?.coupon?.couponCode && (
 //                             <span className="ml-2 bg-green-100 px-2 py-0.5 rounded text-green-800 font-mono">
 //                               Code: {booking.discountInfo.coupon.couponCode}
 //                             </span>
 //                           )}
-//                         </div>
-//                         <div className="flex items-center gap-2 text-green-800">
-//                           Invoice Amount: 
-//                           <span className="font-mono">
-//                             ₹
-//                             {typeof paymentAmount === "number"
-//                               ? calcDiscountedAmount(paymentAmount, discountPercent)
-//                               : typeof paymentAmount === "number"
-//                                 ? calcDiscountedAmount(paymentAmount, discountPercent)
-//                                 : 0}
-//                             (after discount)
-//                           </span>
-//                         </div>
+//                         </span>
+//                         <span className="text-green-800">already included below</span>
 //                       </div>
 //                     )}
-//                     {/* If no discount, show discounted value equals original */}
-//                     {discountPercent <= 0 && (
-//                       <div className="mb-1 flex items-center gap-2 text-xs text-slate-700">
-//                         <span className="text-slate-700">No Discount Applied</span>
-//                         <span className="font-mono">Invoice Amount: ₹{paymentAmount ?? paymentAmount ?? 0}</span>
-//                       </div>
-//                     )}
-//                     <div className="flex items-center gap-2 text-xs text-blue-800 font-semibold mt-1">
-//                       Due Amount: 
-//                       <span className="font-mono">
-//                         ₹
-//                         {(() => {
-//                           const baseAmt = typeof paymentAmount === "number"
-//                             ? (discountPercent > 0
-//                               ? calcDiscountedAmount(paymentAmount, discountPercent)
-//                               : paymentAmount)
-//                             : typeof paymentAmount === "number"
-//                               ? (discountPercent > 0
-//                                 ? calcDiscountedAmount(paymentAmount, discountPercent)
-//                                 : paymentAmount)
-//                               : 0;
-//                           return typeof paidAmount === "number"
-//                             ? Math.max(0, baseAmt - paidAmount)
-//                             : baseAmt;
-//                         })()}
-//                       </span>
+//                     <div className="flex items-center justify-between text-blue-900 font-semibold">
+//                       <span>Current invoice amount</span>
+//                       <span className="font-mono">₹{invoiceAmount}</span>
+//                     </div>
+//                     <div className="flex items-center justify-between text-slate-700">
+//                       <span>Paid so far</span>
+//                       <span className="font-mono">₹{paidAmount}</span>
+//                     </div>
+//                     <div className="flex items-center justify-between text-rose-700 font-semibold border-t border-sky-200 pt-1 mt-1">
+//                       <span>Due now</span>
+//                       <span className="font-mono">₹{dueNow}</span>
 //                     </div>
 //                   </div>
 
 //                   <div className="mb-2 flex items-center gap-2">
 //                     <FiCreditCard className="text-green-600" />
 //                     {isPaid ? (
-//                       <span className="text-green-700 font-semibold">Payment Collected</span>
+//                       <span className="text-green-700 font-semibold">Paid up to current invoice</span>
 //                     ) : isPartiallyPaid ? (
-//                       <span className="text-amber-700 font-semibold">
-//                         Partially Paid
-//                         {typeof paymentAmount !== "undefined" && typeof paidAmount !== "undefined"
-//                           ? ` (Amount: ₹${paymentAmount} | Paid: ₹${paidAmount})`
-//                           : ""}
-//                       </span>
+//                       <span className="text-amber-700 font-semibold">Partially Paid</span>
 //                     ) : (
 //                       <span className="text-orange-600 font-semibold">Payment Pending</span>
 //                     )}
-//                     {!isPaid && (
+//                     {dueNow > 0 && (
 //                       <button
 //                         className="ml-3 flex items-center gap-1 text-xs border px-2 py-1 rounded border-green-400 text-green-800 bg-green-100 hover:bg-green-200 font-medium transition"
 //                         onClick={() => handleModalCollectPayment(booking)}
-//                         title="Mark payment as collected"
+//                         title="Collect payment"
 //                       >
 //                         <FiCreditCard /> Collect Payment
 //                       </button>
 //                     )}
+//                     {dueNow <= 0 && (
+//                       <button
+//                         className="ml-3 flex items-center gap-1 text-xs border px-2 py-1 rounded border-emerald-400 text-emerald-800 bg-emerald-50 hover:bg-emerald-100 font-medium transition"
+//                         onClick={() => handleModalCollectPayment(booking)}
+//                         title="Collect an advance payment for future sessions"
+//                       >
+//                         <FiPocket /> Collect Advance
+//                       </button>
+//                     )}
 //                   </div>
 
-//                   {/* Sessions */}
 //                   {Array.isArray(booking.sessions) && booking.sessions.length > 0 && (
 //                     <details className="mb-2 text-xs text-slate-700">
 //                       <summary className="font-medium cursor-pointer select-none flex items-center">
@@ -1227,7 +957,6 @@
 //                                   ? s.therapyTypeId
 //                                   : typeof s.therapyType === "string" ? s.therapyType : undefined;
 
-//                               // -- Statuses as per session.status --
 //                               const status = sessionStatusLabel(s);
 //                               const isCheckedIn = status.label === "Checked In";
 //                               const isMissed = status.label === "Missed";
@@ -1252,7 +981,6 @@
 //                                     {getSessionStatusUI(s)}
 //                                   </td>
 //                                   <td className="px-2 py-1 border border-slate-200 whitespace-nowrap text-right flex gap-2">
-//                                     {/* Actions: Mark as CheckedIn or Mark as Missed (if neither) */}
 //                                     {!isCheckedIn && !isMissed && (
 //                                       <>
 //                                         <button
@@ -1306,12 +1034,11 @@
 //   );
 // }
 
-
 import { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   FiUser, FiTag, FiPackage, FiChevronDown, FiHash,
-  FiEdit2, FiX, FiCreditCard, FiCheckCircle, FiSearch,
+  FiEdit2, FiX, FiCreditCard, FiCheckCircle, FiSearch, FiCopy,
 } from "react-icons/fi";
 import { FiDollarSign, FiSmartphone, FiPocket } from "react-icons/fi";
 import {
@@ -1696,6 +1423,9 @@ type BookingSummaryProps = {
   getTherapistObject: (booking: Booking) => Therapist | undefined;
   editBookingId: string | null;
   handleEditBooking: (id: string) => void;
+  /** Stores this booking in memory so the "Paste" button in the Booking Form
+   *  can create a new booking for another month with the same details. */
+  handleCopyBooking: (booking: Booking) => void;
   handleCollectPayment: (booking: Booking) => void;
   paymentLoadingBookingId: string | null;
 };
@@ -1713,7 +1443,7 @@ function sessionStatusLabel(session: any) {
 export function BookingSummary({
   bookings, setBookings, setBookingsLoading, setBookingsError,
   getTherapistObject, editBookingId,
-  handleEditBooking,
+  handleEditBooking, handleCopyBooking,
 }: BookingSummaryProps) {
   const [bookingsLoading, setLocalBookingsLoading] = useState(false);
   const [bookingsError, setLocalBookingsError] = useState<string | null>(null);
@@ -2323,6 +2053,13 @@ export function BookingSummary({
                       disabled={!!editBookingId && editBookingId !== booking._id}
                     >
                       <FiEdit2 /> Edit
+                    </button>
+                    <button
+                      className="text-xs rounded px-2 py-1 border border-purple-400 text-purple-700 hover:bg-purple-50 flex items-center gap-1"
+                      onClick={() => handleCopyBooking(booking)}
+                      title="Copy this booking's details so you can paste them into a new booking for another month"
+                    >
+                      <FiCopy /> Copy
                     </button>
                   </div>
 
