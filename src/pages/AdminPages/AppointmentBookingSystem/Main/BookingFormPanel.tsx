@@ -3726,9 +3726,18 @@ function SessionDatesTimesTable({
               const needsDateFix = !!(s.sessionId && dateFixSessionIds?.has(s.sessionId));
  
               return (
-                <tr key={(s.sessionId || s.date) + ":" + idx} className={`text-sm ${isQuickFillConflict || needsDateFix ? "bg-red-50" : ""}`}>
+                <tr
+                  key={(s.sessionId || s.date) + ":" + idx}
+                  className={`text-sm transition-colors ${
+                    isQuickFillConflict || needsDateFix
+                      ? "bg-red-50 hover:bg-red-100"
+                      : idx % 2 === 1
+                      ? "bg-slate-100 hover:bg-blue-100"
+                      : "bg-white hover:bg-blue-100"
+                  }`}
+                >
                   {/* Date */}
-                  <td className="px-2 py-1 border border-slate-200 font-mono align-top">
+                  <td className="px-2 py-1 border border-slate-200 font-mono ">
                     {needsDateFix ? (
                       <>
                         <input
@@ -3738,7 +3747,7 @@ function SessionDatesTimesTable({
                           className="border rounded px-2 py-1 border-red-400"
                         />
                         {s.date && (
-                          <div className="text-[12px] text-slate-900 font-mono  mt-0.5">
+                          <div className=" text-slate-500 font-mono  mt-0.5">
                             {getWeekdayName(s.date)}
                           </div>
                         )}
@@ -3760,7 +3769,7 @@ function SessionDatesTimesTable({
                   </td>
  
                   {/* Time Slot */}
-                  <td className="px-2 py-1 border border-slate-200 whitespace-nowrap align-top">
+                  <td className="px-2 py-1 border border-slate-200 whitespace-nowrap ">
                     <select
                       value={s.slotId}
                       onChange={e => updateSlotId(s.date, e.target.value, idx)}
@@ -3818,7 +3827,7 @@ function SessionDatesTimesTable({
                   </td>
  
                   {/* Therapist */}
-                  <td className="px-2 py-1 border border-slate-200 whitespace-nowrap align-top">
+                  <td className="px-2 py-1 border border-slate-200 whitespace-nowrap ">
                     {(() => {
                       // When a slot is selected for this row, compute which therapists
                       // already have that slot booked on this date (mirrors slot-side logic).
@@ -3895,7 +3904,7 @@ function SessionDatesTimesTable({
                   </td>
  
                   {/* Therapy Type */}
-                  <td className="px-2 py-1 border border-slate-200 whitespace-nowrap align-top">
+                  <td className="px-2 py-1 border border-slate-200 whitespace-nowrap ">
                     <select
                       value={therapyTypeIdVal}
                       onChange={e => updateSessionTherapyType(idx, e.target.value)}
@@ -3910,7 +3919,7 @@ function SessionDatesTimesTable({
                   </td>
  
                   {/* Remove */}
-                  <td className="px-2 py-1 border border-slate-200 whitespace-nowrap text-center align-top">
+                  <td className="px-2 py-1 border border-slate-200 whitespace-nowrap text-center ">
                     <button
                       type="button"
                       title="Remove this session"
