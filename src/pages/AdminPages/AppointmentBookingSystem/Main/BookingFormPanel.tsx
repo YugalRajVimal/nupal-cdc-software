@@ -2882,7 +2882,7 @@ export type BookingFormPanelProps = {
  
 export function BookingFormPanel({
   editBookingId, handleReset, handleCancelEdit, handleBookOrUpdate,
-  canBook, bookingLoading, bookingError, bookingSuccess,
+   bookingLoading, bookingError, bookingSuccess,
   therapistId, setTherapistId, therapists,
   patientId, setPatientId, patients,
   therapyId, setTherapyId, therapies,
