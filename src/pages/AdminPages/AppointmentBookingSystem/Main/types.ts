@@ -527,6 +527,16 @@ export function formatDateDDMMYYYY(dateStr: string): string {
   const year = d.getFullYear();
   return `${day}/${month}/${year}`;
 }
+const WEEKDAY_NAMES = ["SUN", "MON", "TUES", "WED", "THUR", "FRI", "SAT"];
+/** Returns the weekday name (e.g. "Monday") for a "YYYY-MM-DD" date string, or "" if invalid/empty. */
+export function getWeekdayName(dateStr: string): string {
+  if (!dateStr) return '';
+  const [y, m, d] = dateStr.split('-').map(Number);
+  if (!y || !m || !d) return '';
+  const date = new Date(y, m - 1, d);
+  if (isNaN(date.getTime())) return '';
+  return WEEKDAY_NAMES[date.getDay()];
+}
 export function getTotalSessionsForPackage(pkg: Package | null): number | undefined {
   if (!pkg) return undefined;
   return (

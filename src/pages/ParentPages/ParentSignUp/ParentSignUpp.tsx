@@ -8,6 +8,7 @@ import React, { useState, useEffect } from "react";
  * API endpoints:
  *  POST /api/parent/signup  {name, email, phone, password}
  *  POST /api/parent/verify-otp {email, otp}
+ *  POST /api/parent/signup/resend-otp {email}
  *  Success message on completion.
  */
 
@@ -66,6 +67,8 @@ function validateOtp(otp: string): string | null {
   return null;
 }
 
+const RESEND_OTP_COOLDOWN = 30; // seconds
+
 const ParentSignUp: React.FC = () => {
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [email, setEmail] = useState("");
@@ -74,9 +77,24 @@ const ParentSignUp: React.FC = () => {
   const [password, setPassword] = useState("");
   const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [redirectCountdown, setRedirectCountdown] = useState(2); // seconds
+
+  // For resend OTP cooldown
+  const [resendCooldown, setResendCooldown] = useState(0);
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    if (resendCooldown > 0) {
+      timer = setTimeout(() => {
+        setResendCooldown(prev => prev - 1);
+      }, 1000);
+    }
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [resendCooldown]);
 
   // On step 3, redirect to /parent after short delay, using window.location as fallback
   useEffect(() => {
@@ -145,6 +163,7 @@ const ParentSignUp: React.FC = () => {
       if (res.ok && data.success) {
         setInfo("OTP sent to your email address.");
         setStep(2);
+        setResendCooldown(RESEND_OTP_COOLDOWN); // Start cooldown on success
       } else {
         setFormError(data.message || "Failed to send OTP.");
       }
@@ -152,6 +171,40 @@ const ParentSignUp: React.FC = () => {
       setFormError("Server error. Please try again later.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Handle resend OTP
+  const handleResendOTP = async () => {
+    setFormError(null);
+    setInfo(null);
+
+    const trimmedEmail = email.trim().toLowerCase();
+    const emailError = validateEmail(trimmedEmail);
+    if (emailError) {
+      setFormError(emailError);
+      return;
+    }
+
+    setResendLoading(true);
+    try {
+      // API: POST /api/parent/signup/resend-otp
+      const res = await fetch(`${API_URL}/api/parent/signup/resend-otp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: trimmedEmail }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setInfo("OTP resent to your email address.");
+        setResendCooldown(RESEND_OTP_COOLDOWN); // Reset cooldown
+      } else {
+        setFormError(data.message || "Failed to resend OTP.");
+      }
+    } catch (e: any) {
+      setFormError("Server error. Please try again.");
+    } finally {
+      setResendLoading(false);
     }
   };
 
@@ -295,7 +348,7 @@ const ParentSignUp: React.FC = () => {
           </form>
         )}
 
-        {/* Step 2: Enter OTP */}
+        {/* Step 2: Enter OTP and Resend OTP Feature */}
         {step === 2 && (
           <form onSubmit={handleVerifyOTP} className="space-y-4">
             <div>
@@ -317,6 +370,25 @@ const ParentSignUp: React.FC = () => {
                 placeholder="Enter OTP"
                 title="OTP must be 4 to 6 digits."
               />
+              <div className="mt-2 flex items-center justify-between">
+                <button
+                  type="button"
+                  className={`text-blue-600 underline text-sm ml-0 ${
+                    resendLoading || resendCooldown > 0
+                      ? "opacity-60 cursor-not-allowed"
+                      : "hover:text-blue-800"
+                  }`}
+                  onClick={handleResendOTP}
+                  disabled={resendLoading || resendCooldown > 0}
+                  aria-disabled={resendLoading || resendCooldown > 0}
+                >
+                  {resendLoading
+                    ? "Resending..."
+                    : resendCooldown > 0
+                    ? `Resend OTP (${resendCooldown}s)`
+                    : "Resend OTP"}
+                </button>
+              </div>
             </div>
             {formError && (
               <div className="text-red-600 text-sm">{formError}</div>
