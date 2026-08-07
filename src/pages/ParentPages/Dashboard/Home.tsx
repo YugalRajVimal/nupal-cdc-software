@@ -878,7 +878,8 @@ const ParentDashboard: React.FC = () => {
 
   // Init Cashfree
   useEffect(() => {
-    load({ mode: "production" }).then(setCashfree);
+    const mode = import.meta.env.NODE_ENV === "development" ? "sandbox" : "production";
+    load({ mode }).then(setCashfree);
   }, []);
 
   // Fetch dashboard
