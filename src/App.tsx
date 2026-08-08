@@ -148,6 +148,8 @@ export default function App() {
             <Route path="/super-admin/therapists" element={<SuperAdminTherapistsPage/>} />
             <Route path="/super-admin/therapist-salary-comparison" element={<TherapistIncomeComparison/>} />
             <Route path="/super-admin/onboard-admin" element={<OnboardAdmin/>} />
+            <Route path="/super-admin/booking-requests" element={<BookingRequests/>} />
+            <Route path="/super-admin/session-edit-requests" element={<SessionEditRequestsAdmin/>} />
 
 
             <Route path="/super-admin/children" element={<PatientsPage/>} />
