@@ -757,10 +757,12 @@ const AllUsers: React.FC = () => {
 
   const handleLoginAsUser = async (user: FlattenedUser) => {
     if (!user || !user._id) return;
+    console.log("handleLoginAsUser called with:", user);
     setLoggingInUserId(user._id);
     setError(null);
     try {
       const superAdminToken = localStorage.getItem('super-admin-token');
+      console.log("superAdminToken:", superAdminToken);
       const res = await axios.post(
         `${API_BASE}/api/super-admin/users/login-as-user`,
         { userId: user._id },
@@ -771,25 +773,32 @@ const AllUsers: React.FC = () => {
           },
         }
       );
+      console.log("Response from login-as-user:", res);
       const { token, role, user: userData } = res.data;
+      console.log("Extracted token, role, userData:", token, role, userData);
       localStorage.setItem("isLogInViaSuperAdmin", "true");
       if (role === "patient") {
         localStorage.setItem("patient-token", token);
+        console.log("Redirecting to /parent");
         window.location.href = "/parent";
       } else if (role === "therapist") {
         localStorage.setItem("therapist-token", token);
+        console.log("Redirecting to /therapist");
         window.location.href = "/therapist";
       } else if (role === "admin") {
         localStorage.setItem("admin-token", token);
+        console.log("Redirecting to /admin");
         window.location.href = "/admin";
       } else {
         localStorage.setItem("authToken", token);
+        console.log("Redirecting to /");
         window.location.href = "/";
       }
       localStorage.setItem("userRole", role);
       localStorage.setItem("userData", JSON.stringify(userData));
     } catch (err: any) {
       let errMessage = "Failed to log in as user.";
+      console.log("Error in handleLoginAsUser:", err);
       if (axios.isAxiosError(err)) {
         if (err.response?.data?.error) {
           errMessage = err.response.data.error;
@@ -804,6 +813,7 @@ const AllUsers: React.FC = () => {
       setError(errMessage);
     } finally {
       setLoggingInUserId(null);
+      console.log("handleLoginAsUser finished");
     }
   };
 
