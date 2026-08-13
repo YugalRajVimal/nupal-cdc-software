@@ -1525,6 +1525,7 @@ function CollectPaymentModal({ open, onClose, payment, onCollected }: CollectPay
   const [loading, setLoading] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("");
   const [utr, setUtr] = useState("");
+  // Changed default paymentTime from "now" to empty string per requirement
   const [paymentTime, setPaymentTime] = useState<string>("");
 
   const invoiceAmount = payment ? toNumber(payment.invoiceAmount) ?? 0 : 0;
@@ -1555,11 +1556,8 @@ function CollectPaymentModal({ open, onClose, payment, onCollected }: CollectPay
       setLoading(false);
       setPaymentMethod("");
       setUtr("");
-      // Set default paymentTime to now in local time ISO format (for input[type="datetime-local"])
-      const now = new Date();
-      const tzOffset = now.getTimezoneOffset() * 60000;
-      const localISOTime = new Date(now.getTime() - tzOffset).toISOString().slice(0, 16);
-      setPaymentTime(localISOTime);
+      // Set default paymentTime to empty string, not to now
+      setPaymentTime("");
     }
   }, [open, payment]);
 
@@ -2297,6 +2295,14 @@ export default function ReceptionDesk() {
     );
   }
 
+  // Filter out payments with 0 due
+  const paymentsWithDue = payments.filter(payment => {
+    const net = toNumber(payment.invoiceAmount) ?? 0;
+    const paid = toNumber(payment.amountPaid) ?? 0;
+    const outstanding = Math.max(0, net - paid);
+    return outstanding > 0;
+  });
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -2649,11 +2655,11 @@ export default function ReceptionDesk() {
           <div className="flex items-center gap-2 font-semibold text-slate-700 mb-4">
             <FiCreditCard className="text-green-600" /> Pending Payments
           </div>
-          {payments.length === 0 ? (
+          {paymentsWithDue.length === 0 ? (
             <p className="text-sm text-slate-500">No pending payments.</p>
           ) : (
             <div className="space-y-4">
-              {payments.map((payment) => {
+              {paymentsWithDue.map((payment) => {
                 // Running-invoice model: invoiceAmount already reflects
                 // (costPerSession * (1 - discount%)) * checkedInSessions —
                 // no client-side discount re-application here (mirrors BookingSummary.tsx).
