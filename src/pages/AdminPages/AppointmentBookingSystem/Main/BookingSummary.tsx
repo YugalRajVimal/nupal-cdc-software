@@ -53,12 +53,10 @@ function CollectPaymentModal({ open, onClose, payment, onCollected }: CollectPay
   const [loading, setLoading] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("");
   const [utr, setUtr] = useState("");
- 
-  const [paymentTime, setPaymentTime] = useState(() => {
-    const now = new Date();
-    return now.toISOString().slice(0, 16);
-  });
- 
+
+  // Default paymentTime should be empty
+  const [paymentTime, setPaymentTime] = useState<string>("");
+
   const invoiceAmount = payment ? toNumber(payment.invoiceAmount) ?? 0 : 0;
   const amountAlreadyPaid = (payment && toNumber(payment.amountPaid)) ?? 0;
   const dueNow = Math.max(0, invoiceAmount - amountAlreadyPaid);
@@ -66,20 +64,20 @@ function CollectPaymentModal({ open, onClose, payment, onCollected }: CollectPay
   const discountPercent = (payment && typeof payment.discountPercent === "number") ? payment.discountPercent : 0;
   const checkedInCount = payment?.checkedInCount ?? 0;
   const totalSessions = payment?.totalSessions ?? 0;
- 
+
   const partialNumeric = parseFloat(partialValue);
   const overflowToWallet =
     collectType === "partial" && !isNaN(partialNumeric) && partialNumeric > dueNow
       ? partialNumeric - dueNow
       : 0;
- 
+
   const needsUtr = paymentMethod === "online";
   const utrMissing = needsUtr && utr.trim() === "";
   const paymentTimeMissing = !paymentTime || paymentTime.trim() === "";
- 
+
   const canSubmit = !loading && paymentMethod !== "" && !utrMissing && !paymentTimeMissing &&
     (collectType === "full" || (!isNaN(partialNumeric) && partialNumeric > 0));
- 
+
   useEffect(() => {
     if (open) {
       setCollectType("full");
@@ -87,15 +85,14 @@ function CollectPaymentModal({ open, onClose, payment, onCollected }: CollectPay
       setLoading(false);
       setPaymentMethod("");
       setUtr("");
-      const now = new Date();
-      setPaymentTime(now.toISOString().slice(0, 16));
+      setPaymentTime(""); // Make default empty
     }
   }, [open, payment]);
- 
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!payment || !canSubmit) return;
- 
+
     let endpoint = import.meta.env.VITE_API_URL || (window as any).VITE_API_URL;
     if (endpoint) endpoint = endpoint.replace(/\/$/, "");
     setLoading(true);
@@ -127,7 +124,7 @@ function CollectPaymentModal({ open, onClose, payment, onCollected }: CollectPay
       setLoading(false);
     }
   };
- 
+
   if (!open || !payment) return null;
   return (
     <AnimatePresence>
@@ -149,13 +146,13 @@ function CollectPaymentModal({ open, onClose, payment, onCollected }: CollectPay
           </button>
           <div className="p-6 pb-4">
             <div className="font-semibold text-lg text-slate-800 mb-2">Collect Payment</div>
- 
+
             <div className="text-sm mb-3">
               <span className="font-medium text-blue-700">Appt#: {payment.appointmentId}</span><br />
               <span className="text-slate-800">{payment.patientName}</span>{" "}
               <span className="text-xs text-blue-300 font-mono">({payment.patientId})</span>
             </div>
- 
+
             <div className="mb-3 rounded border border-sky-200 bg-sky-50 px-3 py-2 text-xs space-y-1">
               <div className="flex justify-between">
                 <span className="text-slate-600">Sessions checked in</span>
@@ -186,7 +183,7 @@ function CollectPaymentModal({ open, onClose, payment, onCollected }: CollectPay
                 <span className="font-bold text-emerald-700">₹{walletBalance}</span>
               </div>
             </div>
- 
+
             <form onSubmit={handleSubmit}>
               <div className="mb-3">
                 <label className="block font-medium text-slate-700 mb-1 text-sm">Collection type</label>
@@ -203,7 +200,7 @@ function CollectPaymentModal({ open, onClose, payment, onCollected }: CollectPay
                   </label>
                 </div>
               </div>
- 
+
               {collectType === "partial" && (
                 <div className="mb-3">
                   <label className="block mb-1 text-slate-700 text-xs font-medium">
@@ -226,7 +223,7 @@ function CollectPaymentModal({ open, onClose, payment, onCollected }: CollectPay
                   )}
                 </div>
               )}
- 
+
               {collectType === "full" && (
                 <div className="mb-3 text-xs text-slate-500">
                   This collects exactly the ₹{dueNow} currently due. It does not touch
@@ -234,7 +231,7 @@ function CollectPaymentModal({ open, onClose, payment, onCollected }: CollectPay
                   checked in.
                 </div>
               )}
- 
+
               <div className="mb-3">
                 <label className="block font-medium text-slate-700 mb-1 text-sm">
                   Payment date & time <span className="text-red-500">*</span>
@@ -254,7 +251,7 @@ function CollectPaymentModal({ open, onClose, payment, onCollected }: CollectPay
                   </div>
                 )}
               </div>
- 
+
               <div className="mb-3">
                 <label className="block font-medium text-slate-700 mb-1 text-sm">
                   Payment method <span className="text-red-500">*</span>
@@ -279,7 +276,7 @@ function CollectPaymentModal({ open, onClose, payment, onCollected }: CollectPay
                   ))}
                 </div>
               </div>
- 
+
               {needsUtr && (
                 <div className="mb-3 bg-slate-50 border border-slate-200 rounded px-3 py-2">
                   <label className="block text-xs font-medium text-slate-700 mb-1">
@@ -300,7 +297,7 @@ function CollectPaymentModal({ open, onClose, payment, onCollected }: CollectPay
                   </p>
                 </div>
               )}
- 
+
               <button
                 type="submit"
                 className={`mt-1 w-full rounded-md border border-green-500 px-4 py-2 text-sm font-semibold text-green-700 transition-colors ${

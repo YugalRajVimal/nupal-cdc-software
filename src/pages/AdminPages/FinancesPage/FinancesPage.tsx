@@ -42,6 +42,12 @@ const PAYMENT_METHOD_OPTIONS = [
   "Online",
 ];
 
+// For filter dropdowns
+const CREDIT_DEBIT_OPTIONS = [
+  "Credit",
+  "Debit",
+];
+
 function downloadExcel(filename: string, rows: FinanceLog[]) {
   const worksheetRows = rows.map((row) => ({
     _id: row._id,
@@ -189,8 +195,20 @@ export default function FinancesPage() {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [searchInput, setSearchInput] = useState("");
+
+  // Filters
   const [page, setPage] = useState(1);
   const [pageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [sortField, setSortField] = useState<string>("date");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+  const [paymentMethodFilter, setPaymentMethodFilter] = useState<string>("");
+  const [creditDebitStatusFilter, setCreditDebitStatusFilter] = useState<string>("");
+  const [childrenNameFilter, setChildrenNameFilter] = useState<string>("");
+  const [childrenIdFilter, setChildrenIdFilter] = useState<string>("");
+  const [minAmountFilter, setMinAmountFilter] = useState<string | number>("");
+  const [maxAmountFilter, setMaxAmountFilter] = useState<string | number>("");
+  const [startDateFilter, setStartDateFilter] = useState<string>("");
+  const [endDateFilter, setEndDateFilter] = useState<string>("");
 
   // For editing payment method
   const [editingLog, setEditingLog] = useState<FinanceLog | null>(null);
@@ -204,8 +222,18 @@ export default function FinancesPage() {
     const params: Record<string, any> = {
       page,
       pageSize,
+      sortField,
+      sortOrder,
     };
     if (search.trim()) params.search = search.trim();
+    if (paymentMethodFilter) params.paymentMethod = paymentMethodFilter;
+    if (creditDebitStatusFilter) params.creditDebitStatus = creditDebitStatusFilter;
+    if (childrenNameFilter) params.childrenName = childrenNameFilter;
+    if (childrenIdFilter) params.childrenId = childrenIdFilter;
+    if (minAmountFilter !== "") params.minAmount = minAmountFilter;
+    if (maxAmountFilter !== "") params.maxAmount = maxAmountFilter;
+    if (startDateFilter) params.startDate = startDateFilter;
+    if (endDateFilter) params.endDate = endDateFilter;
 
     axios
       .get(`${baseUrl}/api/admin/finance/details`, { params })
@@ -267,10 +295,43 @@ export default function FinancesPage() {
     }
   };
 
+  // When any filter changes, page should probably reset to 1 (except page itself)
+  useEffect(() => {
+    setPage(1);
+    // eslint-disable-next-line
+  }, [
+    search,
+    sortField,
+    sortOrder,
+    paymentMethodFilter,
+    creditDebitStatusFilter,
+    childrenNameFilter,
+    childrenIdFilter,
+    minAmountFilter,
+    maxAmountFilter,
+    startDateFilter,
+    endDateFilter,
+  ]);
+
+  // Effect to fetch data
   useEffect(() => {
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, pageSize, search]);
+  }, [
+    page,
+    pageSize,
+    search,
+    sortField,
+    sortOrder,
+    paymentMethodFilter,
+    creditDebitStatusFilter,
+    childrenNameFilter,
+    childrenIdFilter,
+    minAmountFilter,
+    maxAmountFilter,
+    startDateFilter,
+    endDateFilter,
+  ]);
 
   const handleExportExcel = () => {
     if (financeData?.logs && financeData.logs.length > 0) {
@@ -282,6 +343,43 @@ export default function FinancesPage() {
     e.preventDefault();
     setPage(1); // Reset to first page on new search
     setSearch(searchInput);
+  };
+
+  const handleFilter = (field: string, value: string | number) => {
+    switch (field) {
+      case "paymentMethod":
+        setPaymentMethodFilter(value as string);
+        break;
+      case "creditDebitStatus":
+        setCreditDebitStatusFilter(value as string);
+        break;
+      case "childrenName":
+        setChildrenNameFilter(value as string);
+        break;
+      case "childrenId":
+        setChildrenIdFilter(value as string);
+        break;
+      case "minAmount":
+        setMinAmountFilter(value);
+        break;
+      case "maxAmount":
+        setMaxAmountFilter(value);
+        break;
+      case "startDate":
+        setStartDateFilter(value as string);
+        break;
+      case "endDate":
+        setEndDateFilter(value as string);
+        break;
+      case "sortField":
+        setSortField(value as string);
+        break;
+      case "sortOrder":
+        setSortOrder(value as "asc" | "desc");
+        break;
+      default:
+        break;
+    }
   };
 
   const onPageChange = (newPage: number) => {
@@ -333,6 +431,125 @@ export default function FinancesPage() {
           >
             <FiDownload /> Export Excel
           </button>
+        </div>
+      </div>
+
+      {/* Filters UI */}
+      <div className="bg-white rounded border p-4 mb-6 flex flex-wrap items-end gap-4">
+        <div>
+          <label className="block text-xs mb-1 font-medium">Payment Method</label>
+          <select
+            className="border px-2 py-1 rounded w-40"
+            value={paymentMethodFilter}
+            onChange={e => handleFilter("paymentMethod", e.target.value)}
+          >
+            <option value="">All</option>
+            {PAYMENT_METHOD_OPTIONS.map((meth) => (
+              <option key={meth} value={meth}>
+                {meth}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-xs mb-1 font-medium">Credit/Debit</label>
+          <select
+            className="border px-2 py-1 rounded w-32"
+            value={creditDebitStatusFilter}
+            onChange={e => handleFilter("creditDebitStatus", e.target.value)}
+          >
+            <option value="">All</option>
+            {CREDIT_DEBIT_OPTIONS.map(opt => (
+              <option key={opt} value={opt}>
+                {opt}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs mb-1 font-medium">Children Name</label>
+          <input
+            className="border px-2 py-1 rounded w-32"
+            type="text"
+            placeholder="Name"
+            value={childrenNameFilter}
+            onChange={e => handleFilter("childrenName", e.target.value)}
+          />
+        </div>
+        <div>
+          <label className="block text-xs mb-1 font-medium">Children ID</label>
+          <input
+            className="border px-2 py-1 rounded w-32"
+            type="text"
+            placeholder="ID"
+            value={childrenIdFilter}
+            onChange={e => handleFilter("childrenId", e.target.value)}
+          />
+        </div>
+        <div>
+          <label className="block text-xs mb-1 font-medium">Min Amount</label>
+          <input
+            className="border px-2 py-1 rounded w-24"
+            type="number"
+            placeholder="Min"
+            value={minAmountFilter}
+            onChange={e => handleFilter("minAmount", e.target.value)}
+            min={0}
+          />
+        </div>
+        <div>
+          <label className="block text-xs mb-1 font-medium">Max Amount</label>
+          <input
+            className="border px-2 py-1 rounded w-24"
+            type="number"
+            placeholder="Max"
+            value={maxAmountFilter}
+            onChange={e => handleFilter("maxAmount", e.target.value)}
+            min={0}
+          />
+        </div>
+        <div>
+          <label className="block text-xs mb-1 font-medium">Start Date</label>
+          <input
+            className="border px-2 py-1 rounded w-36"
+            type="date"
+            value={startDateFilter}
+            onChange={e => handleFilter("startDate", e.target.value)}
+          />
+        </div>
+        <div>
+          <label className="block text-xs mb-1 font-medium">End Date</label>
+          <input
+            className="border px-2 py-1 rounded w-36"
+            type="date"
+            value={endDateFilter}
+            onChange={e => handleFilter("endDate", e.target.value)}
+          />
+        </div>
+        <div>
+          <label className="block text-xs mb-1 font-medium">Sort By</label>
+          <select
+            className="border px-2 py-1 rounded w-28"
+            value={sortField}
+            onChange={e => handleFilter("sortField", e.target.value)}
+          >
+            <option value="date">Date</option>
+            <option value="amount">Amount</option>
+            <option value="createdAt">Created At</option>
+            <option value="updatedAt">Updated At</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs mb-1 font-medium">Sort Order</label>
+          <select
+            className="border px-2 py-1 rounded w-28"
+            value={sortOrder}
+            onChange={e => handleFilter("sortOrder", e.target.value as "asc" | "desc")}
+          >
+            <option value="desc">Desc</option>
+            <option value="asc">Asc</option>
+          </select>
         </div>
       </div>
 
