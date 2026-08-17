@@ -1,3 +1,5 @@
+
+
 // import { useEffect, useState, useCallback } from "react";
 // import {
 //   FiCheckCircle,
@@ -8,7 +10,7 @@
 //   FiChevronUp,
 //   FiX,
 // } from "react-icons/fi";
-// import { FiDollarSign, FiSmartphone } from "react-icons/fi";
+// import { FiDollarSign, FiSmartphone, FiPocket } from "react-icons/fi";
 // import { motion, AnimatePresence } from "framer-motion";
 
 // // --- BEGIN: Discount related :: align to BookingSummary logic ---
@@ -66,11 +68,15 @@
 //   patientId: string;
 //   paymentId?: string;
 //   paymentStatus?: string;
-//   paymentAmount?: number | string;
-//   totalAmount?: number | string;
+//   // Running-invoice amount (costPerSession * (1 - discount%) * checkedInSessions),
+//   // computed server-side and stored on the booking as `invoiceAmount`.
+//   invoiceAmount?: number | string;
 //   paymentMethod?: string;
 //   paymentRecordId?: string;
 //   amountPaid?: number | string;
+//   walletBalance?: number | string;
+//   checkedInCount?: number;
+//   totalSessions?: number;
 //   discountInfo?: DiscountInfo;
 //   coupon?: Coupon;
 //   discountPercent?: number;
@@ -96,10 +102,6 @@
 //   }
 //   return undefined;
 // }
-// function calcDiscountedAmount(amount: number, percent: number) {
-//   if (!percent || isNaN(percent)) return amount;
-//   return Math.round(amount - (amount * percent) / 100);
-// }
 // function getDiscountPercent(payment: PaymentInfo) {
 //   if (payment.discountPercent !== undefined) return payment.discountPercent;
 //   if (payment.coupon && payment.coupon.discountEnabled && payment.coupon.discount) {
@@ -123,59 +125,49 @@
 
 // type PaymentMethod = "cash" | "online" | "";
 
+// // NOTE: Under the running-invoice model, `invoiceAmount` from the backend already
+// // reflects (costPerSession * (1 - discount%)) * checkedInSessions. We do NOT
+// // re-apply a discount % on top of it here — that would double-count the discount.
+// // Discount % is shown purely as an informational label (mirrors BookingSummary.tsx).
 // function CollectPaymentModal({ open, onClose, payment, onCollected }: CollectPaymentModalProps) {
 //   const [collectType, setCollectType] = useState<"full" | "partial">("full");
 //   const [partialValue, setPartialValue] = useState("");
 //   const [loading, setLoading] = useState(false);
-//   const [applyDiscount, setApplyDiscount] = useState(true);
 //   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("");
 //   const [utr, setUtr] = useState("");
-//   const [paymentTime, setPaymentTime] = useState<string>(""); // new
+//   // Changed default paymentTime from "now" to empty string per requirement
+//   const [paymentTime, setPaymentTime] = useState<string>("");
 
-//   const discountPercent =
-//     payment && typeof getDiscountPercent(payment) === "number"
-//       ? getDiscountPercent(payment)
-//       : 0;
-
-//   const paymentAmountOriginal = payment ? toNumber(payment.paymentAmount ?? payment.totalAmount) : undefined;
-
-//   const discountedAmount =
-//     paymentAmountOriginal !== undefined
-//       ? calcDiscountedAmount(paymentAmountOriginal, applyDiscount ? discountPercent : 0)
-//       : undefined;
-//   const paymentAmount = discountedAmount;
+//   const invoiceAmount = payment ? toNumber(payment.invoiceAmount) ?? 0 : 0;
 //   const amountAlreadyPaid = (payment && toNumber(payment.amountPaid)) ?? 0;
+//   const dueNow = Math.max(0, invoiceAmount - amountAlreadyPaid);
+//   const walletBalance = (payment && toNumber(payment.walletBalance)) ?? 0;
+//   const discountPercent =
+//     payment && typeof getDiscountPercent(payment) === "number" ? getDiscountPercent(payment) : 0;
+//   const checkedInCount = payment?.checkedInCount ?? 0;
+//   const totalSessions = payment?.totalSessions ?? 0;
 
 //   const partialNumeric = parseFloat(partialValue);
-//   const isPartialOverDue =
-//     collectType === "partial" &&
-//     typeof paymentAmount === "number" &&
-//     !isNaN(partialNumeric) &&
-//     partialNumeric + (typeof amountAlreadyPaid === "number" ? amountAlreadyPaid : 0) > paymentAmount;
-//   const paymentDue =
-//     typeof paymentAmount === "number" && typeof amountAlreadyPaid === "number"
-//       ? paymentAmount - amountAlreadyPaid
-//       : paymentAmount;
+//   const overflowToWallet =
+//     collectType === "partial" && !isNaN(partialNumeric) && partialNumeric > dueNow
+//       ? partialNumeric - dueNow
+//       : 0;
 
 //   const needsUtr = paymentMethod === "online";
 //   const utrMissing = needsUtr && utr.trim() === "";
-//   const paymentTimeMissing = !paymentTime;
-//   const canSubmit = !loading && !isPartialOverDue && paymentMethod !== "" && !utrMissing &&
-//     (collectType === "full" || (!isNaN(partialNumeric) && partialNumeric > 0)) && !paymentTimeMissing;
+//   const paymentTimeMissing = !paymentTime || paymentTime.trim() === "";
+//   const canSubmit = !loading && paymentMethod !== "" && !utrMissing && !paymentTimeMissing &&
+//     (collectType === "full" || (!isNaN(partialNumeric) && partialNumeric > 0));
 
 //   useEffect(() => {
 //     if (open) {
 //       setCollectType("full");
 //       setPartialValue("");
 //       setLoading(false);
-//       setApplyDiscount(true);
 //       setPaymentMethod("");
 //       setUtr("");
-//       // Set default paymentTime to now in local time ISO format (for input[type="datetime-local"])
-//       const now = new Date();
-//       const tzOffset = now.getTimezoneOffset() * 60000;
-//       const localISOTime = new Date(now.getTime() - tzOffset).toISOString().slice(0, 16);
-//       setPaymentTime(localISOTime);
+//       // Set default paymentTime to empty string, not to now
+//       setPaymentTime("");
 //     }
 //   }, [open, payment]);
 
@@ -188,17 +180,12 @@
 //     try {
 //       const body: Record<string, any> = {
 //         paymentType: collectType,
-//         applyDiscount,
+//         discountApplied: discountPercent > 0,
 //         paymentMethod,
 //         ...(needsUtr && utr.trim() ? { utr: utr.trim() } : {}),
 //         ...(collectType === "partial" ? { partialAmount: partialNumeric } : {}),
 //         paymentTime: paymentTime ? new Date(paymentTime).toISOString() : undefined,
 //       };
-//       if (typeof discountPercent === "number" && discountPercent > 0 && applyDiscount) {
-//         body.discountApplied = true;
-//       } else {
-//         body.discountApplied = false;
-//       }
 
 //       const res = await fetch(
 //         `${endpoint}/api/admin/bookings/${payment._id}/collect-payment`,
@@ -263,63 +250,43 @@
 //               <span className="text-xs text-blue-300 font-mono">
 //                 ({payment.patientId})
 //               </span>
-//               <br />
-//               {typeof discountPercent === "number" && discountPercent > 0 && (
-//                 <span className="text-xs text-slate-400 block">
-//                   Original Invoice Amount:{" "}
-//                   <span className="font-semibold text-slate-600">
-//                     ₹{typeof paymentAmountOriginal === "number" ? paymentAmountOriginal : String(payment.paymentAmount ?? "—")}
-//                   </span>
+//             </div>
+
+//             <div className="mb-3 rounded border border-sky-200 bg-sky-50 px-3 py-2 text-xs space-y-1">
+//               <div className="flex justify-between">
+//                 <span className="text-slate-600">Sessions checked in</span>
+//                 <span className="font-semibold text-slate-800">
+//                   {checkedInCount} / {totalSessions || "—"}
 //                 </span>
-//               )}
-//               {typeof discountPercent === "number" && discountPercent > 0 && (
-//                 <div>
-//                   <div className="mb-1 text-xs">
-//                     <label className="font-semibold text-green-700 flex items-center gap-2 cursor-pointer">
-//                       <input
-//                         type="checkbox"
-//                         className="mr-1 accent-green-600"
-//                         checked={applyDiscount}
-//                         onChange={e => setApplyDiscount(!!e.target.checked)}
-//                         disabled={loading}
-//                       />
-//                       Apply Discount ({discountPercent}%)
-//                     </label>
-//                   </div>
+//               </div>
+//               {discountPercent > 0 && (
+//                 <div className="flex justify-between">
+//                   <span className="text-slate-600">Discount</span>
+//                   <span className="font-semibold text-green-700">
+//                     {discountPercent}% (already included below)
+//                   </span>
 //                 </div>
 //               )}
-//               <span className="text-xs text-slate-500 block">
-//                 Invoice Amount:{" "}
-//                 <span className="font-semibold text-slate-700">
-//                   ₹{paymentAmount !== undefined ? paymentAmount : String(payment.paymentAmount ?? "—")}
+//               <div className="flex justify-between">
+//                 <span className="text-slate-600">Current invoice amount</span>
+//                 <span className="font-semibold text-slate-800">₹{invoiceAmount}</span>
+//               </div>
+//               <div className="flex justify-between">
+//                 <span className="text-slate-600">Already paid</span>
+//                 <span className="font-semibold text-slate-800">₹{amountAlreadyPaid}</span>
+//               </div>
+//               <div className="flex justify-between border-t border-sky-200 pt-1 mt-1">
+//                 <span className="text-rose-700 font-medium">Due now</span>
+//                 <span className="font-bold text-rose-700">₹{dueNow}</span>
+//               </div>
+//               <div className="flex justify-between border-t border-sky-200 pt-1 mt-1">
+//                 <span className="text-emerald-700 font-medium flex items-center gap-1">
+//                   <FiPocket size={12} /> Wallet balance
 //                 </span>
-//                 {typeof discountPercent === "number" &&
-//                   discountPercent > 0 &&
-//                   applyDiscount && (
-//                     <span className="ml-1 text-green-800 font-semibold bg-green-100 px-1 rounded">
-//                       (after discount)
-//                     </span>
-//                   )}
-//               </span>
-//               {payment.amountPaid && (
-//                 <span className="text-xs text-slate-400 block">
-//                   Already paid: ₹{String(payment.amountPaid)}
-//                 </span>
-//               )}
-//               <span className="text-xs text-rose-600 block">
-//                 Due Amount:{" "}
-//                 <span className="font-semibold">
-//                   ₹{typeof paymentDue === "number" ? paymentDue : "—"}
-//                 </span>
-//               </span>
-//               {typeof discountPercent === "number" &&
-//                 discountPercent > 0 &&
-//                 applyDiscount && (
-//                   <div className="text-xs mt-1 text-green-700 font-medium">
-//                     Discount Applied: {discountPercent}%
-//                   </div>
-//                 )}
+//                 <span className="font-bold text-emerald-700">₹{walletBalance}</span>
+//               </div>
 //             </div>
+
 //             <form onSubmit={handleSubmit}>
 //               <div className="mb-4 mt-1">
 //                 <label className="block font-medium text-slate-700 mb-1">
@@ -335,7 +302,7 @@
 //                       onChange={() => setCollectType("full")}
 //                       disabled={loading}
 //                     />
-//                     <span className="text-sm">Full Amount</span>
+//                     <span className="text-sm">Full Amount (pays off due now)</span>
 //                   </label>
 //                   <label className="flex items-center gap-1 cursor-pointer">
 //                     <input
@@ -353,7 +320,7 @@
 //               {collectType === "partial" && (
 //                 <div className="mb-2">
 //                   <label className="block mb-1 text-slate-700 text-xs">
-//                     Enter Partial Amount <span className="text-red-500">*</span>
+//                     Enter Amount to Collect <span className="text-red-500">*</span>
 //                   </label>
 //                   <input
 //                     type="number"
@@ -365,13 +332,23 @@
 //                     placeholder="E.g. 800"
 //                     required
 //                     disabled={loading}
-//                     max={paymentDue ?? undefined}
 //                   />
-//                   {isPartialOverDue && (
-//                     <div className="text-xs text-red-500 mt-1">
-//                       Partial amount plus already paid cannot exceed the invoice total ({paymentAmount}).
+//                   <div className="text-xs text-slate-400 mt-1">
+//                     Due now is ₹{dueNow}. Anything you enter beyond that is automatically
+//                     saved as a wallet advance for this patient.
+//                   </div>
+//                   {overflowToWallet > 0 && (
+//                     <div className="text-xs text-emerald-700 mt-1 font-medium">
+//                       ₹{overflowToWallet} of this will be credited to wallet as advance.
 //                     </div>
 //                   )}
+//                 </div>
+//               )}
+//               {collectType === "full" && (
+//                 <div className="mb-3 text-xs text-slate-500">
+//                   This collects exactly the ₹{dueNow} currently due. It does not touch
+//                   the rest of the package — future sessions will be billed as they're
+//                   checked in.
 //                 </div>
 //               )}
 //               {/* Payment Time input (date + time) */}
@@ -453,15 +430,15 @@
 //                 {loading
 //                   ? "Processing…"
 //                   : collectType === "full"
-//                   ? "Collect Full Amount"
-//                   : "Collect Partial Amount"}
+//                   ? `Collect ₹${dueNow} (due now)`
+//                   : "Collect Amount"}
 //               </button>
 //               <div className="mt-1 text-xs text-slate-400 text-center">
 //                 {!paymentMethod
 //                   ? "Select a payment method to continue."
 //                   : collectType === "partial"
-//                   ? "Collects a partial payment; the remaining will appear as pending."
-//                   : "Marks the invoice as fully paid."}
+//                   ? "Amount beyond what's due goes to wallet."
+//                   : "Marks the current invoice as fully paid."}
 //               </div>
 //             </form>
 //           </div>
@@ -552,8 +529,6 @@
 //         let patientId = booking.patient?.patientId || "";
 //         let paymentId = paymentRecord.paymentId || undefined;
 //         let paymentStatus = paymentRecord.status || undefined;
-//         let paymentAmount = (typeof paymentRecord.amount !== "undefined" ? paymentRecord.amount : undefined);
-//         let totalAmount = typeof paymentRecord.totalAmount !== "undefined" ? paymentRecord.totalAmount : undefined;
 //         let paymentMethod = paymentRecord.paymentMethod || "";
 //         let paymentRecordId = paymentRecord._id || undefined;
 //         let amountPaid = (typeof paymentRecord.amountPaid !== "undefined" ? paymentRecord.amountPaid : 0);
@@ -574,6 +549,19 @@
 //           discountPercent = discountInfo.percent;
 //         }
 
+//         // Running-invoice amount: only reflects sessions actually CheckedIn so far
+//         // (computed server-side and stored on the booking), same model used in
+//         // Appointment Booking System / BookingSummary — NOT the full package total.
+//         const invoiceAmount = typeof booking.invoiceAmount !== "undefined" ? booking.invoiceAmount : 0;
+//         const checkedInCount = Array.isArray(booking.sessions)
+//           ? booking.sessions.filter((s: any) => s?.status === "CheckedIn").length
+//           : 0;
+//         const totalSessions =
+//           booking.package?.totalSessions ??
+//           booking.package?.sessionCount ??
+//           (Array.isArray(booking.sessions) ? booking.sessions.length : undefined);
+//         const walletBalance = booking.wallet?.balance ?? 0;
+
 //         return {
 //           _id: booking._id,
 //           appointmentId: booking.appointmentId,
@@ -581,11 +569,13 @@
 //           patientId,
 //           paymentId,
 //           paymentStatus,
-//           paymentAmount,
-//           totalAmount,
+//           invoiceAmount,
 //           paymentMethod,
 //           paymentRecordId,
 //           amountPaid,
+//           walletBalance,
+//           checkedInCount,
+//           totalSessions,
 //           discountInfo,
 //           coupon,
 //           createdAt,
@@ -914,6 +904,14 @@
 //       </div>
 //     );
 //   }
+
+//   // Filter out payments with 0 due
+//   const paymentsWithDue = payments.filter(payment => {
+//     const net = toNumber(payment.invoiceAmount) ?? 0;
+//     const paid = toNumber(payment.amountPaid) ?? 0;
+//     const outstanding = Math.max(0, net - paid);
+//     return outstanding > 0;
+//   });
 
 //   return (
 //     <motion.div
@@ -1267,26 +1265,20 @@
 //           <div className="flex items-center gap-2 font-semibold text-slate-700 mb-4">
 //             <FiCreditCard className="text-green-600" /> Pending Payments
 //           </div>
-//           {payments.length === 0 ? (
+//           {paymentsWithDue.length === 0 ? (
 //             <p className="text-sm text-slate-500">No pending payments.</p>
 //           ) : (
 //             <div className="space-y-4">
-//               {payments.map((payment) => {
-//                 const disc =
-//                   typeof getDiscountPercent(payment) === "number"
-//                     ? Math.round(
-//                         ((toNumber(payment.paymentAmount ?? payment.totalAmount) || 0) *
-//                           (getDiscountPercent(payment) || 0)) /
-//                           100
-//                       )
-//                     : 0;
+//               {paymentsWithDue.map((payment) => {
+//                 // Running-invoice model: invoiceAmount already reflects
+//                 // (costPerSession * (1 - discount%)) * checkedInSessions —
+//                 // no client-side discount re-application here (mirrors BookingSummary.tsx).
 //                 const percent = getDiscountPercent(payment);
-//                 const net =
-//                   toNumber(payment.paymentAmount ?? payment.totalAmount) !== undefined && percent
-//                     ? calcDiscountedAmount(toNumber(payment.paymentAmount ?? payment.totalAmount)!, percent)
-//                     : toNumber(payment.paymentAmount ?? payment.totalAmount);
-//                 const paid = (toNumber(payment.amountPaid) ?? 0);
-//                 const outstanding = typeof net === "number" ? (net - paid) : undefined;
+//                 const net = toNumber(payment.invoiceAmount) ?? 0;
+//                 const paid = toNumber(payment.amountPaid) ?? 0;
+//                 const outstanding = Math.max(0, net - paid);
+//                 const checkedInCount = payment.checkedInCount ?? 0;
+//                 const totalSessions = payment.totalSessions ?? 0;
 //                 return (
 //                   <div
 //                     key={payment._id}
@@ -1336,32 +1328,21 @@
 //                             {payment.paymentStatus || "pending"}
 //                           </span>
 //                         </span>
-//                         {typeof payment.paymentAmount !== "undefined" && (
-//                           <span>
-//                             Invoice: ₹
-//                             {String(payment.paymentAmount)}
-//                           </span>
-//                         )}
-//                         {disc > 0 && (
-//                           <span className="text-rose-500">
-//                             − ₹{disc}
-//                           </span>
-//                         )}
+//                         <span>
+//                           Checked in: {checkedInCount} / {totalSessions || "—"}
+//                         </span>
+//                         <span>
+//                           Invoice: ₹{net}
+//                         </span>
 //                         {percent > 0 && (
 //                           <span className="text-rose-800">
-//                             ({percent}% discount)
+//                             ({percent}% discount already included)
 //                           </span>
 //                         )}
 //                         <span>
-//                           Payable: ₹{typeof net !== "undefined" ? net : (payment.paymentAmount ?? "—")}
+//                           , Paid: ₹{paid}
 //                         </span>
-//                         {(typeof paid !== "undefined" && (paid || paid === 0)) && (
-//                           <span>
-//                             , Paid: ₹
-//                             {paid}
-//                           </span>
-//                         )}
-//                         {typeof outstanding !== "undefined" && outstanding > 0 && (
+//                         {outstanding > 0 && (
 //                           <span>
 //                             , Due: ₹{outstanding}
 //                           </span>
@@ -1402,7 +1383,7 @@ import {
 } from "react-icons/fi";
 import { FiDollarSign, FiSmartphone, FiPocket } from "react-icons/fi";
 import { motion, AnimatePresence } from "framer-motion";
-
+ 
 // --- BEGIN: Discount related :: align to BookingSummary logic ---
 type DiscountInfo = {
   code: string | null;
@@ -1418,7 +1399,7 @@ type Coupon = {
   createdAt?: string;
 };
 // --- END: Discount ---
-
+ 
 const SESSION_TIME_OPTIONS = [
   { id: '1000-1045', label: '10:00 to 10:45', limited: false },
   { id: '1045-1130', label: '10:45 to 11:30', limited: false },
@@ -1436,7 +1417,7 @@ const SESSION_TIME_OPTIONS = [
   { id: '1845-1930', label: '18:45 to 19:30', limited: true },
   { id: '1930-2015', label: '19:30 to 20:15', limited: true }
 ];
-
+ 
 type Appointment = {
   _id: string;
   appointmentId: string;
@@ -1450,7 +1431,7 @@ type Appointment = {
   status?: "CheckedIn" | "NotCheckedIn" | "Missed";
   [key: string]: any;
 };
-
+ 
 type PaymentInfo = {
   _id: string;
   appointmentId: string;
@@ -1472,9 +1453,9 @@ type PaymentInfo = {
   discountPercent?: number;
   [key: string]: any;
 };
-
+ 
 const API_URL = import.meta.env.VITE_API_URL;
-
+ 
 function formatDateDDMMYYYY(dateString: string | undefined): string {
   if (!dateString) return "";
   let d = dateString;
@@ -1483,7 +1464,7 @@ function formatDateDDMMYYYY(dateString: string | undefined): string {
   if (!yyyy || !mm || !dd) return dateString;
   return `${dd}/${mm}/${yyyy}`;
 }
-
+ 
 function toNumber(v: any): number | undefined {
   if (typeof v === "number") return v;
   if (typeof v === "string" && v.trim() !== "") {
@@ -1502,7 +1483,7 @@ function getDiscountPercent(payment: PaymentInfo) {
   }
   return 0;
 }
-
+ 
 // Payment Collection Modal per prompt
 type CollectPaymentModalProps = {
   open: boolean;
@@ -1510,24 +1491,34 @@ type CollectPaymentModalProps = {
   payment?: PaymentInfo | null;
   onCollected: () => void;
 };
-
+ 
 // Add paymentMethod (cash/online) and UTR number, with UI and submission (using BookingSummary.tsx as reference)
-
+ 
 type PaymentMethod = "cash" | "online" | "";
-
+ 
 // NOTE: Under the running-invoice model, `invoiceAmount` from the backend already
 // reflects (costPerSession * (1 - discount%)) * checkedInSessions. We do NOT
 // re-apply a discount % on top of it here — that would double-count the discount.
 // Discount % is shown purely as an informational label (mirrors BookingSummary.tsx).
+type SweepResult = { appointmentId: string; amountApplied: number };
+type SweepInfo = {
+  appliedToInvoice: number;
+  appliedToOtherBookings: SweepResult[];
+};
+ 
 function CollectPaymentModal({ open, onClose, payment, onCollected }: CollectPaymentModalProps) {
   const [collectType, setCollectType] = useState<"full" | "partial">("full");
   const [partialValue, setPartialValue] = useState("");
   const [loading, setLoading] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("");
   const [utr, setUtr] = useState("");
+  // Set after a successful submit — while non-null we show a summary of what
+  // got paid instead of the form, so the user can see if any other booking's
+  // due was cleared by this payment before closing.
+  const [sweepInfo, setSweepInfo] = useState<SweepInfo | null>(null);
   // Changed default paymentTime from "now" to empty string per requirement
   const [paymentTime, setPaymentTime] = useState<string>("");
-
+ 
   const invoiceAmount = payment ? toNumber(payment.invoiceAmount) ?? 0 : 0;
   const amountAlreadyPaid = (payment && toNumber(payment.amountPaid)) ?? 0;
   const dueNow = Math.max(0, invoiceAmount - amountAlreadyPaid);
@@ -1536,19 +1527,19 @@ function CollectPaymentModal({ open, onClose, payment, onCollected }: CollectPay
     payment && typeof getDiscountPercent(payment) === "number" ? getDiscountPercent(payment) : 0;
   const checkedInCount = payment?.checkedInCount ?? 0;
   const totalSessions = payment?.totalSessions ?? 0;
-
+ 
   const partialNumeric = parseFloat(partialValue);
   const overflowToWallet =
     collectType === "partial" && !isNaN(partialNumeric) && partialNumeric > dueNow
       ? partialNumeric - dueNow
       : 0;
-
+ 
   const needsUtr = paymentMethod === "online";
   const utrMissing = needsUtr && utr.trim() === "";
   const paymentTimeMissing = !paymentTime || paymentTime.trim() === "";
   const canSubmit = !loading && paymentMethod !== "" && !utrMissing && !paymentTimeMissing &&
     (collectType === "full" || (!isNaN(partialNumeric) && partialNumeric > 0));
-
+ 
   useEffect(() => {
     if (open) {
       setCollectType("full");
@@ -1558,9 +1549,10 @@ function CollectPaymentModal({ open, onClose, payment, onCollected }: CollectPay
       setUtr("");
       // Set default paymentTime to empty string, not to now
       setPaymentTime("");
+      setSweepInfo(null);
     }
   }, [open, payment]);
-
+ 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!payment || !canSubmit) return;
@@ -1576,7 +1568,7 @@ function CollectPaymentModal({ open, onClose, payment, onCollected }: CollectPay
         ...(collectType === "partial" ? { partialAmount: partialNumeric } : {}),
         paymentTime: paymentTime ? new Date(paymentTime).toISOString() : undefined,
       };
-
+ 
       const res = await fetch(
         `${endpoint}/api/admin/bookings/${payment._id}/collect-payment`,
         {
@@ -1591,17 +1583,35 @@ function CollectPaymentModal({ open, onClose, payment, onCollected }: CollectPay
       const data = await res.json();
       if (!res.ok)
         throw new Error(data?.error || data?.message || "Failed to collect payment.");
+ 
       onCollected();
-      onClose();
+ 
+      const otherBookings: SweepResult[] = Array.isArray(data?.appliedToOtherBookings)
+        ? data.appliedToOtherBookings.map((s: any) => ({
+            appointmentId: s.appointmentId,
+            amountApplied: Number(s.amountApplied) || 0,
+          }))
+        : [];
+ 
+      if (otherBookings.length > 0) {
+        // Some of this payment went toward clearing dues on OTHER bookings —
+        // show the split instead of closing immediately, so it's not silent.
+        setSweepInfo({
+          appliedToInvoice: Number(data?.finance?.amount ?? 0),
+          appliedToOtherBookings: otherBookings,
+        });
+      } else {
+        onClose();
+      }
     } catch (err: any) {
       alert(err.message || "Failed to collect payment.");
     } finally {
       setLoading(false);
     }
   };
-
+ 
   if (!open || !payment) return null;
-
+ 
   return (
     <AnimatePresence>
       <motion.div
@@ -1611,7 +1621,7 @@ function CollectPaymentModal({ open, onClose, payment, onCollected }: CollectPay
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         style={{ backdropFilter: "blur(2px)" }}
-        onClick={onClose}
+        onClick={sweepInfo ? undefined : onClose}
       >
         <motion.div
           initial={{ scale: 0.96, opacity: 0 }}
@@ -1621,14 +1631,49 @@ function CollectPaymentModal({ open, onClose, payment, onCollected }: CollectPay
           className="bg-white rounded-lg shadow-lg max-w-sm w-full border border-slate-200 relative"
           onClick={(e) => e.stopPropagation()}
         >
-          <button
-            className="absolute top-3 right-3 text-slate-400 hover:text-slate-700"
-            onClick={onClose}
-            tabIndex={-1}
-            type="button"
-          >
-            <FiX size={20} />
-          </button>
+          {!sweepInfo && (
+            <button
+              className="absolute top-3 right-3 text-slate-400 hover:text-slate-700"
+              onClick={onClose}
+              tabIndex={-1}
+              type="button"
+            >
+              <FiX size={20} />
+            </button>
+          )}
+          {sweepInfo ? (
+            <div className="p-6">
+              <div className="flex items-center gap-2 mb-3">
+                <FiCheckCircle className="text-emerald-600" size={22} />
+                <div className="font-semibold text-lg text-slate-800">Payment collected</div>
+              </div>
+              <div className="rounded border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm mb-3">
+                <div className="flex justify-between">
+                  <span className="text-slate-600">Applied to Booking #{payment.appointmentId}</span>
+                  <span className="font-semibold text-emerald-700">₹{sweepInfo.appliedToInvoice}</span>
+                </div>
+              </div>
+              <div className="text-xs font-medium text-slate-600 mb-1">
+                The rest also cleared dues on {sweepInfo.appliedToOtherBookings.length} other booking
+                {sweepInfo.appliedToOtherBookings.length > 1 ? "s" : ""}:
+              </div>
+              <div className="rounded border border-slate-200 divide-y mb-4">
+                {sweepInfo.appliedToOtherBookings.map((s, i) => (
+                  <div key={i} className="flex justify-between px-3 py-1.5 text-sm">
+                    <span className="text-slate-700">Booking #{s.appointmentId}</span>
+                    <span className="font-semibold text-slate-800">₹{s.amountApplied}</span>
+                  </div>
+                ))}
+              </div>
+              <button
+                type="button"
+                className="w-full rounded-md border border-green-500 bg-green-50 px-4 py-2 text-sm font-semibold text-green-700 hover:bg-green-100"
+                onClick={() => { setSweepInfo(null); onClose(); }}
+              >
+                Done
+              </button>
+            </div>
+          ) : (
           <div className="p-6 pb-2">
             <div className="font-semibold text-lg text-slate-800 mb-2">Collect Payment</div>
             <div className="text-sm mb-3">
@@ -1641,7 +1686,7 @@ function CollectPaymentModal({ open, onClose, payment, onCollected }: CollectPay
                 ({payment.patientId})
               </span>
             </div>
-
+ 
             <div className="mb-3 rounded border border-sky-200 bg-sky-50 px-3 py-2 text-xs space-y-1">
               <div className="flex justify-between">
                 <span className="text-slate-600">Sessions checked in</span>
@@ -1676,7 +1721,7 @@ function CollectPaymentModal({ open, onClose, payment, onCollected }: CollectPay
                 <span className="font-bold text-emerald-700">₹{walletBalance}</span>
               </div>
             </div>
-
+ 
             <form onSubmit={handleSubmit}>
               <div className="mb-4 mt-1">
                 <label className="block font-medium text-slate-700 mb-1">
@@ -1832,12 +1877,13 @@ function CollectPaymentModal({ open, onClose, payment, onCollected }: CollectPay
               </div>
             </form>
           </div>
+          )}
         </motion.div>
       </motion.div>
     </AnimatePresence>
   );
 }
-
+ 
 // ----------- NEW Handler for Mark As Not Checked In (single & multi) ------------
 export default function ReceptionDesk() {
   const [loading, setLoading] = useState(true);
@@ -1845,12 +1891,12 @@ export default function ReceptionDesk() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [payments, setPayments] = useState<PaymentInfo[]>([]);
   const [today, setToday] = useState<string>("");
-
+ 
   const [selectedAppointments, setSelectedAppointments] = useState<{ [_id_session: string]: boolean }>({});
   const [multiCheckingIn, setMultiCheckingIn] = useState(false);
   const [multiMarkingMissed, setMultiMarkingMissed] = useState(false);
   const [multiMarkingNotCheckedIn, setMultiMarkingNotCheckedIn] = useState(false); // NEW: For multi-mark-not-checkedin
-
+ 
   // Fetch data logic same as before ...
   const fetchReceptionDeskData = useCallback(async () => {
     setLoading(true);
@@ -1865,21 +1911,21 @@ export default function ReceptionDesk() {
       if (!res.ok) throw new Error("Failed to load reception desk");
       const data = await res.json();
       if (!data.success) throw new Error(data.message || "API error");
-
+ 
       setToday(data.today);
-
+ 
       const todays: Appointment[] = (data.todaysBookings || []).map((booking: any) => {
         const session = booking.session;
         let therapistName = "";
         let therapistId = "";
         let therapistUserId = "";
-
+ 
         if (session?.therapist && session.therapist.userId && session.therapist.userId.name) {
           therapistName = session.therapist.userId.name;
           therapistId = session.therapist.therapistId ?? session.therapist._id ?? "";
           therapistUserId = session.therapist._id ?? "";
         }
-
+ 
         if (!therapistName && booking.therapist && typeof booking.therapist === "object" && booking.therapist._id) {
           therapistId = booking.therapist._id;
           therapistName = booking.therapist.name ?? "";
@@ -1888,7 +1934,7 @@ export default function ReceptionDesk() {
           therapistId = booking.therapist;
           therapistUserId = booking.therapist;
         }
-
+ 
         // Map session.status (enum: ['CheckedIn', 'NotCheckedIn', 'Missed']) to Appointment.status
         let status: "CheckedIn" | "NotCheckedIn" | "Missed" = "NotCheckedIn";
         if (session?.status === "CheckedIn") {
@@ -1898,7 +1944,7 @@ export default function ReceptionDesk() {
         } else if (session?.status === "NotCheckedIn") {
           status = "NotCheckedIn";
         }
-
+ 
         return {
           _id: booking._id,
           appointmentId: booking.appointmentId,
@@ -1912,7 +1958,7 @@ export default function ReceptionDesk() {
           status,
         } as Appointment;
       });
-
+ 
       let pendings: PaymentInfo[] = (data.pendingPaymentBookings || []).map((booking: any) => {
         let paymentRecord = booking.payment || {};
         let patientName = booking.patient?.name || "";
@@ -1931,14 +1977,14 @@ export default function ReceptionDesk() {
           coupon = paymentRecord.coupon;
         }
         let createdAt = paymentRecord.createdAt || booking.createdAt || undefined;
-
+ 
         let discountPercent: number | undefined = undefined;
         if (coupon && coupon.discountEnabled && typeof coupon.discount === "number") {
           discountPercent = coupon.discount;
         } else if (discountInfo && typeof discountInfo.percent === "number") {
           discountPercent = discountInfo.percent;
         }
-
+ 
         // Running-invoice amount: only reflects sessions actually CheckedIn so far
         // (computed server-side and stored on the booking), same model used in
         // Appointment Booking System / BookingSummary — NOT the full package total.
@@ -1951,7 +1997,7 @@ export default function ReceptionDesk() {
           booking.package?.sessionCount ??
           (Array.isArray(booking.sessions) ? booking.sessions.length : undefined);
         const walletBalance = booking.wallet?.balance ?? 0;
-
+ 
         return {
           _id: booking._id,
           appointmentId: booking.appointmentId,
@@ -1972,13 +2018,13 @@ export default function ReceptionDesk() {
           discountPercent,
         };
       });
-
+ 
       pendings.sort((a, b) => {
         const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
         const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
         return bTime - aTime;
       });
-
+ 
       setAppointments(todays);
       setPayments(pendings);
     } catch (err) {
@@ -1988,11 +2034,11 @@ export default function ReceptionDesk() {
       setLoading(false);
     }
   }, []);
-
+ 
   useEffect(() => {
     fetchReceptionDeskData();
   }, [fetchReceptionDeskData]);
-
+ 
   const handleCheckIn = async (_id: string, sessionId: string) => {
     const token = localStorage.getItem("admin-token");
     try {
@@ -2017,7 +2063,7 @@ export default function ReceptionDesk() {
       );
     }
   };
-
+ 
   const handleMissed = async (_id: string, sessionId: string) => {
     const token = localStorage.getItem("admin-token");
     try {
@@ -2042,7 +2088,7 @@ export default function ReceptionDesk() {
       );
     }
   };
-
+ 
   // NEW: Mark as Not Checked In (single)
   const handleMarkNotCheckedIn = async (_id: string, sessionId: string) => {
     const token = localStorage.getItem("admin-token");
@@ -2068,19 +2114,19 @@ export default function ReceptionDesk() {
       );
     }
   };
-
+ 
   const handleMultiCheckIn = async () => {
     const keys: string[] = Object.entries(selectedAppointments)
       .filter(([_, checked]) => checked)
       .map(([key]) => key);
-
+ 
     if (keys.length === 0) {
       alert("Please select at least one appointment to mark session complete.");
       return;
     }
     setMultiCheckingIn(true);
     const token = localStorage.getItem("admin-token");
-
+ 
     for (const key of keys) {
       const [bookingId, sessionDbId] = key.split("||");
       if (!bookingId || !sessionDbId) continue;
@@ -2113,19 +2159,19 @@ export default function ReceptionDesk() {
     setSelectedAppointments({});
     await fetchReceptionDeskData();
   };
-
+ 
   const handleMultiMarkAsMissed = async () => {
     const keys: string[] = Object.entries(selectedAppointments)
       .filter(([_, checked]) => checked)
       .map(([key]) => key);
-
+ 
     if (keys.length === 0) {
       alert("Please select at least one appointment to mark as missed.");
       return;
     }
     setMultiMarkingMissed(true);
     const token = localStorage.getItem("admin-token");
-
+ 
     for (const key of keys) {
       const [bookingId, sessionDbId] = key.split("||");
       if (!bookingId || !sessionDbId) continue;
@@ -2164,20 +2210,20 @@ export default function ReceptionDesk() {
     setSelectedAppointments({});
     await fetchReceptionDeskData();
   };
-
+ 
   // NEW: Multi-mark-not-checked-in handler
   const handleMultiMarkAsNotCheckedIn = async () => {
     const keys: string[] = Object.entries(selectedAppointments)
       .filter(([_, checked]) => checked)
       .map(([key]) => key);
-
+ 
     if (keys.length === 0) {
       alert("Please select at least one appointment to mark as Not Checked In.");
       return;
     }
     setMultiMarkingNotCheckedIn(true);
     const token = localStorage.getItem("admin-token");
-
+ 
     for (const key of keys) {
       const [bookingId, sessionDbId] = key.split("||");
       if (!bookingId || !sessionDbId) continue;
@@ -2216,7 +2262,7 @@ export default function ReceptionDesk() {
     setSelectedAppointments({});
     await fetchReceptionDeskData();
   };
-
+ 
   const toggleAppointmentSelection = (_id: string, sessionId: string) => {
     const key = `${_id}||${sessionId}`;
     setSelectedAppointments((prev) => ({
@@ -2224,7 +2270,7 @@ export default function ReceptionDesk() {
       [key]: !prev[key],
     }));
   };
-
+ 
   const selectAllAppointments = () => {
     const newSelection: typeof selectedAppointments = {};
     appointments.forEach((a) => {
@@ -2235,29 +2281,29 @@ export default function ReceptionDesk() {
     });
     setSelectedAppointments(newSelection);
   };
-
+ 
   const deselectAllAppointments = () => setSelectedAppointments({});
-
+ 
   const [collectModalVisible, setCollectModalVisible] = useState(false);
   const [collectPaymentCurrent, setCollectPaymentCurrent] = useState<PaymentInfo | null>(null);
-
+ 
   const openCollectModal = (payment: PaymentInfo) => {
     setCollectPaymentCurrent(payment);
     setCollectModalVisible(true);
   };
-
+ 
   const closeCollectModal = () => {
     setCollectModalVisible(false);
     setTimeout(() => {
       setCollectPaymentCurrent(null);
     }, 200);
   };
-
+ 
   const handleCollected = () => {
     if (!collectPaymentCurrent) return;
     setPayments((pays) => pays.filter((p) => p._id !== collectPaymentCurrent._id));
   };
-
+ 
   function getAppointmentStatusStr(a: Appointment): { label: string; colorClass: string; bgClass?: string } {
     if (a.status === "CheckedIn") {
       return {
@@ -2280,7 +2326,7 @@ export default function ReceptionDesk() {
       bgClass: "bg-yellow-50"
     };
   }
-
+ 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center ">
@@ -2294,7 +2340,7 @@ export default function ReceptionDesk() {
       </div>
     );
   }
-
+ 
   // Filter out payments with 0 due
   const paymentsWithDue = payments.filter(payment => {
     const net = toNumber(payment.invoiceAmount) ?? 0;
@@ -2302,7 +2348,7 @@ export default function ReceptionDesk() {
     const outstanding = Math.max(0, net - paid);
     return outstanding > 0;
   });
-
+ 
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -2319,7 +2365,7 @@ export default function ReceptionDesk() {
           </span>
         </h1>
       </div>
-
+ 
       {/* Guide */}
       <motion.div
         initial={{ opacity: 0, y: 10 }}
@@ -2359,7 +2405,7 @@ export default function ReceptionDesk() {
                 <p className="text-sm text-blue-700 mb-4">
                   Manage children flow and collections for the day.
                 </p>
-
+ 
                 <div className="bg-white border border-blue-100 rounded-md p-4 mb-4">
                   <p className="font-medium text-slate-700 mb-2">Steps to Follow</p>
                   <ol className="list-decimal list-inside text-sm text-slate-600 space-y-1">
@@ -2386,7 +2432,7 @@ export default function ReceptionDesk() {
                     </li>
                   </ol>
                 </div>
-
+ 
                 <div className="bg-green-50 border border-green-200 rounded-md p-4">
                   <div className="flex items-center gap-2 text-green-700 font-medium mb-2">
                     <FiCheckCircle /> Pro Tips
@@ -2403,14 +2449,14 @@ export default function ReceptionDesk() {
           )}
         </AnimatePresence>
       </motion.div>
-
+ 
       <CollectPaymentModal
         open={collectModalVisible}
         onClose={closeCollectModal}
         payment={collectPaymentCurrent}
         onCollected={handleCollected}
       />
-
+ 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Appointments */}
         <motion.div
@@ -2420,7 +2466,7 @@ export default function ReceptionDesk() {
           <div className="flex items-center gap-2 font-semibold text-slate-700 mb-4">
             <FiCalendar className="text-blue-600" /> Today’s Appointments
           </div>
-
+ 
           {/* Multi-Check-in, multi-missed, and multi-not-checked-in Controls */}
           <div className="mb-3 flex flex-wrap gap-2 items-center">
             <button
@@ -2498,7 +2544,7 @@ export default function ReceptionDesk() {
                 : ""}
             </span>
           </div>
-
+ 
           {appointments.length === 0 ? (
             <p className="text-sm text-slate-500">No appointments today.</p>
           ) : (
@@ -2509,7 +2555,7 @@ export default function ReceptionDesk() {
                 // Now allow mark as not checked-in for both not-checked-in/missed/checkedin
                 const selectable = typeof a.sessionDbId === 'string' && !!a.sessionDbId;
                 const statusObj = getAppointmentStatusStr(a);
-
+ 
                 return (
                   <div
                     key={a._id + "|" + a.sessionId}
@@ -2554,12 +2600,12 @@ export default function ReceptionDesk() {
                               ({a.patient?.patientId || "--"})
                             </span>
                           </div>
-
+ 
                           <span className="text-xs text-slate-500 font-mono whitespace-nowrap mt-0.5">
                             Session ID: {a.sessionId ?? "—"}
                           </span>
                         </div>
-
+ 
                         <div className="flex flex-wrap items-center gap-3 mt-1">
                           <div className="text-[13px] font-semibold text-slate-700 flex items-center gap-1">
                             <span className="font-bold text-slate-700">Appt#:</span>
@@ -2574,7 +2620,7 @@ export default function ReceptionDesk() {
                             {statusObj.label}
                           </span>
                         </div>
-
+ 
                         <div className="text-xs text-slate-500 mt-1 flex flex-wrap items-center gap-1">
                           <span className="font-semibold text-slate-600">Therapist:</span>
                           <span className="font-semibold">
@@ -2597,7 +2643,7 @@ export default function ReceptionDesk() {
                         </div>
                       </div>
                     </div>
-
+ 
                     <div className="flex flex-col gap-2 items-center justify-end mt-2 sm:mt-0 min-w-max">
                       {a.status === "NotCheckedIn" ? (
                         <>
@@ -2760,3 +2806,23 @@ export default function ReceptionDesk() {
     </motion.div>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
