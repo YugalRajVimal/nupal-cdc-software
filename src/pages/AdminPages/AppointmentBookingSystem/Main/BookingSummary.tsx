@@ -1132,6 +1132,21 @@ function CollectPaymentModal({ open, onClose, payment, onCollected }: CollectPay
   // Default paymentTime should be empty
   const [paymentTime, setPaymentTime] = useState<string>("");
 
+  /**
+ * Returns "now" as a "YYYY-MM-DDTHH:mm" string in IST, suitable for a
+ * datetime-local input's `max` attribute. `.toISOString()` alone returns
+ * UTC, which is ~5:30 hrs behind IST and rejects valid current-time entries
+ * (e.g. 13:19 IST gets compared against 07:49 UTC as the max).
+ */
+function getISTDatetimeLocalMax(): string {
+  const now = new Date();
+  const utcMs = now.getTime() + now.getTimezoneOffset() * 60000;
+  const istMs = utcMs + 5.5 * 60 * 60000; // IST = UTC+5:30
+  const ist = new Date(istMs);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${ist.getFullYear()}-${pad(ist.getMonth() + 1)}-${pad(ist.getDate())}T${pad(ist.getHours())}:${pad(ist.getMinutes())}`;
+}
+
   const invoiceAmount = payment ? toNumber(payment.invoiceAmount) ?? 0 : 0;
   const amountAlreadyPaid = (payment && toNumber(payment.amountPaid)) ?? 0;
   const dueNow = Math.max(0, invoiceAmount - amountAlreadyPaid);
@@ -1361,7 +1376,7 @@ function CollectPaymentModal({ open, onClose, payment, onCollected }: CollectPay
                 </div>
               )}
 
-              <div className="mb-3">
+              {/* <div className="mb-3">
                 <label className="block font-medium text-slate-700 mb-1 text-sm">
                   Payment date & time <span className="text-red-500">*</span>
                 </label>
@@ -1380,6 +1395,27 @@ function CollectPaymentModal({ open, onClose, payment, onCollected }: CollectPay
                   </div>
                 )}
               </div>
+               */}
+
+<div className="mb-3">
+  <label className="block font-medium text-slate-700 mb-1 text-sm">
+    Payment date & time <span className="text-red-500">*</span>
+  </label>
+  <input
+    type="datetime-local"
+    value={paymentTime}
+    onChange={e => setPaymentTime(e.target.value)}
+    required
+    disabled={loading}
+    className="w-full px-2 py-1 rounded border border-slate-300 text-slate-800 focus:ring focus:ring-blue-100 text-sm"
+    max={getISTDatetimeLocalMax()}
+  />
+  {paymentTimeMissing && (
+    <div className="text-xs text-red-500 mt-1">
+      Please select the date and time of payment.
+    </div>
+  )}
+</div>
 
               <div className="mb-3">
                 <label className="block font-medium text-slate-700 mb-1 text-sm">
