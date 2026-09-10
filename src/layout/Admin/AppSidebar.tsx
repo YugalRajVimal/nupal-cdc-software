@@ -94,6 +94,11 @@ const navItems: NavItem[] = [
   },
   {
     icon: <FileIcon />,
+    name: "Finances Overview",
+    path: "/admin/finances-overview",
+  },
+  {
+    icon: <FileIcon />,
     name: "Manage Holidays",
     path: "/admin/manage-holidays",
   },

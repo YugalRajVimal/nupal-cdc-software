@@ -98,6 +98,7 @@ import PaymentConfirmation from "./pages/ParentPages/InvoiveAndPaymentsPage/Paym
 import { ContactUs, RefundsAndCancellations, TermsAndConditions } from "./pages/Policies";
 import AppointmentBookingSystemMain from "./pages/AdminPages/AppointmentBookingSystem/Main/AppointmentBookingSystemMain";
 import TherapistReassignmentPanel from "./pages/AdminPages/AppointmentBookingSystem/TherapistReassignmentPanel.tsx/TherapistReassignmentPanel";
+import FinanceOverviewPage from "./pages/AdminPages/FinancesPage/FinanceOverviewPage";
 
 
 export default function App() {
@@ -199,6 +200,8 @@ export default function App() {
             <Route path="/admin/therapists" element={<TherapistsPage/>} />
             <Route path="/admin/children" element={<PatientsPage/>} />
             <Route path="/admin/finances" element={<FinancesPage/>} />
+            <Route path="/admin/finances-overview" element={<FinanceOverviewPage/>} />
+
 
             {/* <Route path="/admin/therapy-types" element={<TherapyTypesPage />} />
             <Route path="/admin/packages" element={<PackagesPage />} />
