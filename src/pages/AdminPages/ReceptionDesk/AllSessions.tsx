@@ -1,3 +1,891 @@
+// import { useState, useEffect } from "react";
+// import {
+//   FiCheckCircle,
+//   FiCalendar,
+// } from "react-icons/fi";
+// import { motion } from "framer-motion";
+// import DatePicker from "react-datepicker";
+// import "react-datepicker/dist/react-datepicker.css";
+
+// /**
+//  * All Upcoming Sessions Page
+//  * Shows upcoming (all future, NOT just today) sessions across bookings, as returned by
+//  * backend admin endpoint `/api/admin/bookings/all-sessions`
+//  * - Accessible for admin/reception
+//  * - Filter bar for date, therapist, patient, therapyType, isCheckedIn/Missed
+//  * - Supports "from"/"to" date filter and text search
+//  */
+
+// type SessionStatus = 'scheduled' | 'CheckedIn' | 'Missed' | 'NotCheckedIn';
+
+// const SESSION_TIME_OPTIONS = [
+//   { id: '1000-1045', label: '10:00 to 10:45', limited: false },
+//   { id: '1045-1130', label: '10:45 to 11:30', limited: false },
+//   { id: '1130-1215', label: '11:30 to 12:15', limited: false },
+//   { id: '1215-1300', label: '12:15 to 13:00', limited: false },
+//   { id: '1300-1345', label: '13:00 to 13:45', limited: false },
+//   { id: '1415-1500', label: '14:15 to 15:00', limited: false },
+//   { id: '1500-1545', label: '15:00 to 15:45', limited: false },
+//   { id: '1545-1630', label: '15:45 to 16:30', limited: false },
+//   { id: '1630-1715', label: '16:30 to 17:15', limited: false },
+//   { id: '1715-1800', label: '17:15 to 18:00', limited: false },
+//   { id: '0830-0915', label: '08:30 to 09:15', limited: true },
+//   { id: '0915-1000', label: '09:15 to 10:00', limited: true },
+//   { id: '1800-1845', label: '18:00 to 18:45', limited: true },
+//   { id: '1845-1930', label: '18:45 to 19:30', limited: true },
+//   { id: '1930-2015', label: '19:30 to 20:15', limited: true },
+// ];
+
+// type Patient = {
+//   _id: string;
+//   patientId?: string;
+//   name: string;
+//   mobile?: string;
+//   gender?: string;
+// };
+
+// type Therapy = {
+//   _id: string;
+//   name: string;
+// };
+
+// type Package = {
+//   _id: string;
+//   packageName?: string;
+//   packageType?: string;
+// };
+
+// type PaymentSummary = any;
+
+// type UpcomingSession = {
+//   bookingId: string;
+//   appointmentId?: string;
+//   patient: Patient | null;
+//   package: Package | null;
+//   therapy: Therapy | null;
+//   payment: PaymentSummary | null;
+//   session: {
+//     _id: string;
+//     date: string;
+//     slotId?: string;
+//     time?: string;
+//     therapist?: any;
+//     status?: SessionStatus;
+//     sessionId?: string;
+//     isCheckedIn?: boolean;
+//     [k: string]: any;
+//   };
+// };
+
+// const API_URL = import.meta.env.VITE_API_URL;
+
+// function formatDateDDMMYYYY(dateStr: string): string {
+//   if (!dateStr) return "";
+//   const match = dateStr.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
+//   if (match) {
+//     const [, yyyy, mm, dd] = match;
+//     const pad = (n: string) => n.length === 1 ? "0" + n : n;
+//     return `${pad(dd)}/${pad(mm)}/${yyyy}`;
+//   }
+//   const d = new Date(dateStr);
+//   if (!isNaN(d.getTime())) {
+//     const day = ("0" + d.getDate()).slice(-2);
+//     const month = ("0" + (d.getMonth() + 1)).slice(-2);
+//     return `${day}/${month}/${d.getFullYear()}`;
+//   }
+//   return dateStr;
+// }
+
+// // // Helper: correct value YYYY-MM-DD for input[type=date]
+// // function yyyyMMdd(dateStr: string | null | undefined): string {
+// //   if (!dateStr) return "";
+// //   if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
+// //   if (/^\d{4}\/\d{2}\/\d{2}$/.test(dateStr)) return dateStr.replace(/\//g, "-");
+// //   if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(dateStr)) {
+// //     // e.g. 2023-7-5 -> 2023-07-05
+// //     const match = dateStr.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+// //     if (match) {
+// //       const y = match[1];
+// //       const m = match[2].padStart(2, "0");
+// //       const d = match[3].padStart(2, "0");
+// //       return `${y}-${m}-${d}`;
+// //     }
+// //   }
+// //   const d = new Date(dateStr);
+// //   if (!isNaN(d.getTime()))
+// //     return `${d.getFullYear()}-${("0" + (d.getMonth() + 1)).slice(-2)}-${("0" + d.getDate()).slice(-2)}`;
+// //   return "";
+// // }
+
+// function valueToDate(val: string) {
+//   if (!val) return null;
+//   const d = new Date(val);
+//   if (isNaN(d.getTime())) return null;
+//   // This ensures correct handling for "YYYY-MM-DD" format & browser date parsing
+//   if (val.length === 10) {
+//     const [yyyy, mm, dd] = val.split(/[-/]/);
+//     if (yyyy && mm && dd) {
+//       return new Date(Number(yyyy), Number(mm) - 1, Number(dd));
+//     }
+//   }
+//   return d;
+// }
+
+// function dateToValue(date: Date | null) {
+//   if (!date) return "";
+//   const yyyy = date.getFullYear();
+//   const mm = ("0" + (date.getMonth() + 1)).slice(-2);
+//   const dd = ("0" + date.getDate()).slice(-2);
+//   return `${yyyy}-${mm}-${dd}`;
+// }
+
+// export default function AllUpcomingSessions() {
+//   const [loading, setLoading] = useState(true);
+//   const [sessions, setSessions] = useState<UpcomingSession[]>([]);
+//   const [fetchError, setFetchError] = useState<string | null>(null);
+//   const [shownDate, setShownDate] = useState<string>("");
+
+//   // From/to date as string for API, but also handle as Date for react-datepicker
+//   const [fromDate, setFromDate] = useState<string>("");
+//   const [toDate, setToDate] = useState<string>("");
+
+//   // Date objects for react-datepicker display
+//   const [fromDateObj, setFromDateObj] = useState<Date | null>(valueToDate(fromDate));
+//   const [toDateObj, setToDateObj] = useState<Date | null>(valueToDate(toDate));
+
+//   const [search, setSearch] = useState<string>("");
+
+//   // Multi-select and check-in logic
+//   const [selectedSessionIds, setSelectedSessionIds] = useState<string[]>([]);
+//   const [checkingIn, setCheckingIn] = useState<string[]>([]);
+//   const [multiCheckingIn, setMultiCheckingIn] = useState(false);
+//   const [missingInProgress, setMissingInProgress] = useState<string[]>([]);
+//   const [multiMissingIn, setMultiMissingIn] = useState(false);
+
+//   // NOT Checked In states
+//   const [notCheckInInProgress, setNotCheckInInProgress] = useState<string[]>([]);
+//   const [multiNotCheckInIn, setMultiNotCheckInIn] = useState(false);
+
+//   // Filter state for status
+//   const [checkedInFilter, setCheckedInFilter] = useState<'all' | 'CheckedIn' | 'NotCheckedIn' | 'Missed'>('all');
+
+//   // Ensure string for API is synced with DatePicker's date obj for fromDate/toDate
+//   useEffect(() => {
+//     setFromDate(fromDateObj ? dateToValue(fromDateObj) : "");
+//   }, [fromDateObj]);
+
+//   useEffect(() => {
+//     setToDate(toDateObj ? dateToValue(toDateObj) : "");
+//   }, [toDateObj]);
+
+//   // Effect: fetch sessions from API with filters (from, to, search)
+//   const fetchSessions = async () => {
+//     setFetchError(null);
+//     setLoading(true);
+//     try {
+//       const token = localStorage.getItem("admin-token");
+//       // Compose query string
+//       const params = new URLSearchParams();
+//       if (fromDate) params.append("from", fromDate);
+//       if (toDate) params.append("to", toDate);
+//       if (search.trim() !== "") params.append("search", search.trim());
+
+//       const endpoint = `${API_URL}/api/admin/bookings/sessions${params.size > 0 ? "?" + params.toString() : ""}`;
+
+//       const res = await fetch(endpoint, {
+//         headers: {
+//           Authorization: token || "",
+//           "Content-Type": "application/json",
+//         },
+//       });
+
+//       if (!res.ok) throw new Error("Failed to fetch upcoming sessions");
+
+//       const data = await res.json();
+//       console.log(data);
+//       if (!data.success) throw new Error(data.message || "API error");
+
+//       setShownDate(data.date);
+//       setSessions(Array.isArray(data.sessions) ? data.sessions : []);
+//     } catch (e: any) {
+//       setFetchError(e.message ?? "Could not fetch sessions");
+//       setSessions([]);
+//     } finally {
+//       setLoading(false);
+//     }
+//   };
+
+//   // Fetch on mount and whenever filters change
+//   useEffect(() => {
+//     fetchSessions();
+//     // eslint-disable-next-line
+//   }, [fromDate, toDate, search]);
+
+//   function getSessionTimeLabel(session: UpcomingSession["session"]) {
+//     if (!session) return "";
+//     let slot = session.slotId || session.time || "";
+//     let known = SESSION_TIME_OPTIONS.find((opt) => opt.id === slot);
+//     return known?.label || slot || "—";
+//   }
+
+//   function getSessionStatus(session: UpcomingSession["session"]) {
+//     switch (session.status) {
+//       case "CheckedIn":
+//         return {
+//           label: "Checked In",
+//           color: "green",
+//           icon: <FiCheckCircle size={13} />,
+//         };
+//       case "Missed":
+//         return {
+//           label: "Missed",
+//           color: "red",
+//           icon: null,
+//         };
+//       case "NotCheckedIn":
+//         return {
+//           label: "Not Checked In",
+//           color: "orange",
+//           icon: null,
+//         };
+//       case "scheduled":
+//       default:
+//         if (session.isCheckedIn) {
+//           return {
+//             label: "Checked In",
+//             color: "green",
+//             icon: <FiCheckCircle size={13} />,
+//           };
+//         }
+//         return {
+//           label: "Not Checked In",
+//           color: "orange",
+//           icon: null,
+//         };
+//     }
+//   }
+
+//   function handleCheckSelect(sessionId: string, checked: boolean) {
+//     setSelectedSessionIds((prev) =>
+//       checked
+//         ? [...prev, sessionId]
+//         : prev.filter((id) => id !== sessionId)
+//     );
+//   }
+
+//   function handleAllCheckSelect(e: React.ChangeEvent<HTMLInputElement>) {
+//     if (e.target.checked) {
+//       let toSelect: string[];
+//       if (checkedInFilter === "CheckedIn") {
+//         toSelect = filteredSessions.filter(
+//           s => s.session.status === "CheckedIn" || (!s.session.status && s.session.isCheckedIn)
+//         ).map(s => s.session._id);
+//       } else if (checkedInFilter === "Missed") {
+//         toSelect = filteredSessions.filter(
+//           s => s.session.status === "Missed"
+//         ).map(s => s.session._id);
+//       } else if (checkedInFilter === "NotCheckedIn") {
+//         toSelect = filteredSessions.filter(
+//           s => s.session.status === "NotCheckedIn" || (!s.session.status && !s.session.isCheckedIn)
+//         ).map(s => s.session._id);
+//       } else {
+//         toSelect = filteredSessions.map(s => s.session._id);
+//       }
+//       setSelectedSessionIds(toSelect);
+//     } else {
+//       setSelectedSessionIds([]);
+//     }
+//   }
+
+//   // Single session actions: check-in, not checked-in, missed
+//   async function handleSessionCheckIn(sessionId: string) {
+//     setCheckingIn((prev) => [...prev, sessionId]);
+//     setFetchError(null);
+//     try {
+//       const token = localStorage.getItem("admin-token");
+//       const sessionObj = sessions.find((s) => s.session._id === sessionId);
+//       const bookingId = sessionObj?.bookingId;
+//       const res = await fetch(`${API_URL}/api/admin/bookings/check-in`, {
+//         method: "POST",
+//         headers: {
+//           Authorization: `${token || ""}`,
+//           "Content-Type": "application/json",
+//         },
+//         body: JSON.stringify({ sessionId, bookingId }),
+//       });
+//       if (!res.ok) throw new Error("Failed to check-in session");
+//       const data = await res.json();
+//       if (!data.success) throw new Error(data.message || "Check-in error");
+//       await fetchSessions();
+//       setSelectedSessionIds((ids) => ids.filter((id) => id !== sessionId));
+//     } catch (error: any) {
+//       setFetchError(error.message || "Could not check-in session");
+//     } finally {
+//       setCheckingIn((prev) => prev.filter((id) => id !== sessionId));
+//     }
+//   }
+
+//   async function handleSessionNotCheckedIn(sessionId: string) {
+//     setNotCheckInInProgress((prev) => [...prev, sessionId]);
+//     setFetchError(null);
+//     try {
+//       const token = localStorage.getItem("admin-token");
+//       const sessionObj = sessions.find((s) => s.session._id === sessionId);
+//       const bookingId = sessionObj?.bookingId;
+//       const res = await fetch(`${API_URL}/api/admin/bookings/mark-session-not-checked-in`, {
+//         method: "POST",
+//         headers: {
+//           Authorization: `${token || ""}`,
+//           "Content-Type": "application/json",
+//         },
+//         body: JSON.stringify({ sessionId, bookingId }),
+//       });
+//       if (!res.ok) throw new Error("Failed to mark session as not checked in");
+//       const data = await res.json();
+//       if (!data.success) throw new Error(data.message || "Mark not checked-in error");
+//       await fetchSessions();
+//       setSelectedSessionIds((ids) => ids.filter((id) => id !== sessionId));
+//     } catch (error: any) {
+//       setFetchError(error.message || "Could not mark as not checked in");
+//     } finally {
+//       setNotCheckInInProgress((prev) => prev.filter((id) => id !== sessionId));
+//     }
+//   }
+
+//   async function handleSessionMissed(sessionId: string) {
+//     setMissingInProgress((prev) => [...prev, sessionId]);
+//     setFetchError(null);
+//     try {
+//       const token = localStorage.getItem("admin-token");
+//       const sessionObj = sessions.find((s) => s.session._id === sessionId);
+//       const bookingId = sessionObj?.bookingId;
+//       const res = await fetch(`${API_URL}/api/admin/bookings/mark-session-missed`, {
+//         method: "POST",
+//         headers: {
+//           Authorization: `${token || ""}`,
+//           "Content-Type": "application/json",
+//         },
+//         body: JSON.stringify({ sessionId, bookingId }),
+//       });
+//       if (!res.ok) throw new Error("Failed to mark session as missed");
+//       const data = await res.json();
+//       if (!data.success) throw new Error(data.message || "Mark missed error");
+//       await fetchSessions();
+//     } catch (error: any) {
+//       setFetchError(error.message || "Could not mark session as missed");
+//     } finally {
+//       setMissingInProgress((prev) => prev.filter((id) => id !== sessionId));
+//     }
+//   }
+
+//   // Multi actions
+//   async function handleMultiCheckIn() {
+//     if (selectedSessionIds.length === 0) return;
+//     setMultiCheckingIn(true);
+//     setFetchError(null);
+//     try {
+//       const token = localStorage.getItem("admin-token");
+//       for (let i = 0; i < selectedSessionIds.length; ++i) {
+//         const sessionId = selectedSessionIds[i];
+//         const sessionObj = sessions.find((s) => s.session._id === sessionId);
+//         const bookingId = sessionObj?.bookingId;
+//         await fetch(`${API_URL}/api/admin/bookings/check-in`, {
+//           method: "POST",
+//           headers: {
+//             Authorization: `${token || ""}`,
+//             "Content-Type": "application/json",
+//           },
+//           body: JSON.stringify({ sessionId, bookingId }),
+//         });
+//       }
+//       await fetchSessions();
+//       setSelectedSessionIds([]);
+//     } catch (error: any) {
+//       setFetchError(error.message || "Could not bulk check-in selected sessions");
+//     } finally {
+//       setMultiCheckingIn(false);
+//     }
+//   }
+
+//   async function handleMultiMissed() {
+//     if (selectedSessionIds.length === 0) return;
+//     setMultiMissingIn(true);
+//     setFetchError(null);
+//     try {
+//       const token = localStorage.getItem("admin-token");
+//       for (let i = 0; i < selectedSessionIds.length; ++i) {
+//         const sessionId = selectedSessionIds[i];
+//         const sessionObj = sessions.find((s) => s.session._id === sessionId);
+//         const bookingId = sessionObj?.bookingId;
+//         await fetch(`${API_URL}/api/admin/bookings/mark-session-missed`, {
+//           method: "POST",
+//           headers: {
+//             Authorization: `${token || ""}`,
+//             "Content-Type": "application/json",
+//           },
+//           body: JSON.stringify({ sessionId, bookingId }),
+//         });
+//       }
+//       await fetchSessions();
+//       setSelectedSessionIds([]);
+//     } catch (error: any) {
+//       setFetchError(error.message || "Could not bulk mark selected as missed");
+//     } finally {
+//       setMultiMissingIn(false);
+//     }
+//   }
+
+//   async function handleMultiNotCheckedIn() {
+//     if (selectedSessionIds.length === 0) return;
+//     setMultiNotCheckInIn(true);
+//     setFetchError(null);
+//     try {
+//       const token = localStorage.getItem("admin-token");
+//       for (let i = 0; i < selectedSessionIds.length; ++i) {
+//         const sessionId = selectedSessionIds[i];
+//         const sessionObj = sessions.find((s) => s.session._id === sessionId);
+//         const bookingId = sessionObj?.bookingId;
+//         await fetch(`${API_URL}/api/admin/bookings/mark-session-not-checked-in`, {
+//           method: "POST",
+//           headers: {
+//             Authorization: `${token || ""}`,
+//             "Content-Type": "application/json",
+//           },
+//           body: JSON.stringify({ sessionId, bookingId }),
+//         });
+//       }
+//       await fetchSessions();
+//       setSelectedSessionIds([]);
+//     } catch (error: any) {
+//       setFetchError(error.message || "Could not bulk mark selected as Not Checked In");
+//     } finally {
+//       setMultiNotCheckInIn(false);
+//     }
+//   }
+
+//   // Filtering for status (CheckedIn/NotCheckedIn/Missed)
+//   let filteredSessions = sessions;
+//   if (checkedInFilter === "CheckedIn") {
+//     filteredSessions = sessions.filter(
+//       (s) => s.session.status === "CheckedIn" || (!s.session.status && s.session.isCheckedIn)
+//     );
+//   } else if (checkedInFilter === "NotCheckedIn") {
+//     filteredSessions = sessions.filter(
+//       (s) => s.session.status === "NotCheckedIn" || (!s.session.status && !s.session.isCheckedIn)
+//     );
+//   } else if (checkedInFilter === "Missed") {
+//     filteredSessions = sessions.filter(
+//       (s) => s.session.status === "Missed"
+//     );
+//   }
+
+//   const filteredCount = filteredSessions.length;
+
+//   return (
+//     <motion.div
+//       initial={{ opacity: 0, y: 20 }}
+//       animate={{ opacity: 1, y: 0 }}
+//       transition={{ duration: 0.6, ease: "easeOut" }}
+//       className="min-h-screen p-8"
+//     >
+//       <div className="flex items-center justify-between mb-6">
+//         <h1 className="text-2xl font-bold text-slate-800">
+//           All Sessions{" "}
+//           {(shownDate && (
+//             <span className="text-slate-400">
+//               {/* If only single-date response, show date */}
+//               – Date: {formatDateDDMMYYYY(shownDate)}
+//             </span>
+//           )) || ""}
+//         </h1>
+//       </div>
+
+//       {/* Filter Bar: Date (from/to), search, Checked-in / Missed / Not Checked-in */}
+//       <div className="mb-4 flex flex-wrap gap-4 items-center">
+//         <div className="flex items-end gap-4">
+//           <div className="flex flex-col">
+//             <label htmlFor="fromDate" className="font-medium text-slate-700 mb-1">
+//               From date:
+//             </label>
+//             <div className="relative">
+//               <DatePicker
+//                 id="fromDate"
+//                 selected={fromDateObj}
+//                 onChange={(date: Date | null) => setFromDateObj(date)}
+//                 dateFormat="yyyy-MM-dd"
+//                 placeholderText="Select from date"
+//                 className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-44 pl-10 bg-white shadow-sm transition"
+//                 isClearable
+//                 maxDate={toDateObj ?? undefined}
+//                 calendarClassName="calendar"
+//                 popperPlacement="bottom-start"
+//               />
+//               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+//                 <FiCalendar size={17} />
+//               </span>
+//             </div>
+//           </div>
+//           <div className="flex flex-col">
+//             <label htmlFor="toDate" className="font-medium text-slate-700 mb-1">
+//               To date:
+//             </label>
+//             <div className="relative">
+//               <DatePicker
+//                 id="toDate"
+//                 selected={toDateObj}
+//                 onChange={(date: Date | null) => setToDateObj(date)}
+//                 dateFormat="yyyy-MM-dd"
+//                 placeholderText="Select to date"
+//                 className="border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-44 pl-10 bg-white shadow-sm transition"
+//                 isClearable
+//                 minDate={fromDateObj ?? undefined}
+//                 calendarClassName="calendar"
+//                 popperPlacement="bottom-start"
+//               />
+//               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+//                 <FiCalendar size={17} />
+//               </span>
+//             </div>
+//           </div>
+//         </div>
+ 
+//         <label className="font-medium text-slate-700 ml-2">Search:</label>
+//         <input
+//           type="text"
+//           placeholder="Session ID, Patient, Therapist, Booking, Date, etc."
+//           className="border border-slate-300 rounded px-2 py-1 text-sm"
+//           style={{ minWidth: 210 }}
+//           value={search}
+//           onChange={e => setSearch(e.target.value)}
+//           onKeyDown={e => {
+//             if (e.key === "Enter") fetchSessions();
+//           }}
+//         />
+
+//         <label className="font-medium text-slate-700 ml-2">Show:</label>
+//         <select
+//           className="rounded border border-slate-300 px-2 py-1 text-sm"
+//           value={checkedInFilter}
+//           onChange={e =>
+//             setCheckedInFilter(
+//               e.target.value as 'all' | 'CheckedIn' | 'NotCheckedIn' | 'Missed'
+//             )
+//           }
+//           style={{ minWidth: 170 }}
+//         >
+//           <option value="all">All Sessions</option>
+//           <option value="NotCheckedIn">Not Checked-In</option>
+//           <option value="CheckedIn">Checked-In</option>
+//           <option value="Missed">Missed</option>
+//         </select>
+//         <button
+//           type="button"
+//           className="bg-slate-200 rounded px-3 py-0.5 text-xs font-semibold ml-2"
+//           style={{ marginLeft: 8 }}
+//           onClick={() => {
+//             setFromDateObj(null);
+//             setToDateObj(null);
+//             setFromDate("");
+//             setToDate("");
+//             setSearch("");
+//             fetchSessions();
+//           }}
+//         >
+//           Clear Filters
+//         </button>
+//       </div>
+
+//       {/* List of ALL Upcoming/Future Sessions */}
+//       {loading ? (
+//         <div className="flex items-center justify-center min-h-[30vh]">
+//           <motion.div
+//             initial={{ opacity: 0, scale: 0.95 }}
+//             animate={{ opacity: 1, scale: 1 }}
+//             className="text-slate-600 font-semibold tracking-wide"
+//           >
+//             Loading all sessions…
+//           </motion.div>
+//         </div>
+//       ) : fetchError ? (
+//         <div className="text-red-600 text-sm font-semibold mb-6">
+//           Could not load sessions: {fetchError}
+//         </div>
+//       ) : (
+//         <motion.div
+//           whileHover={{ y: -2 }}
+//           className="bg-white border border-slate-200 rounded-lg p-6 shadow-sm"
+//         >
+//           <div className="flex items-center gap-2 font-semibold text-slate-700 mb-4">
+//             <FiCalendar className="text-blue-600" /> All Sessions{" "}
+//             <span className="ml-2 text-xs text-slate-400">
+//               {filteredSessions.length} result{filteredSessions.length === 1 ? "" : "s"}
+//             </span>
+//           </div>
+//           {filteredSessions.length > 0 && (
+//             <div className="flex gap-4 items-center mb-3">
+//               <div className="flex items-center select-none">
+//                 <input
+//                   type="checkbox"
+//                   checked={selectedSessionIds.length === filteredCount && selectedSessionIds.length > 0}
+//                   onChange={handleAllCheckSelect}
+//                   className="w-4 h-4 accent-blue-600 border-slate-300 rounded"
+//                   id="all-session-select"
+//                 />
+//                 <label className="text-xs font-medium text-slate-600 ml-2 cursor-pointer" htmlFor="all-session-select">
+//                   Select All{checkedInFilter === "CheckedIn"
+//                     ? " (Checked-In)"
+//                     : checkedInFilter === "Missed"
+//                     ? " (Missed)"
+//                     : checkedInFilter === "NotCheckedIn"
+//                     ? " (Not Checked-In)"
+//                     : ""}
+//                 </label>
+//               </div>
+//               <button
+//                 onClick={handleMultiCheckIn}
+//                 disabled={
+//                   multiCheckingIn ||
+//                   selectedSessionIds.length === 0 ||
+//                   filteredCount === 0
+//                 }
+//                 className={`rounded bg-green-600 text-white px-4 py-1 font-semibold text-xs hover:bg-green-700 transition-all
+//                   ${multiCheckingIn || selectedSessionIds.length === 0 ? "opacity-60 cursor-not-allowed" : ""}
+//                 `}
+//                 type="button"
+//               >
+//                 {multiCheckingIn ? "Processing..." : `Check-in Selected (${selectedSessionIds.length})`}
+//               </button>
+//               <button
+//                 onClick={handleMultiMissed}
+//                 disabled={
+//                   multiMissingIn ||
+//                   selectedSessionIds.length === 0 ||
+//                   filteredCount === 0
+//                 }
+//                 className={`rounded bg-red-600 text-white px-4 py-1 font-semibold text-xs hover:bg-red-700 transition-all
+//                   ${multiMissingIn || selectedSessionIds.length === 0 ? "opacity-60 cursor-not-allowed" : ""}
+//                 `}
+//                 type="button"
+//               >
+//                 {multiMissingIn ? "Processing..." : `Mark as Missed (${selectedSessionIds.length})`}
+//               </button>
+//               <button
+//                 onClick={handleMultiNotCheckedIn}
+//                 disabled={
+//                   multiNotCheckInIn ||
+//                   selectedSessionIds.length === 0 ||
+//                   filteredCount === 0
+//                 }
+//                 className={`rounded bg-orange-600 text-white px-4 py-1 font-semibold text-xs hover:bg-orange-700 transition-all
+//                   ${multiNotCheckInIn || selectedSessionIds.length === 0 ? "opacity-60 cursor-not-allowed" : ""}
+//                 `}
+//                 type="button"
+//               >
+//                 {multiNotCheckInIn ? "Processing..." : `Mark as Not Checked-In (${selectedSessionIds.length})`}
+//               </button>
+//             </div>
+//           )}
+
+//           {filteredSessions.length === 0 ? (
+//             <div className="text-slate-400 text-sm mx-2 my-8">
+//               No upcoming sessions found.
+//             </div>
+//           ) : (
+//             <div className="overflow-x-auto">
+//               <table className="min-w-full text-xs md:text-sm border rounded">
+//                 <thead className="bg-slate-100">
+//                   <tr>
+//                     <th className="py-2 px-2 border-b font-semibold w-8"></th>
+//                     <th className="py-2 px-2 border-b font-semibold">Session ID</th>
+//                     <th className="py-2 px-2 border-b font-semibold">Date</th>
+//                     <th className="py-2 px-2 border-b font-semibold">Time Slot</th>
+//                     <th className="py-2 px-2 border-b font-semibold">Patient</th>
+//                     <th className="py-2 px-2 border-b font-semibold">Therapist</th>
+//                     <th className="py-2 px-2 border-b font-semibold">Therapy</th>
+//                     <th className="py-2 px-2 border-b font-semibold">Appt# / Booking</th>
+//                     <th className="py-2 px-2 border-b font-semibold">Status</th>
+//                     <th className="py-2 px-2 border-b font-semibold"></th>
+//                   </tr>
+//                 </thead>
+//                 <tbody>
+//                   {filteredSessions.map((s) => {
+//                     const pat = s.patient;
+//                     const therapist =
+//                       s.session?.therapist?.userId?.name ??
+//                       s.session?.therapist?.name ??
+//                       "—";
+//                     const therapistId =
+//                       s.session?.therapist?.therapistId ??
+//                       s.session?.therapist?._id ??
+//                       "";
+//                     const isSelected = selectedSessionIds.includes(s.session._id);
+//                     const sessionStatus = getSessionStatus(s.session);
+
+//                     const showCheckbox = true;
+
+//                     return (
+//                       <tr
+//                         key={`${s.bookingId}|${s.session._id}`}
+//                         className="border-b last:border-0"
+//                         style={{ background: isSelected ? "#e0f2fe" : undefined }}
+//                       >
+//                         <td className="py-2 px-2 text-center">
+//                           {showCheckbox ? (
+//                             <input
+//                               type="checkbox"
+//                               checked={isSelected}
+//                               onChange={e =>
+//                                 handleCheckSelect(s.session._id, e.target.checked)
+//                               }
+//                               className="w-4 h-4 accent-blue-600 border-slate-300 rounded"
+//                             />
+//                           ) : null}
+//                         </td>
+//                         <td className="py-2 px-2">
+//                           <span className="font-mono" title={s.session._id}>{s.session.sessionId}</span>
+//                         </td>
+//                         <td className="py-2 px-2">
+//                           <span className="font-mono">{formatDateDDMMYYYY(s.session.date)}</span>
+//                         </td>
+//                         <td className="py-2 px-2 whitespace-nowrap">
+//                           <span>
+//                             {getSessionTimeLabel(s.session)}
+//                           </span>
+//                         </td>
+//                         <td className="py-2 px-2">
+//                           {pat && pat._id ? (
+//                             <a
+//                               className="text-blue-700 hover:underline font-semibold"
+//                               href={`/admin/children?patientId=${encodeURIComponent(pat._id)}`}
+//                               target="_blank"
+//                               rel="noopener noreferrer"
+//                             >
+//                               {pat.name}
+//                             </a>
+//                           ) : (
+//                             <span>{pat?.name || "Unknown"}</span>
+//                           )}
+//                           {pat?.patientId && (
+//                             <span className="text-blue-400 text-xs ml-1">({pat.patientId})</span>
+//                           )}
+//                         </td>
+//                         <td className="py-2 px-2">
+//                           {therapist && therapistId ? (
+//                             <a
+//                               className="text-blue-600 hover:underline font-semibold"
+//                               href={`/admin/therapists?therapistId=${encodeURIComponent(therapistId)}`}
+//                               target="_blank"
+//                               rel="noopener noreferrer"
+//                             >
+//                               {therapist}
+//                             </a>
+//                           ) : (
+//                             <span>{therapist || "—"}</span>
+//                           )}
+//                           {therapistId && (
+//                             <span className="ml-1 text-blue-300 font-mono">({therapistId})</span>
+//                           )}
+//                         </td>
+//                         <td className="py-2 px-2">
+//                           {s.therapy?.name || "—"}
+//                         </td>
+//                         <td className="py-2 px-2">
+//                           <span className="font-semibold text-blue-900">
+//                             {s.appointmentId ? s.appointmentId : "-"}
+//                           </span>
+//                           <div className="text-xs text-slate-400 font-mono">
+//                             {s.bookingId}
+//                           </div>
+//                         </td>
+//                         <td className="py-2 px-2">
+//                           <span
+//                             className={[
+//                               "rounded",
+//                               "px-2",
+//                               "py-0.5",
+//                               "font-semibold",
+//                               "text-xs",
+//                               "inline-flex",
+//                               "items-center",
+//                               "gap-1",
+//                               "whitespace-nowrap",
+//                               sessionStatus.color === 'green'
+//                                 ? "bg-green-50 text-green-700"
+//                                 : sessionStatus.color === 'red'
+//                                 ? "bg-red-50 text-red-600"
+//                                 : sessionStatus.color === 'orange'
+//                                 ? "bg-orange-100 text-orange-700"
+//                                 : "bg-slate-100 text-slate-500"
+//                             ].join(' ')}
+//                             style={{ whiteSpace: 'nowrap' }}
+//                           >
+//                             {sessionStatus.label}
+//                             {sessionStatus.icon}
+//                           </span>
+//                         </td>
+//                         <td className="py-2 px-2 text-center">
+//                           <div className="flex gap-1 flex-col  md:gap-2 whitespace-nowrap">
+//                             {/* Show Check-in button only if status is NOT CheckedIn */}
+//                             {s.session.status !== "CheckedIn" && (
+//                               <button
+//                                 className="rounded bg-green-600 text-white px-3 py-1 font-semibold text-xs hover:bg-green-700 transition-all"
+//                                 onClick={() => handleSessionCheckIn(s.session._id)}
+//                                 disabled={checkingIn.includes(s.session._id)}
+//                                 type="button"
+//                                 style={{ minWidth: 90 }}
+//                               >
+//                                 {checkingIn.includes(s.session._id)
+//                                   ? "Checking in..."
+//                                   : "Check-in"}
+//                               </button>
+//                             )}
+//                             {/* Show Mark Missed button only if status is NOT Missed */}
+//                             {s.session.status !== "Missed" && s.session.status !== "CheckedIn" && (
+//                               <button
+//                                 className="rounded bg-red-600 text-white px-3 py-1 font-semibold text-xs hover:bg-red-700 transition-all"
+//                                 onClick={() => handleSessionMissed(s.session._id)}
+//                                 disabled={missingInProgress.includes(s.session._id)}
+//                                 type="button"
+//                                 style={{ minWidth: 98 }}
+//                               >
+//                                 {missingInProgress.includes(s.session._id)
+//                                   ? "Marking…"
+//                                   : "Mark Missed"}
+//                               </button>
+//                             )}
+
+//                             {/* Show Mark Not Checked-In button only if status is NOT NotCheckedIn */}
+//                             {s.session.status !== "NotCheckedIn" && (
+//                               <button
+//                                 className="rounded bg-yellow-500 text-black px-3 py-1 font-semibold text-xs hover:bg-yellow-600 transition-all"
+//                                 onClick={() => handleSessionNotCheckedIn(s.session._id)}
+//                                 disabled={notCheckInInProgress.includes(s.session._id)}
+//                                 type="button"
+//                                 style={{ minWidth: 110 }}
+//                               >
+//                                 {notCheckInInProgress.includes(s.session._id)
+//                                   ? "Marking…"
+//                                   : "Mark Not Checked-In"}
+//                               </button>
+
+//                             )}
+//                           </div>
+//                         </td>
+
+//                       </tr>
+//                     );
+//                   })}
+//                 </tbody>
+//               </table>
+//             </div>
+//           )}
+//         </motion.div>
+//       )}
+//     </motion.div>
+//   );
+// }
+
+
 import { useState, useEffect } from "react";
 import {
   FiCheckCircle,
@@ -519,6 +1407,7 @@ export default function AllUpcomingSessions() {
                 maxDate={toDateObj ?? undefined}
                 calendarClassName="calendar"
                 popperPlacement="bottom-start"
+                autoComplete="off"
               />
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
                 <FiCalendar size={17} />
@@ -541,6 +1430,7 @@ export default function AllUpcomingSessions() {
                 minDate={fromDateObj ?? undefined}
                 calendarClassName="calendar"
                 popperPlacement="bottom-start"
+                autoComplete="off"
               />
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
                 <FiCalendar size={17} />
